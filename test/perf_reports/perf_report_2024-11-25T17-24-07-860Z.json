@@ -1,0 +1,21 @@
+{
+  "timestamp": "2024-11-25T17:24:07.860Z",
+  "metrics": {
+    "Image Loading": {
+      "avg": 3.73,
+      "median": 2.84,
+      "min": 2.42,
+      "max": 7.85,
+      "p95": 7.85
+    },
+    "Scroll Handling": {
+      "avg": 0.38,
+      "median": 0.31,
+      "min": 0.29,
+      "max": 0.67,
+      "p95": 0.67
+    }
+  },
+  "regressions": [],
+  "improvements": []
+}

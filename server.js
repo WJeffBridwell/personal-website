@@ -217,14 +217,21 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Server error:', err);
+    console.error(err.stack);
     res.status(500).json({
-        error: 'Internal Server Error',
-        message: err.message
+        message: err.message,
     });
 });
 
-app.listen(port, '0.0.0.0', () => {
-    console.log(`Server running locally at http://localhost:${port}`);
-    console.log(`Access from other devices at http://192.168.86.242:${port}`);
+// Start server with error handling
+const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${port}`);
+}).on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${port} is already in use. Please try a different port.`);
+        process.exit(1);
+    } else {
+        console.error('Failed to start server:', error);
+        process.exit(1);
+    }
 });
