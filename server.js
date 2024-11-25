@@ -1,7 +1,10 @@
 const express = require('express');
+const sharp = require('sharp');
 const path = require('path');
 const fsPromises = require('fs').promises;
-const fs = require('fs');  
+const fsSync = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const app = express();
 const port = 3000;
 const { exec } = require('child_process');
@@ -19,6 +22,47 @@ app.use((req, res, next) => {
 
 // Serve static files from the current directory
 app.use(express.static(__dirname));
+
+// Image processing middleware
+async function optimizeImage(req, res, next) {
+    const imagePath = path.join('/Volumes/VideosNew/Models', req.params.filename);
+    console.log('Processing image:', imagePath);
+    
+    const cacheDir = path.join(__dirname, 'cache');
+    const cachedPath = path.join(cacheDir, `${req.params.filename}.webp`);
+    console.log('Cache path:', cachedPath);
+
+    try {
+        // Check if cached version exists
+        if (fsSync.existsSync(cachedPath)) {
+            console.log('Serving cached image:', cachedPath);
+            res.sendFile(cachedPath);
+            return;
+        }
+
+        // Ensure cache directory exists
+        if (!fsSync.existsSync(cacheDir)) {
+            console.log('Creating cache directory:', cacheDir);
+            fsSync.mkdirSync(cacheDir, { recursive: true });
+        }
+
+        console.log('Processing new image...');
+        // Process and cache the image
+        await sharp(imagePath)
+            .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toFile(cachedPath);
+
+        console.log('Image processed successfully');
+        res.sendFile(cachedPath);
+    } catch (error) {
+        console.error('Image processing error:', error);
+        next(error);
+    }
+}
+
+// Update image route to use optimization
+app.get('/images/:filename', optimizeImage);
 
 // Serve images from the Models directory with proper headers
 app.use('/images', express.static('/Volumes/VideosNew/Models', {
@@ -138,12 +182,12 @@ tell application "System Events"
 end tell`;
 
     const scriptPath = '/tmp/search_files.applescript';
-    fs.writeFileSync(scriptPath, scriptContent);
+    fsSync.writeFileSync(scriptPath, scriptContent);
     
     const osascriptCommand = `osascript ${scriptPath}`;
     exec(osascriptCommand, (err, out, stdErr) => {
         try {
-            fs.unlinkSync(scriptPath);
+            fsSync.unlinkSync(scriptPath);
         } catch (e) {
             console.error('Failed to clean up script file:', e);
         }

@@ -1,73 +1,35 @@
+// Store all images for filtering
+let allImages = [];
+
 // Function to load images
 async function loadImages() {
     const imageGrid = document.getElementById('image-grid');
-    if (!imageGrid) return; // Exit if we're not on a page with the gallery
+    if (!imageGrid) return;
 
     try {
+        console.log('Starting to load images...');
         // Show loading state
         imageGrid.innerHTML = '<div class="loading">Loading images...</div>';
 
         // Fetch images from the API
+        console.log('Fetching images from API...');
         const response = await fetch('/api/images');
         const data = await response.json();
+        console.log(`Received ${data.length} images from API`);
 
         if (!Array.isArray(data)) {
             throw new Error('Invalid response format');
         }
 
+        // Store all images for filtering
+        allImages = data;
+
         // Clear loading state
         imageGrid.innerHTML = '';
+        displayImages(data);
 
-        // Create image cards
-        data.forEach(file => {
-            const card = document.createElement('div');
-            card.className = 'image-card';
-
-            const img = document.createElement('img');
-            img.src = file.url;
-            img.alt = file.name;
-            img.loading = 'lazy';
-
-            const title = document.createElement('div');
-            title.className = 'image-title';
-            // Extract prefix (everything before the first underscore or the file extension)
-            const prefix = file.name.split(/[_\.]/)[0];
-            title.textContent = prefix;
-
-            const searchIcon = document.createElement('div');
-            searchIcon.className = 'search-icon';
-            searchIcon.innerHTML = '<i class="fas fa-search"></i>';
-            
-            // Prevent search icon click from triggering modal
-            searchIcon.addEventListener('click', (e) => {
-                handleSearchIconClick(e, prefix);
-            });
-
-            // Extract and add tags
-            const tags = extractTags(file.name);
-            const tagsElement = createTagElements(tags);
-
-            card.appendChild(img);
-            card.appendChild(title);
-            card.appendChild(searchIcon);
-            card.appendChild(tagsElement);
-            imageGrid.appendChild(card);
-
-            // Add error handling for images
-            img.onerror = () => {
-                console.error(`Failed to load image: ${file.url}`);
-                img.src = 'placeholder.jpg';
-                img.alt = 'Image not found';
-            };
-
-            // Add click handler for modal
-            card.addEventListener('click', () => {
-                openModal(file.url, prefix);
-            });
-        });
-
-        // Set up modal handlers
-        setupModalHandlers();
+        // Initialize filters
+        initializeFilters();
 
     } catch (error) {
         console.error('Error loading images:', error);
@@ -75,24 +37,164 @@ async function loadImages() {
     }
 }
 
+// Function to display images
+function displayImages(images) {
+    const imageGrid = document.getElementById('image-grid');
+    imageGrid.innerHTML = '';
+
+    images.forEach(image => {
+        const card = document.createElement('div');
+        card.className = 'image-card';
+        
+        const img = document.createElement('img');
+        img.src = image.url;
+        img.alt = image.name;
+        img.loading = 'lazy';
+        
+        // Add image name overlay
+        const nameOverlay = document.createElement('div');
+        nameOverlay.className = 'image-name';
+        const prefix = image.name.split(/[_\.]/)[0];
+        nameOverlay.textContent = prefix;
+        
+        // Add search icon overlay
+        const searchIcon = document.createElement('div');
+        searchIcon.className = 'search-icon';
+        searchIcon.innerHTML = '<i class="fas fa-search"></i>';
+        
+        // Add search icon click handler
+        searchIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleSearchIconClick(e, prefix);
+        });
+        
+        card.appendChild(img);
+        card.appendChild(nameOverlay);
+        card.appendChild(searchIcon);
+        imageGrid.appendChild(card);
+
+        // Add click handler for modal
+        card.addEventListener('click', () => {
+            const modal = document.getElementById('imageModal');
+            const modalImg = document.getElementById('modalImage');
+            
+            modal.style.display = 'block';
+            modalImg.src = image.url;
+            
+            // Add state to browser history
+            history.pushState({ modal: true }, '', '#modal');
+            
+            // Close modal when clicking anywhere
+            modal.onclick = () => {
+                closeModal();
+            };
+            
+            // Close modal with Escape key
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                }
+            });
+        });
+    });
+}
+
+// Function to close modal
+function closeModal() {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    
+    modal.style.display = 'none';
+    modalImg.src = '';
+    
+    // Remove modal from URL if it's there
+    if (location.hash === '#modal') {
+        history.back();
+    }
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', (event) => {
+    const modal = document.getElementById('imageModal');
+    if (modal.style.display === 'block') {
+        closeModal();
+    }
+});
+
+// Initialize filters
+function initializeFilters() {
+    const searchInput = document.getElementById('searchInput');
+    const searchButton = document.getElementById('searchButton');
+    const letterFilters = document.querySelectorAll('.filter-btn');
+
+    // Search functionality
+    const handleSearch = () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        const filteredImages = allImages.filter(file => {
+            const prefix = file.name.split(/[_\.]/)[0].toLowerCase();
+            return prefix.includes(searchTerm);
+        });
+        displayImages(filteredImages);
+    };
+
+    searchInput.addEventListener('input', handleSearch);
+    searchButton.addEventListener('click', handleSearch);
+
+    // Letter filters
+    letterFilters.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Update active state
+            letterFilters.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            const letter = btn.dataset.letter;
+            let filteredImages;
+
+            if (letter === 'all') {
+                filteredImages = allImages;
+            } else {
+                filteredImages = allImages.filter(file => {
+                    const prefix = file.name.split(/[_\.]/)[0].toLowerCase();
+                    return prefix.toLowerCase().startsWith(letter.toLowerCase());
+                });
+            }
+
+            displayImages(filteredImages);
+            
+            // Log for debugging
+            console.log(`Filtered by letter: ${letter}`);
+            console.log(`Found ${filteredImages.length} matching images`);
+        });
+    });
+}
+
 // Function to open modal
 function openModal(imageUrl, caption) {
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('modalImage');
     const modalCaption = document.getElementById('modalCaption');
+    const closeBtn = document.querySelector('.close-modal');
     
     modal.style.display = 'block';
     modalImg.src = imageUrl;
     modalCaption.textContent = caption;
-    
-    // Add click handler to the image itself
-    modalImg.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent double-closing from modal backdrop
-        closeModal();
+
+    // Close button click
+    closeBtn.onclick = closeModal;
+
+    // Click outside image
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    };
+
+    // Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
     });
-    
-    // Add state to browser history
-    history.pushState({ modal: true }, '', '#modal');
 }
 
 // Function to display search results in modal
@@ -154,24 +256,6 @@ async function showSearchResults(searchTerm) {
     } catch (error) {
         console.error('Search error:', error);
         modalCaption.textContent = 'Error performing search. Please try again.';
-    }
-}
-
-// Function to close modal
-function closeModal() {
-    const modal = document.getElementById('imageModal');
-    const modalImg = document.getElementById('modalImage');
-    const searchResults = modal.querySelector('.search-results');
-    
-    modal.style.display = 'none';
-    modalImg.style.display = 'block';
-    
-    if (searchResults) {
-        searchResults.remove();
-    }
-    
-    if (location.hash === '#modal') {
-        history.back();
     }
 }
 
@@ -243,51 +327,6 @@ function filterGalleryByTag(tag) {
             image.style.display = 'block';
         } else {
             image.style.display = 'none';
-        }
-    });
-}
-
-// Set up modal event handlers
-function setupModalHandlers() {
-    const modal = document.getElementById('imageModal');
-    const closeBtn = document.querySelector('.modal-close');
-    
-    // Close button click
-    closeBtn.onclick = closeModal;
-
-    // Click outside image
-    modal.onclick = (e) => {
-        if (e.target === modal) {
-            closeModal();
-        }
-    };
-
-    // Escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal.style.display === 'block') {
-            closeModal();
-        }
-    });
-
-    // Handle browser back/forward
-    window.addEventListener('popstate', (event) => {
-        if (event.state) {
-            if (event.state.modal) {
-                // Handle modal back button
-                const modal = document.getElementById('imageModal');
-                if (modal.style.display === 'block') {
-                    closeModal();
-                }
-            } else if (event.state.section) {
-                // Handle section navigation
-                const section = document.querySelector(`#${event.state.section}`);
-                if (section) {
-                    section.scrollIntoView({ behavior: 'smooth' });
-                }
-            }
-        } else {
-            // If no state, assume we're going back to the top/home
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     });
 }

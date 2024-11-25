@@ -1,0 +1,57 @@
+@startuml Component Diagram
+!theme plain
+skinparam componentStyle rectangle
+
+title Personal Website - Component Architecture
+
+package "Frontend" {
+  [index.html] as UI
+  [styles.css] as Styles
+  [script.js] as ClientJS
+  
+  component "Image Gallery" {
+    [Filter Bar] as FilterBar
+    [Image Grid] as ImageGrid
+    [Modal View] as Modal
+  }
+  
+  component "Contact Form" {
+    [Form Validation] as FormValidation
+    [Form Submission] as FormSubmission
+  }
+}
+
+package "Backend" {
+  [server.js] as Server
+  [routes/gallery.js] as GalleryRoutes
+  
+  database "File System" {
+    folder "Images" as Images
+  }
+}
+
+package "Development Tools" {
+  [ESLint] as Lint
+  [Mocha Tests] as Tests
+  [GitHub Actions] as CI
+}
+
+' Frontend connections
+UI --> Styles : uses
+UI --> ClientJS : uses
+ClientJS --> FilterBar : manages
+ClientJS --> ImageGrid : manages
+ClientJS --> Modal : manages
+ClientJS --> FormValidation : implements
+ClientJS --> FormSubmission : implements
+
+' Backend connections
+Server --> GalleryRoutes : routes
+GalleryRoutes --> Images : reads
+FormSubmission --> Server : submits
+
+' Development connections
+CI --> Tests : runs
+CI --> Lint : runs
+
+@enduml

@@ -1,0 +1,52 @@
+@startuml Deployment Diagram
+!theme plain
+skinparam componentStyle rectangle
+
+title Personal Website - Deployment Architecture
+
+node "GitHub" {
+  component "GitHub Repository" as Repo {
+    [Source Code]
+    [GitHub Actions]
+  }
+}
+
+node "Development Environment" as DevEnv {
+  component "Node.js Server" as DevServer {
+    [Express]
+    [Development Build]
+  }
+  
+  component "Development Tools" as DevTools {
+    [npm]
+    [ESLint]
+    [Mocha]
+  }
+}
+
+node "Production Environment" as ProdEnv {
+  component "Node.js Server" as ProdServer {
+    [Express]
+    [Production Build]
+  }
+  
+  component "Static Assets" as Assets {
+    [HTML/CSS/JS]
+    [Images]
+  }
+}
+
+node "Client Browser" as Client {
+  [Web Browser]
+}
+
+' Development Flow
+Repo --> DevEnv : git clone/pull
+DevTools --> [Development Build] : build & test
+[GitHub Actions] --> ProdEnv : deploy
+
+' Production Flow
+ProdServer --> Client : serve
+Assets --> Client : deliver
+
+@enduml

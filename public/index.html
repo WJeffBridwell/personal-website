@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeff Bridwell | Personal Website</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <nav>
+                <div class="logo">JB</div>
+                <ul>
+                    <li><a href="/">Home</a></li>
+                    <li><a href="#about">About</a></li>
+                    <li><a href="#projects">Projects</a></li>
+                    <li><a href="#gallery">Gallery</a></li>
+                    <li><a href="#contact">Contact</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main>
+            <section id="home" class="hero">
+                <div class="hero-content">
+                    <h1>Jeff Bridwell</h1>
+                    <p class="subtitle">Software Engineer | Tech Innovator</p>
+                    <div class="social-links">
+                        <a href="#" target="_blank"><i class="fab fa-linkedin"></i></a>
+                        <a href="#" target="_blank"><i class="fab fa-github"></i></a>
+                        <a href="#" target="_blank"><i class="fab fa-twitter"></i></a>
+                    </div>
+                </div>
+            </section>
+
+            <section id="about" class="about">
+                <h2>About Me</h2>
+                <div class="about-content">
+                    <img src="profile.jpg" alt="Jeff Bridwell" class="profile-img">
+                    <div class="about-text">
+                        <p>Hello! I'm Jeff Bridwell, a passionate software engineer with a love for creating innovative technological solutions. I specialize in building robust, scalable applications that solve real-world problems.</p>
+                        <div class="skills">
+                            <h3>Technologies I Work With</h3>
+                            <ul>
+                                <li>Python</li>
+                                <li>JavaScript</li>
+                                <li>React</li>
+                                <li>Node.js</li>
+                                <li>Docker</li>
+                                <li>Cloud Computing</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="projects" class="projects">
+                <h2>My Projects</h2>
+                <div class="project-grid">
+                    <div class="project-card">
+                        <h3>Songs I Love</h3>
+                        <p>A curated collection of my favorite songs, featuring music that has moved me and shaped my life's soundtrack.</p>
+                        <a href="https://jeffbridwell.blog" class="btn" target="_blank">View Songs</a>
+                    </div>
+                    <div class="project-card">
+                        <h3>Project 2</h3>
+                        <p>Another innovative project that showcases your skills.</p>
+                        <a href="#" class="btn">View Project</a>
+                    </div>
+                    <div class="project-card">
+                        <h3>Project 3</h3>
+                        <p>A third project that demonstrates your versatility.</p>
+                        <a href="#" class="btn">View Project</a>
+                    </div>
+                </div>
+            </section>
+
+            <section id="gallery" class="gallery">
+                <h2>My Collections</h2>
+                <div id="image-grid" class="image-grid"></div>
+                
+                <!-- Image Modal -->
+                <div id="imageModal" class="modal">
+                    <span class="modal-close">&times;</span>
+                    <img id="modalImage" class="modal-content">
+                    <div id="modalCaption"></div>
+                </div>
+            </section>
+
+            <section id="contact" class="contact">
+                <h2>Get in Touch</h2>
+                <form class="contact-form">
+                    <input type="text" placeholder="Your Name" required>
+                    <input type="email" placeholder="Your Email" required>
+                    <textarea placeholder="Your Message" required></textarea>
+                    <button type="submit" class="btn">Send Message</button>
+                </form>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

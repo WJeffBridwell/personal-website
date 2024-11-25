@@ -6,6 +6,19 @@
     <title>Jeff Bridwell | Personal Website</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Initial styles to prevent layout shift */
+        .section-content,
+        .hero-content,
+        .collections-controls,
+        .image-grid {
+            padding-left: 96px !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -16,7 +29,7 @@
                     <li><a href="/">Home</a></li>
                     <li><a href="#about">About</a></li>
                     <li><a href="#projects">Projects</a></li>
-                    <li><a href="#gallery">Gallery</a></li>
+                    <li><a href="#collections">Collections</a></li>
                     <li><a href="#contact">Contact</a></li>
                 </ul>
             </nav>
@@ -35,68 +48,106 @@
                 </div>
             </section>
 
-            <section id="about" class="about">
-                <h2>About Me</h2>
-                <div class="about-content">
-                    <img src="profile.jpg" alt="Jeff Bridwell" class="profile-img">
-                    <div class="about-text">
-                        <p>Hello! I'm Jeff Bridwell, a passionate software engineer with a love for creating innovative technological solutions. I specialize in building robust, scalable applications that solve real-world problems.</p>
-                        <div class="skills">
-                            <h3>Technologies I Work With</h3>
-                            <ul>
-                                <li>Python</li>
-                                <li>JavaScript</li>
-                                <li>React</li>
-                                <li>Node.js</li>
-                                <li>Docker</li>
-                                <li>Cloud Computing</li>
-                            </ul>
+            <section id="about" class="section about">
+                <div class="section-content">
+                    <h2>About Me</h2>
+                    <div class="about-content">
+                        <img src="profile.jpg" alt="Jeff Bridwell" class="profile-img">
+                        <div class="about-text">
+                            <p>Hello! I'm Jeff Bridwell, a passionate software engineer with a love for creating innovative technological solutions. I specialize in building robust, scalable applications that solve real-world problems.</p>
+                            <div class="skills">
+                                <h3>Technologies I Work With</h3>
+                                <ul>
+                                    <li>Python</li>
+                                    <li>JavaScript</li>
+                                    <li>React</li>
+                                    <li>Node.js</li>
+                                    <li>Docker</li>
+                                    <li>Cloud Computing</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <section id="projects" class="projects">
-                <h2>My Projects</h2>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <h3>Project 1</h3>
-                        <p>A brief description of an exciting project you've worked on.</p>
-                        <a href="#" class="btn">View Project</a>
-                    </div>
-                    <div class="project-card">
-                        <h3>Project 2</h3>
-                        <p>Another innovative project that showcases your skills.</p>
-                        <a href="#" class="btn">View Project</a>
-                    </div>
-                    <div class="project-card">
-                        <h3>Project 3</h3>
-                        <p>A third project that demonstrates your versatility.</p>
-                        <a href="#" class="btn">View Project</a>
+            <section id="projects" class="section projects">
+                <div class="section-content">
+                    <h2>My Projects</h2>
+                    <div class="project-grid">
+                        <div class="project-card">
+                            <h3>Songs I Love</h3>
+                            <p>A curated collection of my favorite songs, featuring music that has moved me and shaped my life's soundtrack.</p>
+                            <a href="https://jeffbridwell.blog" class="btn" target="_blank">View Songs</a>
+                        </div>
+                        <div class="project-card">
+                            <h3>Project 2</h3>
+                            <p>Another innovative project that showcases your skills.</p>
+                            <a href="#" class="btn">View Project</a>
+                        </div>
+                        <div class="project-card">
+                            <h3>Project 3</h3>
+                            <p>A third project that demonstrates your versatility.</p>
+                            <a href="#" class="btn">View Project</a>
+                        </div>
                     </div>
                 </div>
             </section>
 
-            <section id="gallery" class="gallery">
-                <h2>My Collections</h2>
-                <div id="image-grid" class="image-grid"></div>
-                
-                <!-- Image Modal -->
-                <div id="imageModal" class="modal">
-                    <span class="modal-close">&times;</span>
-                    <img id="modalImage" class="modal-content">
-                    <div id="modalCaption"></div>
+            <section id="collections" class="section collections">
+                <div class="section-content">
+                    <h2>My Collections</h2>
+                    <div class="collections-controls">
+                        <div class="search-container">
+                            <input type="text" id="searchInput" placeholder="Search collections...">
+                            <button id="searchButton">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div id="letterFilters" class="letter-filters">
+                            <button class="filter-btn active" data-letter="all">All</button>
+                            <button class="filter-btn" data-letter="A">A</button>
+                            <button class="filter-btn" data-letter="B">B</button>
+                            <button class="filter-btn" data-letter="C">C</button>
+                            <button class="filter-btn" data-letter="D">D</button>
+                            <button class="filter-btn" data-letter="E">E</button>
+                            <button class="filter-btn" data-letter="F">F</button>
+                            <button class="filter-btn" data-letter="G">G</button>
+                            <button class="filter-btn" data-letter="H">H</button>
+                            <button class="filter-btn" data-letter="I">I</button>
+                            <button class="filter-btn" data-letter="J">J</button>
+                            <button class="filter-btn" data-letter="K">K</button>
+                            <button class="filter-btn" data-letter="L">L</button>
+                            <button class="filter-btn" data-letter="M">M</button>
+                            <button class="filter-btn" data-letter="N">N</button>
+                            <button class="filter-btn" data-letter="O">O</button>
+                            <button class="filter-btn" data-letter="P">P</button>
+                            <button class="filter-btn" data-letter="Q">Q</button>
+                            <button class="filter-btn" data-letter="R">R</button>
+                            <button class="filter-btn" data-letter="S">S</button>
+                            <button class="filter-btn" data-letter="T">T</button>
+                            <button class="filter-btn" data-letter="U">U</button>
+                            <button class="filter-btn" data-letter="V">V</button>
+                            <button class="filter-btn" data-letter="W">W</button>
+                            <button class="filter-btn" data-letter="X">X</button>
+                            <button class="filter-btn" data-letter="Y">Y</button>
+                            <button class="filter-btn" data-letter="Z">Z</button>
+                        </div>
+                    </div>
+                    <div id="image-grid" class="image-grid"></div>
                 </div>
             </section>
 
-            <section id="contact" class="contact">
-                <h2>Get in Touch</h2>
-                <form class="contact-form">
-                    <input type="text" placeholder="Your Name" required>
-                    <input type="email" placeholder="Your Email" required>
-                    <textarea placeholder="Your Message" required></textarea>
-                    <button type="submit" class="btn">Send Message</button>
-                </form>
+            <section id="contact" class="section contact">
+                <div class="section-content">
+                    <h2>Get in Touch</h2>
+                    <form class="contact-form">
+                        <input type="text" placeholder="Your Name" required>
+                        <input type="email" placeholder="Your Email" required>
+                        <textarea placeholder="Your Message" required></textarea>
+                        <button type="submit" class="btn">Send Message</button>
+                    </form>
+                </div>
             </section>
         </main>
 
@@ -104,7 +155,10 @@
             <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
         </footer>
     </div>
-
+<!-- Image Modal -->
+<div id="imageModal" class="modal">
+    <img id="modalImage" class="modal-content" src="" alt="">
+</div>
     <script src="script.js"></script>
 </body>
 </html>

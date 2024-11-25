@@ -1,0 +1,54 @@
+@startuml Sequence Diagram
+!theme plain
+skinparam componentStyle rectangle
+
+title Personal Website - Image Gallery Interaction
+
+actor User
+participant "Web Browser" as Browser
+participant "Frontend JS" as JS
+participant "Backend Server" as Server
+database "File System" as FS
+
+== Page Load ==
+User -> Browser: Visit website
+Browser -> Server: GET /
+Server -> Browser: Send HTML/CSS/JS
+Browser -> JS: Initialize
+
+== Image Gallery Load ==
+JS -> Server: GET /api/images
+Server -> FS: Read image directory
+FS -> Server: Return image list
+Server -> JS: Send image data
+JS -> Browser: Render image grid
+
+== Image Filtering ==
+User -> Browser: Click filter button
+Browser -> JS: Filter event
+JS -> JS: Filter images
+JS -> Browser: Update display
+
+== Image Search ==
+User -> Browser: Enter search term
+Browser -> JS: Search event
+JS -> JS: Search images
+JS -> Browser: Update display
+
+== Image Modal ==
+User -> Browser: Click image
+Browser -> JS: Modal event
+JS -> Browser: Show modal
+User -> Browser: Click close
+Browser -> JS: Close event
+JS -> Browser: Hide modal
+
+== Contact Form ==
+User -> Browser: Submit form
+Browser -> JS: Validate form
+JS -> Server: POST /api/contact
+Server -> Server: Process form
+Server -> JS: Confirmation
+JS -> Browser: Show success
+
+@enduml
