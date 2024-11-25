@@ -28,6 +28,46 @@ A modern, responsive personal portfolio website showcasing professional skills, 
 - Add your projects in the Projects section
 - Replace `profile.jpg` with your own image
 
+## Testing
+
+The website includes a comprehensive test suite using Mocha and JSDOM. The tests cover:
+
+- Filter functionality
+  - Letter-based filtering
+  - Search box filtering
+  - "All" filter reset
+- Image gallery features
+  - Image card display
+  - Overlay interactions
+  - Modal behavior
+- Layout and styling
+  - Spacing and margins
+  - Element alignment
+- Contact form validation
+
+### Running Tests
+
+To run the test suite:
+
+```bash
+npm test
+```
+
+### Test Structure
+
+Tests are located in `test/test.js` and use the following technologies:
+- Mocha: Test framework
+- JSDOM: Browser environment simulation
+- Node's built-in assert: Assertions
+
+Each test file is organized into logical sections:
+1. Filter Bar Tests
+2. Image Gallery Tests
+3. Modal Tests
+4. Image Card Overlay Tests
+5. Alignment Tests
+6. Contact Form Tests
+
 ## Future Improvements
 - Backend form submission
 - More detailed project descriptions
