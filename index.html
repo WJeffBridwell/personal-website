@@ -98,12 +98,19 @@
                 <div class="section-content">
                     <h2>My Collections</h2>
                     <div class="collections-controls">
-                        <div class="search-container">
-                            <input type="text" id="searchInput" placeholder="Search images...">
-                            <button id="searchButton"><i class="fas fa-search"></i></button>
+                        <div class="controls-container">
+                            <div class="search-container">
+                                <input type="text" id="searchInput" placeholder="Search images...">
+                                <button id="searchButton">Search</button>
+                            </div>
+                            <div class="sort-container">
+                                <button id="sortAZ" class="sort-btn">Sort A-Z</button>
+                                <button id="sortZA" class="sort-btn">Sort Z-A</button>
+                            </div>
                         </div>
                     </div>
-                    <div id="imageGrid" class="image-grid"></div>
+                    <div id="image-grid" class="image-grid"></div>
+                    <div class="loading-indicator">Loading more images...</div>
                 </div>
             </section>
 
@@ -124,13 +131,15 @@
             <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
         </footer>
     </div>
-<!-- Image Modal -->
-<div id="imageModal" class="modal">
-    <span class="close">&times;</span>
-    <img id="modalImage" class="modal-content" src="" alt="">
-    <div id="caption"></div>
-    <div id="error-message" class="error-message" style="display: none;"></div>
-</div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <img id="modal-img" class="modal-image loading" src="" alt="">
+            <div id="caption" class="modal-caption"></div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>

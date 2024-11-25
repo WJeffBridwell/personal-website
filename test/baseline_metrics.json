@@ -1,16 +1,16 @@
 {
   "Image Loading": {
-    "avg": 3.76,
-    "median": 2.89,
-    "min": 2.5,
-    "max": 7.91,
-    "p95": 7.91
+    "avg": null,
+    "median": null,
+    "min": null,
+    "max": null,
+    "p95": null
   },
   "Scroll Handling": {
-    "avg": 0.37,
-    "median": 0.3,
-    "min": 0.29,
-    "max": 0.67,
-    "p95": 0.67
+    "avg": null,
+    "median": null,
+    "min": null,
+    "max": null,
+    "p95": null
   }
 }
