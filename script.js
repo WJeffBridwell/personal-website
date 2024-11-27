@@ -19,6 +19,15 @@ let performanceMetrics = {
     memory: {}
 };
 
+// State management
+const state = {
+    currentImages: [],
+    filteredImages: [],
+    currentFilter: 'all',
+    currentLetter: 'all',
+    isFiltering: false
+};
+
 // DOM Helper Functions
 function createElement(tag, attributes = {}, children = []) {
     const element = document.createElement(tag);
@@ -526,6 +535,73 @@ function handleScroll() {
     }
 }
 
+// Letter Filter Functionality
+function initLetterFilter() {
+    const letterButtons = document.querySelectorAll('.letter-btn');
+    letterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // Update active button
+            document.querySelectorAll('.letter-btn').forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            // Get selected letter
+            const letter = button.dataset.letter;
+            state.currentLetter = letter;
+
+            // Filter images
+            filterImages();
+        });
+    });
+}
+
+// Get filename from path
+function getFilename(path) {
+    // Extract filename from path and remove extension
+    return path.split('/').pop().split('.')[0];
+}
+
+// Filter images based on current search and letter filter
+function filterImages() {
+    state.isFiltering = true;
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    
+    state.filteredImages = state.currentImages.filter(image => {
+        const filename = getFilename(image.src).toLowerCase();
+        const matchesSearch = !searchTerm || filename.includes(searchTerm);
+        const matchesLetter = state.currentLetter === 'all' || 
+                            filename.startsWith(state.currentLetter.toLowerCase());
+        return matchesSearch && matchesLetter;
+    });
+
+    displayImages(state.filteredImages);
+    state.isFiltering = false;
+}
+
+// Update image loading to store filenames
+async function fetchImages() {
+    try {
+        const response = await fetch('/api/images');
+        if (!response.ok) throw new Error('Failed to fetch images');
+        
+        const images = await response.json();
+        state.currentImages = images.map(image => ({
+            ...image,
+            filename: getFilename(image.src) // Store filename for filtering
+        }));
+        state.filteredImages = [...state.currentImages];
+        
+        return state.currentImages;
+    } catch (error) {
+        console.error('Error fetching images:', error);
+        throw error;
+    }
+}
+
+// Update search event listener to include letter filtering
+document.getElementById('searchInput').addEventListener('input', () => {
+    filterImages();
+});
+
 // Initialization
 async function init() {
     try {
@@ -550,7 +626,7 @@ async function init() {
 
         // Load initial images
         console.log('Loading initial images from local directory...');
-        await imageFunctions.loadNextImageChunk();
+        await fetchImages();
         console.log('Initial images loaded');
 
         // Add scroll event listener for infinite scroll
@@ -588,6 +664,9 @@ async function init() {
             });
         }
         
+        // Initialize letter filter functionality
+        initLetterFilter();
+
         console.log('Initialization complete');
     } catch (error) {
         console.error('Initialization error:', error);

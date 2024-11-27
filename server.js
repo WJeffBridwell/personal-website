@@ -1,3 +1,10 @@
+/**
+ * Express server configuration for the personal website.
+ * Provides static file serving, API endpoints for Finder integration,
+ * and gallery functionality. Includes security middleware and request logging.
+ */
+
+// Import required Node.js modules and external dependencies
 const express = require('express');
 const sharp = require('sharp');
 const path = require('path');
@@ -11,19 +18,30 @@ const { exec } = require('child_process');
 const util = require('util');
 const execPromise = util.promisify(exec);
 
+// Configure Express application and set default port
+const app = express();
+const port = 3000;
+
 // Import routes
 const galleryRouter = require('./routes/gallery');
 
-// Middleware to log all requests
+// Middleware Configuration
+// Log all incoming HTTP requests with timestamp
 app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
 
-// Serve static files from the current directory
+// Static File Serving
+// Serve files from the current directory
 app.use(express.static(__dirname));
 
-// API endpoint to launch Finder with a search query
+/**
+ * API endpoint to launch macOS Finder with a search query
+ * @route GET /api/finder-search
+ * @param {string} term - The search term to look for in Finder
+ * @returns {Object} JSON response indicating success or failure
+ */
 app.get('/api/finder-search', (req, res) => {
     const searchTerm = req.query.term;
     if (!searchTerm) {
@@ -86,10 +104,12 @@ end tell`;
     });
 });
 
-// Use gallery router
+// Mount Routes
+// Use the gallery router for all /gallery routes
 app.use('/gallery', galleryRouter);
 
-// Start server with error handling
+// Server Initialization
+// Start the server with error handling for common issues like port conflicts
 const server = app.listen(port, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}`);
 }).on('error', (error) => {

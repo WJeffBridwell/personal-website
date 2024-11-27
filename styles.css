@@ -569,66 +569,21 @@ body.modal-open {
 
 .controls-container {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 1rem;
+    gap: 96px; /* Exactly 1 inch */
     width: 100%;
 }
 
 .search-container {
     display: flex;
-    gap: 0.5rem;
+    gap: 10px;
     flex: 1;
-}
-
-.search-container input {
-    flex: 1;
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 1rem;
-}
-
-.search-container button {
-    padding: 8px 16px;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-}
-
-.search-container button:hover {
-    background-color: var(--accent-color);
 }
 
 .sort-container {
     display: flex;
     gap: 0.5rem;
-}
-
-.sort-btn {
-    padding: 8px 16px;
-    background-color: white;
-    color: var(--text-color);
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.9rem;
-}
-
-.sort-btn:hover {
-    background-color: var(--background-color);
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-}
-
-.sort-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
+    margin-right: auto; /* Ensures sort container stays next to search container */
 }
 
 /* Image grid */
@@ -752,6 +707,28 @@ body.modal-open {
     section {
         padding: 40px 0;
     }
+}
+
+/* Search and Sort Button Styles */
+.search-container button,
+.sort-btn {
+    padding: 8px 16px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    font-size: 1rem;
+}
+
+.search-container button:hover,
+.sort-btn:hover {
+    background-color: var(--accent-color);
+}
+
+.sort-btn.active {
+    background-color: var(--accent-color);
 }
 
 /* Sorting Controls */
@@ -951,4 +928,60 @@ footer {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         gap: 10px;
     }
+}
+
+/* A-Z Filter Styles */
+.search-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    flex: 1;
+}
+
+.filter-container {
+    display: flex;
+    align-items: center;
+}
+
+.az-filter {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.az-filter span {
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.letter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.letter-btn {
+    padding: 4px 8px;
+    background-color: white;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--primary-color);
+    font-size: 0.9rem;
+}
+
+.letter-btn:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.letter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.letter-btn.all {
+    font-weight: 500;
 }

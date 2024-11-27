@@ -30,7 +30,7 @@ describe('Collections Controls Layout', () => {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                gap: 1rem;
+                gap: 96px;
                 width: 100%;
             }
 
@@ -43,6 +43,7 @@ describe('Collections Controls Layout', () => {
             .sort-container {
                 display: flex;
                 gap: 0.5rem;
+                margin-right: auto;
             }
 
             .sort-btn {
@@ -58,22 +59,29 @@ describe('Collections Controls Layout', () => {
     });
 
     test('sort buttons are properly aligned and spaced', () => {
+        const controlsContainer = document.querySelector('.controls-container');
         const sortContainer = document.querySelector('.sort-container');
+        const searchContainer = document.querySelector('.search-container');
         const sortButtons = sortContainer.querySelectorAll('.sort-btn');
 
         // Check that we have two sort buttons
         expect(sortButtons.length).toBe(2);
 
         // Get computed styles
-        const containerStyle = window.getComputedStyle(sortContainer);
+        const containerStyle = window.getComputedStyle(controlsContainer);
+        const sortContainerStyle = window.getComputedStyle(sortContainer);
 
-        // Check flex layout and gap
+        // Check flex layout and gaps
         expect(containerStyle.display).toBe('flex');
-        expect(containerStyle.gap).toBe('0.5rem');
+        expect(containerStyle.gap).toBe('96px'); 
+        expect(sortContainerStyle.gap).toBe('0.5rem');
 
         // Check that buttons are in the correct order
         expect(sortButtons[0].textContent).toBe('Sort A-Z');
         expect(sortButtons[1].textContent).toBe('Sort Z-A');
+
+        // Check that sort container is positioned correctly
+        expect(sortContainerStyle.marginRight).toBe('auto');
 
         // Check that buttons have the correct class and styles
         sortButtons.forEach(button => {
@@ -96,17 +104,18 @@ describe('Collections Controls Layout', () => {
         // Check the flex layout properties that ensure correct positioning
         const controlsStyle = window.getComputedStyle(controlsContainer);
         expect(controlsStyle.display).toBe('flex');
-        expect(controlsStyle.justifyContent).toBe('space-between');
+        expect(controlsStyle.gap).toBe('96px'); 
         expect(controlsStyle.width).toBe('100%');
 
         // Check that search container takes up remaining space
         const searchStyle = window.getComputedStyle(searchContainer);
         expect(searchStyle.flex).toBe('1');
 
-        // Check that sort container is a flex container
+        // Check that sort container is a flex container with correct positioning
         const sortStyle = window.getComputedStyle(sortContainer);
         expect(sortStyle.display).toBe('flex');
         expect(sortStyle.gap).toBe('0.5rem');
+        expect(sortStyle.marginRight).toBe('auto');
 
         // Check the DOM order
         const children = Array.from(controlsContainer.children);
@@ -122,7 +131,7 @@ describe('Collections Controls Layout', () => {
         // Check initial layout
         const controlsStyle = window.getComputedStyle(controlsContainer);
         expect(controlsStyle.display).toBe('flex');
-        expect(controlsStyle.justifyContent).toBe('space-between');
+        expect(controlsStyle.gap).toBe('96px'); 
 
         // Simulate window resize to desktop
         window.innerWidth = 1024;
@@ -143,7 +152,7 @@ describe('Collections Controls Layout', () => {
 
         // Check that layout structure is preserved
         expect(controlsStyle.display).toBe('flex');
-        expect(controlsStyle.justifyContent).toBe('space-between');
+        expect(controlsStyle.gap).toBe('96px'); 
         expect(searchStyle.flex).toBe('1');
 
         // Verify DOM order is maintained
