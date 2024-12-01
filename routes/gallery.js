@@ -10,11 +10,11 @@ console.log('=====================================');
 
 // Import required dependencies for file system and routing
 import express from 'express';
-import path from 'path';
-import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { exec } from 'child_process';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,20 +43,38 @@ router.get('/test', (req, res) => {
 /**
  * Serve the main gallery page
  * @route GET /gallery
- * @returns {HTML} The gallery.html page
+ * @returns {HTML} The gallery.html page from public directory
  */
-router.get('/', (req, res) => {
-    console.log('Gallery root route hit');
-    const htmlPath = path.join(__dirname, '../gallery.html');
-    console.log('Attempting to serve:', htmlPath);
-    res.sendFile(htmlPath, (err) => {
-        if (err) {
-            console.error('Error serving gallery.html:', err);
-            res.status(500).send('Error loading gallery page');
-        } else {
-            console.log('Successfully served gallery.html');
-        }
-    });
+router.get('/', async (req, res) => {
+    console.log('\n=== Gallery Route Hit ===');
+    const galleryPath = path.join(__dirname, '../public/gallery.html');
+    console.log('Full gallery path:', galleryPath);
+    
+    try {
+        // Verify file exists
+        await fs.access(galleryPath);
+        console.log('Gallery file exists at path');
+        
+        // Read file contents for verification
+        const contents = await fs.readFile(galleryPath, 'utf8');
+        console.log('Gallery file length:', contents.length);
+        console.log('Contains modal:', contents.includes('id="imageModal"'));
+        
+        // Send the file
+        res.setHeader('Content-Type', 'text/html');
+        res.sendFile(galleryPath, (err) => {
+            if (err) {
+                console.error('Error sending gallery.html:', err);
+                res.status(500).send('Error loading gallery page');
+            } else {
+                console.log('Successfully sent gallery.html');
+            }
+        });
+    } catch (error) {
+        console.error('Error accessing gallery.html:', error);
+        res.status(500).send('Error loading gallery page');
+    }
+    console.log('======================\n');
 });
 
 /**
@@ -68,79 +86,7 @@ router.get('/', (req, res) => {
  * @throws {500} If there's an error reading the directory
  */
 router.get('/images', async (req, res) => {
-    const startTime = process.hrtime();
-    console.log('Gallery images route hit');
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const offset = (page - 1) * limit;
-        
-        console.log(`Fetching images - page: ${page}, limit: ${limit}`);
-        const directoryPath = '/Volumes/VideosNew/Models';
-        
-        // Time directory access check
-        const accessStartTime = process.hrtime();
-        try {
-            await fs.access(directoryPath);
-            const accessTime = process.hrtime(accessStartTime);
-            console.log(`Directory access time: ${accessTime[0]}s ${accessTime[1] / 1000000}ms`);
-        } catch (err) {
-            console.error('Directory access error:', err);
-            return res.status(500).json({ error: 'Directory not accessible', details: err.message });
-        }
-        
-        // Time directory read
-        const readStartTime = process.hrtime();
-        const allFiles = await fs.readdir(directoryPath, { withFileTypes: true });
-        const readTime = process.hrtime(readStartTime);
-        console.log(`Directory read time: ${readTime[0]}s ${readTime[1] / 1000000}ms`);
-        console.log('Total files found:', allFiles.length);
-        
-        // Time filtering and processing
-        const processStartTime = process.hrtime();
-        const totalImages = allFiles.filter(file => !file.isDirectory() && /\.(jpg|jpeg|png|webp)$/i.test(file.name)).length;
-        
-        const files = allFiles
-            .filter(file => !file.isDirectory() && /\.(jpg|jpeg|png|webp)$/i.test(file.name))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .slice(offset, offset + limit)
-            .map(file => ({
-                name: file.name,
-                url: `/images/${encodeURIComponent(file.name)}`
-            }));
-        
-        const processTime = process.hrtime(processStartTime);
-        console.log(`Processing time: ${processTime[0]}s ${processTime[1] / 1000000}ms`);
-        console.log(`Returning ${files.length} images (total: ${totalImages})`);
-        
-        const totalTime = process.hrtime(startTime);
-        console.log(`Total route time: ${totalTime[0]}s ${totalTime[1] / 1000000}ms`);
-        
-        res.json({
-            images: files,
-            pagination: {
-                page,
-                limit,
-                total: totalImages,
-                totalPages: Math.ceil(totalImages / limit),
-                hasMore: offset + files.length < totalImages
-            },
-            performance: {
-                totalTime: `${totalTime[0]}s ${totalTime[1] / 1000000}ms`,
-                readTime: `${readTime[0]}s ${readTime[1] / 1000000}ms`,
-                processTime: `${processTime[0]}s ${processTime[1] / 1000000}ms`
-            }
-        });
-    } catch (error) {
-        const errorTime = process.hrtime(startTime);
-        console.error('Error reading directory:', error);
-        console.error(`Error occurred after: ${errorTime[0]}s ${errorTime[1] / 1000000}ms`);
-        res.status(500).json({ error: 'Error reading directory', details: error.message });
-    }
-});
-
-router.get('/images/:imageName', async (req, res) => {
-    console.log('Gallery image route hit');
+    console.log('GET /gallery/images endpoint hit');
     try {
         const directoryPath = '/Volumes/VideosNew/Models';
         console.log('Checking directory:', directoryPath);
@@ -151,25 +97,79 @@ router.get('/images/:imageName', async (req, res) => {
             console.log('Directory exists and is accessible');
         } catch (err) {
             console.error('Directory access error:', err);
-            return res.status(500).json({ error: 'Directory not accessible', details: err.message });
+            return res.status(500).json({ 
+                error: 'Directory not accessible', 
+                details: err.message,
+                path: directoryPath
+            });
         }
+
+        // Read directory contents
+        const files = await fs.readdir(directoryPath, { withFileTypes: true });
+        console.log(`Found ${files.length} total files in directory`);
         
-        const imagePath = path.join(directoryPath, req.params.imageName);
-        console.log('Checking image file:', imagePath);
+        // Filter for images
+        const images = files
+            .filter(file => {
+                const isImage = !file.isDirectory() && /\.(jpg|jpeg|png|webp)$/i.test(file.name);
+                if (isImage) console.log('Found image:', file.name);
+                return isImage;
+            })
+            .map(file => ({
+                name: file.name,
+                url: `/gallery/images/${encodeURIComponent(file.name)}`
+            }));
+
+        console.log(`Returning ${images.length} images`);
+        res.json({ images });
         
-        // Check if image file exists and is accessible
+    } catch (error) {
+        console.error('Error in /gallery/images:', error);
+        res.status(500).json({ 
+            error: 'Failed to read directory',
+            details: error.message
+        });
+    }
+});
+
+// Serve individual images
+router.get('/images/:imageName', async (req, res) => {
+    const imageName = decodeURIComponent(req.params.imageName);
+    console.log('GET /gallery/images/:imageName endpoint hit for:', imageName);
+    
+    try {
+        const imagePath = path.join('/Volumes/VideosNew/Models', imageName);
+        console.log('Attempting to serve image from:', imagePath);
+        
         try {
             await fs.access(imagePath);
-            console.log('Image file exists and is accessible');
+            console.log('Image file exists, serving:', imagePath);
+            
+            // Determine content type based on file extension
+            const ext = path.extname(imageName).toLowerCase();
+            let contentType = 'image/jpeg';  // default
+            if (ext === '.png') contentType = 'image/png';
+            else if (ext === '.webp') contentType = 'image/webp';
+            
+            res.sendFile(imagePath, {
+                headers: {
+                    'Content-Type': contentType
+                }
+            });
         } catch (err) {
-            console.error('Image file access error:', err);
-            return res.status(404).json({ error: 'Image file not found', details: err.message });
+            console.error('Image file not found:', imagePath, err);
+            res.status(404).json({ 
+                error: 'Image not found',
+                details: err.message,
+                path: imagePath
+            });
         }
-        
-        res.sendFile(imagePath);
     } catch (error) {
-        console.error('Error reading directory:', error);
-        res.status(500).json({ error: 'Error reading directory', details: error.message });
+        console.error('Error serving image:', error);
+        res.status(500).json({ 
+            error: 'Failed to serve image',
+            details: error.message
+        });
     }
 });
 
@@ -317,5 +317,5 @@ end tell`;
 
 console.log('Gallery routes registered:', router.stack.map(r => r.route?.path));
 
-// Export the router for use in the main application
+// Export the router
 export default router;

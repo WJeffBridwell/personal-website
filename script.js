@@ -1,30 +1,109 @@
-// Test module loading
-export function init() {
-    console.log('Module initialized');
+console.log('Script file loaded and starting execution');
+
+// Global variables
+let currentPage = 1;
+let isLoading = false;
+let modal, modalImg, modalCaption, closeModalBtn;
+
+// Modal functions
+function openModal(imageSrc, caption) {
+    console.log('Opening modal with:', { imageSrc, caption });
+    if (!modal || !modalImg || !modalCaption) {
+        console.error('Modal elements missing:', {
+            modal: !!modal,
+            modalImg: !!modalImg,
+            modalCaption: !!modalCaption
+        });
+        return;
+    }
+    modal.style.display = 'block';
+    modalImg.src = imageSrc;
+    modalCaption.textContent = caption;
+    console.log('Modal opened');
 }
 
-console.log('Script file loaded and starting execution');
+function closeModalFunction() {
+    console.log('Closing modal');
+    if (!modal || !modalImg) {
+        console.error('Modal elements missing for close');
+        return;
+    }
+    modal.style.display = 'none';
+    modalImg.src = '';
+    console.log('Modal closed');
+}
+
+// Initialize modal event listeners
+function initializeModalListeners() {
+    console.log('Setting up modal listeners');
+    
+    // Get modal elements
+    modal = document.getElementById('imageModal');
+    modalImg = document.getElementById('modalImage');
+    modalCaption = document.getElementById('modalCaption');
+    closeModalBtn = document.querySelector('.close-modal');
+
+    console.log('Modal elements found:', {
+        modal: !!modal,
+        modalImg: !!modalImg,
+        modalCaption: !!modalCaption,
+        closeModalBtn: !!closeModalBtn
+    });
+    
+    if (!modal || !closeModalBtn) {
+        console.error('Cannot initialize modal listeners - elements missing:', {
+            modal: !!modal,
+            closeModalBtn: !!closeModalBtn
+        });
+        return;
+    }
+
+    // Close modal with close button
+    closeModalBtn.onclick = closeModalFunction;
+
+    // Close modal when clicking outside the image
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            closeModalFunction();
+        }
+    };
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeModalFunction();
+        }
+    });
+    
+    console.log('Modal listeners initialized');
+}
 
 // Basic image loading
 async function fetchImages() {
     console.log('fetchImages called');
-    const response = await fetch('http://localhost:3000/gallery/images');
-    console.log('fetchImages response:', response.status);
-    const data = await response.json();
-    console.log('fetchImages data:', data);
-    return data.images;
+    try {
+        const response = await fetch('/gallery/images');
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Fetched image data:', data);
+        return data.images;
+    } catch (error) {
+        console.error('Error fetching images:', error);
+        throw error;
+    }
 }
 
 // Search for image in Finder
 async function searchImageInFinder(imageName) {
     console.log('Searching for image:', imageName);
     try {
-        const response = await fetch(`http://localhost:3000/gallery/finder-search?term=${encodeURIComponent(imageName)}`);
-        
+        const response = await fetch(`/gallery/finder-search?term=${encodeURIComponent(imageName)}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
         const result = await response.json();
         console.log('Search result:', result);
     } catch (error) {
@@ -41,8 +120,7 @@ function displayImages(images) {
         return;
     }
     
-    grid.innerHTML = '';
-    console.log('Grid cleared, adding images...');
+    grid.innerHTML = ''; // Clear existing images
     
     images.forEach((image, index) => {
         console.log(`Processing image ${index + 1}/${images.length}:`, image.name);
@@ -51,9 +129,16 @@ function displayImages(images) {
         
         // Create image element
         const img = document.createElement('img');
-        img.src = `http://localhost:3000${image.url}`;
+        img.src = image.url;
         img.alt = image.name;
+        img.loading = 'lazy';
         img.className = 'loading';
+        
+        // Add click handler for modal
+        img.addEventListener('click', () => {
+            console.log('Image clicked:', image.name);
+            openModal(image.url, image.name);
+        });
         
         // Create search icon
         const searchIcon = document.createElement('i');
@@ -69,90 +154,42 @@ function displayImages(images) {
         nameLabel.className = 'image-name';
         nameLabel.textContent = image.name;
         
-        // Add loading and error handlers
         img.onload = () => {
+            console.log('Image loaded:', image.name);
             img.classList.remove('loading');
             img.classList.add('loaded');
             container.classList.remove('skeleton');
         };
         
-        img.onerror = () => {
-            console.error('Failed to load image:', image.url);
+        img.onerror = (e) => {
+            console.error('Failed to load image:', image.url, e);
             img.classList.remove('loading');
             img.classList.add('error');
             container.classList.remove('skeleton');
-            container.classList.add('error');
         };
         
-        // Add hover effect handlers
-        container.addEventListener('mouseenter', () => {
-            searchIcon.style.opacity = '1';
-            nameLabel.style.opacity = '1';
-        });
-        
-        container.addEventListener('mouseleave', () => {
-            searchIcon.style.opacity = '0';
-            nameLabel.style.opacity = '0';
-        });
-        
-        // Assemble the container
         container.appendChild(img);
         container.appendChild(searchIcon);
         container.appendChild(nameLabel);
         grid.appendChild(container);
     });
-    console.log('All images added to grid');
 }
 
-console.log('Setting up initialization');
+// Initialize gallery when DOM is loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM loaded, initializing gallery');
 
-// Initialize when DOM and stylesheets are loaded
-Promise.all([
-    new Promise(resolve => {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', resolve);
-        } else {
-            resolve();
-        }
-    }),
-    new Promise(resolve => {
-        const styleSheets = Array.from(document.styleSheets);
-        if (styleSheets.length === document.querySelectorAll('link[rel="stylesheet"]').length) {
-            resolve();
-        } else {
-            let loadedStyles = 0;
-            const stylesToLoad = document.querySelectorAll('link[rel="stylesheet"]').length;
-            document.querySelectorAll('link[rel="stylesheet"]').forEach(stylesheet => {
-                if (stylesheet.sheet) {
-                    loadedStyles++;
-                    if (loadedStyles === stylesToLoad) resolve();
-                } else {
-                    stylesheet.onload = () => {
-                        loadedStyles++;
-                        if (loadedStyles === stylesToLoad) resolve();
-                    };
-                }
-            });
-        }
-    })
-]).then(async () => {
-    console.log('DOM and stylesheets loaded - Starting initialization');
+    // Initialize modal listeners (this will also get modal elements)
+    initializeModalListeners();
+
     try {
-        console.log('Starting to fetch images...');
         const images = await fetchImages();
-        console.log(`Fetched ${images.length} images successfully`);
-        displayImages(images);
-        console.log('Gallery initialization complete');
+        await displayImages(images);
     } catch (error) {
         console.error('Failed to initialize gallery:', error);
         const grid = document.getElementById('image-grid');
         if (grid) {
-            grid.innerHTML = `
-                <div class="error-message">
-                    Failed to load gallery: ${error.message}
-                    <br>
-                    Check the console for more details.
-                </div>`;
+            grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
         }
     }
 });

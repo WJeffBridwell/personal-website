@@ -1,448 +1,209 @@
-// Function to load images
-async function loadImages() {
-  const imageGrid = document.getElementById('image-grid');
-  if (!imageGrid) return; // Exit if we're not on a page with the gallery
-
-  try {
-    // Show loading state
-    imageGrid.innerHTML = '<div class="loading">Loading images...</div>';
-
-    // Fetch images from the API
-    const response = await fetch('/api/images');
-    const data = await response.json();
-
-    if (!Array.isArray(data)) {
-      throw new Error('Invalid response format');
-    }
-
-    // Clear loading state
-    imageGrid.innerHTML = '';
-
-    // Create image cards
-    data.forEach(file => {
-      const card = document.createElement('div');
-      card.className = 'image-card';
-
-      const img = document.createElement('img');
-      img.src = file.url;
-      img.alt = file.name;
-      img.loading = 'lazy';
-
-      const title = document.createElement('div');
-      title.className = 'image-title';
-      // Extract prefix (everything before the first underscore or the file extension)
-      const prefix = file.name.split(/[_.]/)[0];
-      title.textContent = prefix;
-
-      const searchIcon = document.createElement('div');
-      searchIcon.className = 'search-icon';
-      searchIcon.innerHTML = '<i class="fas fa-search"></i>';
-
-      // Prevent search icon click from triggering modal
-      searchIcon.addEventListener('click', e => {
-        handleSearchIconClick(e, prefix);
-      });
-
-      // Extract and add tags
-      const tags = extractTags(file.name);
-      const tagsElement = createTagElements(tags);
-
-      card.appendChild(img);
-      card.appendChild(title);
-      card.appendChild(searchIcon);
-      card.appendChild(tagsElement);
-      imageGrid.appendChild(card);
-
-      // Add error handling for images
-      img.onerror = () => {
-        console.error(`Failed to load image: ${file.url}`);
-        img.src = '/images/placeholder.jpg';
-        img.alt = 'Image not found';
-        img.classList.add('error');
-      };
-
-      // Add click handler for modal
-      card.addEventListener('click', () => {
-        openModal(file.url, prefix);
-      });
-    });
-
-    // Set up modal handlers
-    setupModalHandlers();
-  } catch (error) {
-    console.error('Error loading images:', error);
-    // Display error message in the UI
-    const errorMessage = document.createElement('div');
-    errorMessage.className = 'error-message';
-    errorMessage.textContent = 'Operation failed';
-    document.body.appendChild(errorMessage);
-    setTimeout(() => errorMessage.remove(), 3000);
-  }
-}
-
-// Function to open modal
-function openModal(imageUrl, caption) {
-  const modalInstance = document.getElementById('imageModal');
-  const modalImg = document.getElementById('modalImage');
-  const modalCaption = document.getElementById('modalCaption');
-
-  modalInstance.style.display = 'block';
-  modalImg.src = imageUrl;
-  modalCaption.textContent = caption;
-
-  // Add click handler to the image itself
-  modalImg.addEventListener('click', e => {
-    e.stopPropagation(); // Prevent double-closing from modal backdrop
-    closeModal();
-  });
-
-  // Add state to browser history
-  history.pushState({ modal: true }, '', '#modal');
-}
-
-// Function to display search results in modal
-async function showSearchResults(searchTerm) {
-  const modalInstance = document.getElementById('imageModal');
-  const modalImg = document.getElementById('modalImage');
-  const modalCaption = document.getElementById('modalCaption');
-
-  try {
-    modalCaption.textContent = `Searching for "${searchTerm}"...`;
-    modalInstance.style.display = 'block';
-
-    const response = await fetch('/api/search?query=' + encodeURIComponent(searchTerm));
-    if (!response.ok) {
-      throw new Error('Search failed');
-    }
-    const results = await response.json();
-
-    if (!Array.isArray(results)) {
-      throw new Error('Invalid response format');
-    }
-
-    // Create results container
-    const resultsContainer = document.createElement('div');
-    resultsContainer.className = 'search-results';
-
-    if (results.length === 0) {
-      // Display error message in the UI
-      const errorMessage = document.createElement('div');
-      errorMessage.className = 'error-message';
-      errorMessage.textContent = 'No matching images found';
-      document.body.appendChild(errorMessage);
-      setTimeout(() => errorMessage.remove(), 3000);
-    } else {
-      results.forEach(result => {
-        const resultCard = document.createElement('div');
-        resultCard.className = 'result-card';
-
-        const img = document.createElement('img');
-        img.src = result.url;
-        img.alt = result.name;
-        img.loading = 'lazy';
-
-        // Add error handling for images
-        img.onerror = () => {
-          console.error(`Failed to load image: ${result.url}`);
-          img.src = '/images/placeholder.jpg';
-          img.alt = 'Image not found';
-          img.classList.add('error');
-        };
-
-        resultCard.appendChild(img);
-        resultCard.addEventListener('click', () => {
-          openModal(result.url, result.name.split('.')[0]);
-        });
-
-        resultsContainer.appendChild(resultCard);
-      });
-    }
-
-    modalImg.style.display = 'none';
-    modalCaption.after(resultsContainer);
-
-    // Add state to browser history
-    history.pushState({ modal: true, search: true }, '', '#search');
-  } catch (error) {
-    console.error('Search failed:', error);
-    // Display error message in the UI
-    const errorMessage = document.createElement('div');
-    errorMessage.className = 'error-message';
-    errorMessage.textContent = 'Search failed. Please try again.';
-    document.body.appendChild(errorMessage);
-    setTimeout(() => errorMessage.remove(), 3000);
-  }
-}
-
-// Expose showSearchResults for event handlers
-window.showSearchResults = showSearchResults;
-
-// Function to close modal
-function closeModal() {
-  const currentModal = document.getElementById('imageModal');
-  const modalImg = document.getElementById('modalImage');
-  const searchResults = currentModal.querySelector('.search-results');
-
-  currentModal.style.display = 'none';
-  modalImg.style.display = 'block';
-
-  if (searchResults) {
-    searchResults.remove();
-  }
-
-  if (location.hash === '#modal') {
-    history.back();
-  }
-}
-
-// Function to handle search icon click
-async function handleSearchIconClick(event, imageName) {
-  event.stopPropagation();
-  try {
-    const response = await fetch(`/api/finder-search?term=${encodeURIComponent(imageName)}`);
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.details || data.error || 'Search failed');
-    }
-
-    if (!data.success) {
-      throw new Error('Search operation did not complete successfully');
-    }
-  } catch (error) {
-    console.error('Search error:', error);
-    alert(`Search error: ${error.message}`);
-  }
-}
-
-// Function to extract tags from filename
-function extractTags(filename) {
-  // Remove file extension
-  const nameWithoutExt = filename.split('.').slice(0, -1).join('.');
-
-  // Split by underscore and remove the first part (prefix)
-  const parts = nameWithoutExt.split('_').slice(1);
-
-  // Filter out empty strings and convert to lowercase
-  return parts.filter(Boolean).map(tag => tag.toLowerCase());
-}
-
-// Function to create tag elements
-function createTagElements(tags) {
-  const tagsContainer = document.createElement('div');
-  tagsContainer.className = 'image-tags';
-
-  tags.forEach(tag => {
-    const tagElement = document.createElement('span');
-    tagElement.className = 'image-tag';
-    tagElement.textContent = tag;
-    tagElement.addEventListener('click', e => {
-      e.stopPropagation(); // Prevent image card click
-      filterGalleryByTag(tag);
-    });
-    tagsContainer.appendChild(tagElement);
-  });
-
-  return tagsContainer;
-}
-
-// Function to filter gallery by tag
-function filterGalleryByTag(tag) {
-  const images = document.querySelectorAll('.image-card');
-  const buttons = document.querySelectorAll('.filter-button');
-
-  // Remove active state from letter filters
-  buttons.forEach(button => button.classList.remove('active'));
-
-  // Filter images
-  images.forEach(image => {
-    const tags = Array.from(image.querySelectorAll('.image-tag'))
-      .map(tagEl => tagEl.textContent.toLowerCase());
-
-    if (tags.includes(tag.toLowerCase())) {
-      image.style.display = 'block';
-    } else {
-      image.style.display = 'none';
-    }
-  });
-}
-
-// Set up modal event handlers
-function setupModalHandlers() {
-  const modalDialog = document.getElementById('imageModal');
-  const closeBtn = document.querySelector('.modal-close');
-
-  // Close button click
-  closeBtn.onclick = closeModal;
-
-  // Click outside image
-  modalDialog.onclick = e => {
-    if (e.target === modalDialog) {
-      closeModal();
-    }
-  };
-
-  // Escape key
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && modalDialog.style.display === 'block') {
-      closeModal();
-    }
-  });
-
-  // Handle browser back/forward
-  window.addEventListener('popstate', event => {
-    if (event.state) {
-      if (event.state.modal) {
-        // Handle modal back button
-        const modal = document.getElementById('imageModal');
-        if (modal.style.display === 'block') {
-          closeModal();
-        }
-      } else if (event.state.section) {
-        // Handle section navigation
-        const section = document.querySelector(`#${event.state.section}`);
-        if (section) {
-          section.scrollIntoView({ behavior: 'smooth' });
-        }
-      }
-    } else {
-      // If no state, assume we're going back to the top/home
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  });
-}
-
-// Create filter bar
-function createFilterBar() {
-  const filterBar = document.createElement('div');
-  filterBar.className = 'filter-bar';
-
-  // Add "All" button
-  const allButton = document.createElement('button');
-  allButton.className = 'filter-button all active';
-  allButton.textContent = 'All';
-  allButton.addEventListener('click', () => filterGallery('all'));
-  filterBar.appendChild(allButton);
-
-  // Add A-Z buttons
-  for (let i = 65; i <= 90; i++) {
-    const letter = String.fromCharCode(i);
-    const button = document.createElement('button');
-    button.className = 'filter-button';
-    button.textContent = letter;
-    button.addEventListener('click', () => filterGallery(letter));
-    filterBar.appendChild(button);
-  }
-
-  // Add search box
-  const searchBox = document.createElement('input');
-  searchBox.type = 'text';
-  searchBox.className = 'filter-search';
-  searchBox.placeholder = 'Search by name...';
-  searchBox.addEventListener('input', e => filterGalleryBySearch(e.target.value));
-  filterBar.appendChild(searchBox);
-
-  // Insert filter bar after the heading but before the image grid
-  const gallery = document.querySelector('.gallery');
-  const imageGrid = document.querySelector('#image-grid');
-  gallery.insertBefore(filterBar, imageGrid);
-}
-
-// Filter gallery by search term
-function filterGalleryBySearch(searchTerm) {
-  const imageCards = document.querySelectorAll('.image-card');
-  const normalizedSearchTerm = searchTerm.toLowerCase().trim();
-
-  imageCards.forEach(card => {
-    const title = card.querySelector('.image-title').textContent.toLowerCase();
-    if (normalizedSearchTerm === '' || title.includes(normalizedSearchTerm)) {
-      card.style.display = '';
-    } else {
-      card.style.display = 'none';
-    }
-  });
-
-  // Reset active state of filter buttons
-  document.querySelectorAll('.filter-button').forEach(button => {
-    button.classList.remove('active');
-  });
-  if (normalizedSearchTerm === '') {
-    document.querySelector('.filter-button.all').classList.add('active');
-  }
-}
-
-// Filter gallery by letter
-function filterGallery(filter) {
-  const imageCards = document.querySelectorAll('.image-card');
-  const searchBox = document.querySelector('.filter-search');
-
-  // Clear search box
-  if (searchBox) {
-    searchBox.value = '';
-  }
-
-  imageCards.forEach(card => {
-    const title = card.querySelector('.image-title').textContent;
-    if (filter === 'all' || title.charAt(0).toUpperCase() === filter) {
-      card.style.display = '';
-    } else {
-      card.style.display = 'none';
-    }
-  });
-
-  // Update active state of filter buttons
-  document.querySelectorAll('.filter-button').forEach(button => {
-    button.classList.remove('active');
-    if ((filter === 'all' && button.classList.contains('all')) ||
-            button.textContent === filter) {
-      button.classList.add('active');
-    }
-  });
-}
-
-// Handle browser history for sections
-document.querySelectorAll('nav a[href^="#"]').forEach(anchor => {
-  anchor.addEventListener('click', function (e) {
-    e.preventDefault();
-    const sectionId = this.getAttribute('href');
-    const section = document.querySelector(sectionId);
-
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-      // Add state to browser history
-      const stateName = sectionId.replace('#', '');
-      history.pushState({ section: stateName }, '', `#${stateName}`);
-    }
-  });
-});
-
-// Load images when the page loads
+console.log('=== Script Starting ===');
+console.log('Document readyState:', document.readyState);
+console.log('Full HTML:', document.documentElement.outerHTML);
+
+console.log('Script file loaded and starting execution');
+
+// Verify we're on the gallery page
+const isGalleryPage = document.title.includes('Gallery') || window.location.pathname.includes('gallery');
+console.log('Is gallery page:', isGalleryPage);
+console.log('Page title:', document.title);
+console.log('Page URL:', window.location.href);
+console.log('Page pathname:', window.location.pathname);
+
+// Global variables
+let currentPage = 1;
+let isLoading = false;
+let modal, modalImg, modalCaption, closeBtn;
+
+// Initialize modal functionality
 document.addEventListener('DOMContentLoaded', () => {
-  loadImages();
-  createFilterBar();
+    // Create modal elements
+    createModal();
+    
+    // Add click handlers to all gallery images
+    const galleryImages = document.querySelectorAll('.image-container img');
+    galleryImages.forEach(img => {
+        img.addEventListener('click', () => {
+            const fullSrc = img.getAttribute('data-full-src') || img.src;
+            const caption = img.alt;
+            openModal(fullSrc, caption);
+        });
+    });
 
-  // Handle direct navigation to sections
-  if (location.hash) {
-    const section = document.querySelector(location.hash);
-    if (section) {
-      section.scrollIntoView({ behavior: 'smooth' });
-      history.replaceState({ section: location.hash.replace('#', '') }, '', location.hash);
-    }
-  } else {
-    // If no hash, set initial state
-    history.replaceState({ section: 'home' }, '', '');
-  }
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModalFunction();
+        }
+    });
+
+    // Close modal with escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModalFunction();
+        }
+    });
+
+    // Close button handler
+    closeBtn.addEventListener('click', closeModalFunction);
+
+    // Handle back button
+    window.addEventListener('popstate', () => {
+        if (modal.style.display === 'block') {
+            closeModalFunction();
+        }
+    });
 });
 
-// Smooth scrolling for navigation links
-document.querySelectorAll('nav a[href^="#"]').forEach(anchor => {
-  anchor.addEventListener('click', function (e) {
-    e.preventDefault();
-    const target = document.querySelector(this.getAttribute('href'));
-    if (target) {
-      target.scrollIntoView({
-        behavior: 'smooth'
-      });
+// Create modal elements
+function createModal() {
+    modal = document.createElement('div');
+    modal.className = 'modal';
+    
+    const modalContent = document.createElement('div');
+    modalContent.className = 'modal-content';
+    
+    closeBtn = document.createElement('span');
+    closeBtn.className = 'modal-close';
+    closeBtn.innerHTML = '&times;';
+    
+    modalImg = document.createElement('img');
+    modalImg.className = 'modal-img';
+    
+    modalCaption = document.createElement('div');
+    modalCaption.id = 'modalCaption';
+    
+    modalContent.appendChild(closeBtn);
+    modalContent.appendChild(modalImg);
+    modalContent.appendChild(modalCaption);
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+}
+
+// Open modal with image
+function openModal(imageSrc, caption) {
+    modalImg.src = imageSrc;
+    modalCaption.textContent = caption || '';
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// Close modal
+function closeModalFunction() {
+    modal.style.display = 'none';
+    modalImg.src = '';
+    modalCaption.textContent = '';
+    document.body.style.overflow = '';
+}
+
+// Basic image loading
+async function fetchImages() {
+    console.log('fetchImages called');
+    try {
+        const response = await fetch('/gallery/images');
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        console.log('Fetched image data:', data);
+        return data.images;
+    } catch (error) {
+        console.error('Error fetching images:', error);
+        throw error;
     }
-  });
+}
+
+// Search for image in Finder
+async function searchImageInFinder(imageName) {
+    console.log('Searching for image:', imageName);
+    try {
+        const response = await fetch(`/gallery/finder-search?term=${encodeURIComponent(imageName)}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        console.log('Search result:', result);
+    } catch (error) {
+        console.error('Error searching for image:', error);
+    }
+}
+
+// Display images
+function displayImages(images) {
+    console.log('displayImages called with', images.length, 'images');
+    const grid = document.getElementById('image-grid');
+    if (!grid) {
+        console.error('Image grid not found');
+        return;
+    }
+    
+    grid.innerHTML = ''; // Clear existing images
+    
+    images.forEach((image, index) => {
+        console.log(`Processing image ${index + 1}/${images.length}:`, image.name);
+        const container = document.createElement('div');
+        container.className = 'image-container';
+        
+        // Create image element
+        const img = document.createElement('img');
+        img.src = image.url;
+        img.alt = image.name;
+        img.loading = 'lazy';
+        img.className = 'loading';
+        
+        // Create search icon
+        const searchIcon = document.createElement('i');
+        searchIcon.className = 'fas fa-search search-icon';
+        searchIcon.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            searchImageInFinder(image.name);
+        });
+        
+        // Create name label
+        const nameLabel = document.createElement('div');
+        nameLabel.className = 'image-name';
+        nameLabel.textContent = image.name;
+        
+        img.onload = () => {
+            console.log('Image loaded:', image.name);
+            img.classList.remove('loading');
+            img.classList.add('loaded');
+            container.classList.remove('skeleton');
+        };
+        
+        img.onerror = (e) => {
+            console.error('Failed to load image:', image.url, e);
+            img.classList.remove('loading');
+            img.classList.add('error');
+            container.classList.remove('skeleton');
+        };
+        
+        container.appendChild(img);
+        container.appendChild(searchIcon);
+        container.appendChild(nameLabel);
+        grid.appendChild(container);
+    });
+}
+
+// Wait for DOM to be fully loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('\n=== DOM Content Loaded ===');
+    try {
+        const images = await fetchImages();
+        await displayImages(images);
+    } catch (error) {
+        console.error('Failed to initialize gallery:', error);
+        const grid = document.getElementById('image-grid');
+        if (grid) {
+            grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
+        }
+    }
+});
+
+// Also try on window load
+window.addEventListener('load', () => {
+    console.log('\n=== Window Loaded ===');
 });

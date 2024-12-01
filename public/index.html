@@ -5,80 +5,126 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jeff Bridwell | Personal Website</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="modal.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <nav>
+    <nav>
+        <div class="nav-content">
+            <div class="logo-section">
                 <div class="logo">JB</div>
-                <ul>
-                    <li><a href="/">Home</a></li>
-                    <li><a href="#about">About</a></li>
-                    <li><a href="#projects">Projects</a></li>
-                    <li><a href="#gallery">Gallery</a></li>
-                    <li><a href="#contact">Contact</a></li>
-                </ul>
-            </nav>
-        </header>
-
-        <main>
-            <section id="home" class="hero">
-                <div class="hero-content">
+                <div class="logo-text">
                     <h1>Jeff Bridwell</h1>
                     <p class="subtitle">Software Engineer | Tech Innovator</p>
-                    <div class="social-links">
-                        <a href="#" target="_blank"><i class="fab fa-linkedin"></i></a>
-                        <a href="#" target="_blank"><i class="fab fa-github"></i></a>
-                        <a href="#" target="_blank"><i class="fab fa-twitter"></i></a>
-                    </div>
                 </div>
-            </section>
-
+            </div>
+            <ul>
+                <li><a href="/">Home</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#projects">Projects</a></li>
+                <li><a href="#gallery">Collections</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </div>
+    </nav>
+    
+    <div class="container">
+        <main>
             <section id="about" class="about">
-                <h2>About Me</h2>
+                <div class="header-band">
+                    <h2>About Me</h2>
+                </div>
                 <div class="about-content">
                     <img src="profile.jpg" alt="Jeff Bridwell" class="profile-img">
                     <div class="about-text">
                         <p>Hello! I'm Jeff Bridwell, a passionate software engineer with a love for creating innovative technological solutions. I specialize in building robust, scalable applications that solve real-world problems.</p>
-                        <div class="skills">
-                            <h3>Technologies I Work With</h3>
-                            <ul>
-                                <li>Python</li>
-                                <li>JavaScript</li>
-                                <li>React</li>
-                                <li>Node.js</li>
-                                <li>Docker</li>
-                                <li>Cloud Computing</li>
-                            </ul>
+                    </div>
+                </div>
+            </section>
+
+            <section id="technologies" class="technologies">
+                <div class="header-band">
+                    <h2>Tech Stack</h2>
+                </div>
+                <div class="tech-buttons">
+                    <button class="tech-btn">Python</button>
+                    <button class="tech-btn">JavaScript</button>
+                    <button class="tech-btn">React</button>
+                    <button class="tech-btn">Node.js</button>
+                    <button class="tech-btn">Docker</button>
+                    <button class="tech-btn">Cloud Computing</button>
+                </div>
+            </section>
+
+            <section id="projects" class="projects">
+                <div class="header-band">
+                    <h2>Projects</h2>
+                </div>
+                <div class="project-grid">
+                    <div class="project-tile">
+                        <div class="project-content">
+                            <h3>Songs I Love</h3>
+                            <p>A curated collection of my favorite songs, featuring music that has moved me and shaped my life's soundtrack.</p>
+                            <div class="project-tech">
+                                <span class="tech-tag">React</span>
+                                <span class="tech-tag">Node.js</span>
+                                <span class="tech-tag">MongoDB</span>
+                            </div>
+                            <div class="project-links">
+                                <a href="https://jeffbridwell.blog" class="project-btn" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> View Live
+                                </a>
+                                <a href="#" class="project-btn">
+                                    <i class="fab fa-github"></i> Source Code
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="project-tile">
+                        <div class="project-content">
+                            <h3>Project 2</h3>
+                            <p>Another innovative project that showcases your skills and demonstrates your expertise in modern web development.</p>
+                            <div class="project-tech">
+                                <span class="tech-tag">Python</span>
+                                <span class="tech-tag">Django</span>
+                                <span class="tech-tag">PostgreSQL</span>
+                            </div>
+                            <div class="project-links">
+                                <a href="#" class="project-btn">
+                                    <i class="fas fa-external-link-alt"></i> View Live
+                                </a>
+                                <a href="#" class="project-btn">
+                                    <i class="fab fa-github"></i> Source Code
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="project-tile">
+                        <div class="project-content">
+                            <h3>Project 3</h3>
+                            <p>A third project that demonstrates your versatility and ability to create impactful solutions.</p>
+                            <div class="project-tech">
+                                <span class="tech-tag">Vue.js</span>
+                                <span class="tech-tag">Firebase</span>
+                                <span class="tech-tag">TailwindCSS</span>
+                            </div>
+                            <div class="project-links">
+                                <a href="#" class="project-btn">
+                                    <i class="fas fa-external-link-alt"></i> View Live
+                                </a>
+                                <a href="#" class="project-btn">
+                                    <i class="fab fa-github"></i> Source Code
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <section id="projects" class="projects">
-                <h2>My Projects</h2>
-                <div class="project-grid">
-                    <div class="project-card">
-                        <h3>Songs I Love</h3>
-                        <p>A curated collection of my favorite songs, featuring music that has moved me and shaped my life's soundtrack.</p>
-                        <a href="https://jeffbridwell.blog" class="btn" target="_blank">View Songs</a>
-                    </div>
-                    <div class="project-card">
-                        <h3>Project 2</h3>
-                        <p>Another innovative project that showcases your skills.</p>
-                        <a href="#" class="btn">View Project</a>
-                    </div>
-                    <div class="project-card">
-                        <h3>Project 3</h3>
-                        <p>A third project that demonstrates your versatility.</p>
-                        <a href="#" class="btn">View Project</a>
-                    </div>
-                </div>
-            </section>
-
             <section id="gallery" class="gallery">
-                <h2>My Collections</h2>
+                <div class="header-band">
+                    <h2>Collections</h2>
+                </div>
                 <div id="image-grid" class="image-grid"></div>
                 
                 <!-- Image Modal -->
@@ -90,7 +136,9 @@
             </section>
 
             <section id="contact" class="contact">
-                <h2>Get in Touch</h2>
+                <div class="header-band">
+                    <h2>Get in Touch</h2>
+                </div>
                 <form class="contact-form">
                     <input type="text" placeholder="Your Name" required>
                     <input type="email" placeholder="Your Email" required>
