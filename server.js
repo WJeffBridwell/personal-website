@@ -23,7 +23,7 @@ const __dirname = dirname(__filename);
 
 // Configure Express application and set default port
 const app = express();
-const port = 3000;
+const port = 3001;
 
 // Import routes
 import galleryRouter from './routes/gallery.js';

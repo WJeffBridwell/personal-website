@@ -189,85 +189,48 @@ section:last-of-type {
 
 .image-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 1rem;
-    padding: 24px var(--padding-x);
-    max-width: var(--max-width);
-    margin: 24px auto 0;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
 }
 
 .image-container {
     position: relative;
-    padding-bottom: 100%;
+    aspect-ratio: 1;
     overflow: hidden;
-    border-radius: 4px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
     cursor: pointer;
 }
 
+.image-container:hover {
+    transform: translateY(-2px);
+}
+
 .image-container img {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     transition: transform 0.3s ease;
 }
 
-.image-container.skeleton {
-    background: linear-gradient(
-        90deg,
-        #f3f4f6 0%,
-        #e5e7eb 50%,
-        #f3f4f6 100%
-    );
-    background-size: 200% 100%;
-    animation: loading 1.5s infinite;
-}
-
-.image-name {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 1rem;
-    background: linear-gradient(
-        to top,
-        rgba(0, 0, 0, 0.8),
-        rgba(0, 0, 0, 0)
-    );
-    color: white;
-    font-size: 1rem;
-    font-weight: 500;
-    text-align: center;
-    opacity: 0;
-    transform: translateY(10px);
-    transition: all var(--transition-speed) ease;
-}
-
-.image-container:hover .image-name {
-    opacity: 1;
-    transform: translateY(0);
+.image-container:hover img {
+    transform: scale(1.05);
 }
 
 .search-icon {
     position: absolute;
-    top: 1rem;
-    right: 1rem;
-    color: white;
+    top: 10px;
+    right: 10px;
     background: rgba(0, 0, 0, 0.6);
-    padding: 0.75rem;
+    color: white;
+    padding: 8px;
     border-radius: 50%;
     cursor: pointer;
-    transition: all var(--transition-speed) ease;
-    z-index: 2;
-    opacity: 0;
-    transform: translateY(-10px);
-}
-
-.image-container:hover .search-icon {
-    opacity: 1;
-    transform: translateY(0);
+    transition: all 0.2s ease;
+    z-index: 5;
+    pointer-events: auto;
 }
 
 .search-icon:hover {
@@ -275,10 +238,29 @@ section:last-of-type {
     transform: scale(1.1);
 }
 
-/* Loading and Error States */
+.image-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    font-size: 0.9rem;
+    text-align: center;
+    transition: opacity 0.2s ease;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.image-container:hover .image-name {
+    opacity: 1;
+}
+
+/* Loading States */
 .loading {
     opacity: 0;
-    transition: opacity var(--transition-speed) ease;
+    transition: opacity 0.3s ease;
 }
 
 .loaded {
@@ -286,23 +268,7 @@ section:last-of-type {
 }
 
 .error {
-    opacity: 0.7;
-    filter: grayscale(100%);
-}
-
-@keyframes loading {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-.error-message {
-    color: #ef4444;
-    text-align: center;
-    padding: 1rem;
-    background: #fee2e2;
-    border-radius: 8px;
-    margin: 1rem 0;
-    font-weight: 500;
+    opacity: 0.5;
 }
 
 /* Technologies Section */
@@ -582,54 +548,56 @@ footer {
 .modal {
     display: none;
     position: fixed;
-    z-index: 1100;
+    z-index: 9999;
     left: 0;
     top: 0;
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.9);
-    padding: 24px;
-    box-sizing: border-box;
+    pointer-events: all;
 }
 
 .modal-content {
     position: relative;
-    max-width: 90%;
-    max-height: 90vh;
-    margin: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
+    margin: 40px auto;
+    width: 90%;
+    max-width: 1200px;
+    pointer-events: auto;
 }
 
-.modal img {
-    max-width: 100%;
-    max-height: 85vh;
-    object-fit: contain;
-    margin: auto;
+.modal-img {
     display: block;
+    max-width: 100%;
+    max-height: 80vh;
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+.modal-caption {
+    color: white;
+    padding: 20px;
+    text-align: center;
+    font-size: 1.1rem;
 }
 
 .modal-close {
     position: absolute;
+    right: 25px;
     top: -40px;
-    right: 0;
-    color: #fff;
+    color: white;
     font-size: 35px;
     font-weight: bold;
     cursor: pointer;
-    z-index: 1101;
+    z-index: 10000;
 }
 
 .modal-close:hover {
     color: var(--accent-color);
 }
 
-#modalCaption {
-    color: #fff;
-    text-align: center;
-    padding: 16px 0;
-    width: 100%;
+/* Ensure other elements stay visible */
+.image-container .search-icon,
+.image-container .image-name {
+    z-index: 1;
+    pointer-events: auto;
 }

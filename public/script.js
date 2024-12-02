@@ -16,85 +16,198 @@ let currentPage = 1;
 let isLoading = false;
 let modal, modalImg, modalCaption, closeBtn;
 
-// Initialize modal functionality
-document.addEventListener('DOMContentLoaded', () => {
-    // Create modal elements
-    createModal();
-    
-    // Add click handlers to all gallery images
-    const galleryImages = document.querySelectorAll('.image-container img');
-    galleryImages.forEach(img => {
-        img.addEventListener('click', () => {
-            const fullSrc = img.getAttribute('data-full-src') || img.src;
-            const caption = img.alt;
-            openModal(fullSrc, caption);
+// Global modal elements
+modal = null;
+modalImg = null;
+modalCaption = null;
+closeBtn = null;
+
+// Initialize modal
+function initializeModal() {
+    // Remove existing modal if present
+    const existingModal = document.getElementById('imageModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    try {
+        modal = document.createElement('div');
+        modal.id = 'imageModal';
+        modal.className = 'modal';
+        modal.style.display = 'none';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        closeBtn = document.createElement('span');
+        closeBtn.className = 'modal-close';
+        closeBtn.innerHTML = '&times;';
+        
+        modalImg = document.createElement('img');
+        modalImg.className = 'modal-img';
+        modalImg.style.cursor = 'pointer';  // Add pointer cursor
+        
+        // Add loading indicator and click handler
+        modalImg.addEventListener('load', () => {
+            modalImg.style.opacity = '1';
         });
-    });
-
-    // Close modal when clicking outside
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-            closeModalFunction();
-        }
-    });
-
-    // Close modal with escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closeModalFunction();
-        }
-    });
-
-    // Close button handler
-    closeBtn.addEventListener('click', closeModalFunction);
-
-    // Handle back button
-    window.addEventListener('popstate', () => {
-        if (modal.style.display === 'block') {
-            closeModalFunction();
-        }
-    });
-});
-
-// Create modal elements
-function createModal() {
-    modal = document.createElement('div');
-    modal.className = 'modal';
-    
-    const modalContent = document.createElement('div');
-    modalContent.className = 'modal-content';
-    
-    closeBtn = document.createElement('span');
-    closeBtn.className = 'modal-close';
-    closeBtn.innerHTML = '&times;';
-    
-    modalImg = document.createElement('img');
-    modalImg.className = 'modal-img';
-    
-    modalCaption = document.createElement('div');
-    modalCaption.id = 'modalCaption';
-    
-    modalContent.appendChild(closeBtn);
-    modalContent.appendChild(modalImg);
-    modalContent.appendChild(modalCaption);
-    modal.appendChild(modalContent);
-    document.body.appendChild(modal);
+        
+        modalImg.addEventListener('error', (e) => {
+            console.error('Failed to load image:', e);
+            modalCaption.textContent = 'Error loading image';
+            modalImg.style.display = 'none';
+        });
+        
+        // Close modal when clicking the image
+        modalImg.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal();
+        });
+        
+        modalCaption = document.createElement('div');
+        modalCaption.className = 'modal-caption';
+        
+        modalContent.appendChild(closeBtn);
+        modalContent.appendChild(modalImg);
+        modalContent.appendChild(modalCaption);
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        // Event listeners
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                e.preventDefault();
+                closeModal();
+            }
+        });
+        
+        closeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal();
+        });
+        
+        // Handle back button
+        window.addEventListener('popstate', () => {
+            if (modal.style.display === 'block') {
+                closeModal();
+            }
+        });
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+        
+        console.log('Modal initialized successfully');
+    } catch (error) {
+        console.error('Error initializing modal:', error);
+    }
 }
 
-// Open modal with image
+// Open modal with improved visibility handling
 function openModal(imageSrc, caption) {
-    modalImg.src = imageSrc;
-    modalCaption.textContent = caption || '';
-    modal.style.display = 'block';
-    document.body.style.overflow = 'hidden';
+    try {
+        if (!modal) {
+            console.error('Modal not initialized');
+            initializeModal();
+        }
+        
+        if (!imageSrc) {
+            console.error('No image source provided');
+            return;
+        }
+        
+        // Reset modal image state
+        modalImg.style.opacity = '0';
+        modalImg.style.display = 'block';
+        modalImg.src = imageSrc;
+        modalCaption.textContent = caption || '';
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        console.log('Opening modal with image:', imageSrc);
+    } catch (error) {
+        console.error('Error opening modal:', error);
+    }
 }
 
-// Close modal
-function closeModalFunction() {
-    modal.style.display = 'none';
-    modalImg.src = '';
-    modalCaption.textContent = '';
-    document.body.style.overflow = '';
+// Close modal with cleanup
+function closeModal() {
+    try {
+        if (!modal) return;
+        
+        modal.style.display = 'none';
+        modalImg.src = '';
+        modalImg.style.opacity = '0';
+        modalCaption.textContent = '';
+        document.body.style.overflow = '';
+        
+        console.log('Modal closed successfully');
+    } catch (error) {
+        console.error('Error closing modal:', error);
+    }
+}
+
+// Display images
+function displayImages(images) {
+    const imageGrid = document.querySelector('.image-grid');
+    if (!imageGrid) {
+        console.error('Image grid not found');
+        return;
+    }
+    
+    try {
+        imageGrid.innerHTML = '';
+        
+        images.forEach(image => {
+            const container = document.createElement('div');
+            container.className = 'image-container';
+            
+            const img = document.createElement('img');
+            img.src = image.thumbnailUrl || image.url;
+            img.alt = image.name;
+            img.loading = 'lazy';
+            
+            const searchIcon = document.createElement('i');
+            searchIcon.className = 'fas fa-search search-icon';
+            
+            const nameLabel = document.createElement('div');
+            nameLabel.className = 'image-name';
+            nameLabel.textContent = image.name;
+            
+            // Container click handler for modal
+            container.addEventListener('click', (e) => {
+                if (!e.target.classList.contains('search-icon')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openModal(image.url, image.name);
+                    // Push state for back button support
+                    history.pushState({ modal: true }, '');
+                }
+            });
+            
+            // Search icon click handler
+            searchIcon.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                searchImageInFinder(image.name);
+            });
+            
+            container.appendChild(img);
+            container.appendChild(searchIcon);
+            container.appendChild(nameLabel);
+            imageGrid.appendChild(container);
+        });
+        
+        // Initialize modal after images are loaded
+        initializeModal();
+        
+    } catch (error) {
+        console.error('Error displaying images:', error);
+    }
 }
 
 // Basic image loading
@@ -130,67 +243,8 @@ async function searchImageInFinder(imageName) {
     }
 }
 
-// Display images
-function displayImages(images) {
-    console.log('displayImages called with', images.length, 'images');
-    const grid = document.getElementById('image-grid');
-    if (!grid) {
-        console.error('Image grid not found');
-        return;
-    }
-    
-    grid.innerHTML = ''; // Clear existing images
-    
-    images.forEach((image, index) => {
-        console.log(`Processing image ${index + 1}/${images.length}:`, image.name);
-        const container = document.createElement('div');
-        container.className = 'image-container';
-        
-        // Create image element
-        const img = document.createElement('img');
-        img.src = image.url;
-        img.alt = image.name;
-        img.loading = 'lazy';
-        img.className = 'loading';
-        
-        // Create search icon
-        const searchIcon = document.createElement('i');
-        searchIcon.className = 'fas fa-search search-icon';
-        searchIcon.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            searchImageInFinder(image.name);
-        });
-        
-        // Create name label
-        const nameLabel = document.createElement('div');
-        nameLabel.className = 'image-name';
-        nameLabel.textContent = image.name;
-        
-        img.onload = () => {
-            console.log('Image loaded:', image.name);
-            img.classList.remove('loading');
-            img.classList.add('loaded');
-            container.classList.remove('skeleton');
-        };
-        
-        img.onerror = (e) => {
-            console.error('Failed to load image:', image.url, e);
-            img.classList.remove('loading');
-            img.classList.add('error');
-            container.classList.remove('skeleton');
-        };
-        
-        container.appendChild(img);
-        container.appendChild(searchIcon);
-        container.appendChild(nameLabel);
-        grid.appendChild(container);
-    });
-}
-
-// Wait for DOM to be fully loaded
+// Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('\n=== DOM Content Loaded ===');
     try {
         const images = await fetchImages();
         await displayImages(images);
