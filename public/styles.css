@@ -200,7 +200,6 @@ section:last-of-type {
     overflow: hidden;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s ease;
     cursor: pointer;
     background-color: #f8f9fa;
 }
@@ -209,7 +208,7 @@ section:last-of-type {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.2s ease;
+    display: block;
 }
 
 .image-name {
@@ -217,36 +216,39 @@ section:last-of-type {
     bottom: 0;
     left: 0;
     right: 0;
-    background-color: rgba(0, 0, 0, 0.8);
+    background-color: rgba(0, 0, 0, 0.5);
     color: white;
-    padding: 12px;
-    font-size: 14px;
+    padding: 8px;
+    font-size: 13px;
     text-align: center;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.image-container:hover .image-name {
-    opacity: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .search-icon {
     position: absolute;
-    top: 12px;
-    right: 12px;
-    color: white;
-    background-color: rgba(0, 0, 0, 0.8);
+    top: 10px;
+    right: 10px;
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
     opacity: 0;
     transition: all 0.3s ease;
-    z-index: 10;
+    z-index: 5;
+}
+
+.search-icon::before {
+    content: '\f002';  /* Font Awesome search icon */
+    font-family: 'Font Awesome 6 Free';
+    font-weight: 900;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 14px;
 }
 
 .image-container:hover .search-icon {
@@ -255,21 +257,7 @@ section:last-of-type {
 
 .search-icon:hover {
     transform: scale(1.1);
-    background-color: rgba(0, 0, 0, 0.9);
-}
-
-/* Loading States */
-.loading {
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.loaded {
-    opacity: 1;
-}
-
-.error {
-    opacity: 0.5;
+    background-color: var(--primary-color);
 }
 
 /* Technologies Section */
