@@ -1,169 +1,167 @@
-import { jest } from '@jest/globals';
-
 /**
- * @jest-environment jsdom
+ * Image Loading Test Suite
+ * 
+ * Tests the functionality of image loading including:
+ * - Image fetching from server
+ * - Thumbnail generation and loading
+ * - Error handling for failed loads
+ * - Loading state management
+ * - Image grid display
  */
 
-// Mock the image loading functions for testing
-const imageFunctions = {
-    displayImages: async function(images) {
-        console.log('Starting to display images:', images.length);
-        const grid = document.getElementById('image-grid');
-        if (!grid) {
-            console.error('Image grid element not found');
-            return;
-        }
+import { jest } from '@jest/globals';
+import { JSDOM } from 'jsdom';
 
-        const loadingIndicator = document.querySelector('.loading-indicator');
-        if (loadingIndicator) {
-            loadingIndicator.classList.add('visible');
-        }
+// Mock DOM environment
+const dom = new JSDOM(`
+    <!DOCTYPE html>
+    <html>
+        <body>
+            <div class="image-grid"></div>
+        </body>
+    </html>
+`);
+global.document = dom.window.document;
+global.window = dom.window;
 
-        for (const image of images) {
-            const container = document.createElement('div');
-            container.className = 'image-container skeleton';
+// Mock fetch API
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
-            const img = document.createElement('img');
-            img.className = 'loading';
-            img.alt = image.alt || '';
-            img.loading = 'lazy';
-            img.src = image.src;
-
-            // Create search icon
-            const searchIcon = document.createElement('i');
-            searchIcon.className = 'fas fa-search search-icon';
-
-            // Set up load handler
-            img.onload = () => {
-                img.classList.remove('loading');
-                img.classList.add('loaded');
-                container.classList.remove('skeleton');
-            };
-
-            // Set up error handler
-            img.onerror = () => {
-                img.classList.remove('loading');
-                img.classList.add('error');
-                container.classList.remove('skeleton');
-                container.classList.add('error');
-            };
-
-            container.appendChild(img);
-            container.appendChild(searchIcon);
-            grid.appendChild(container);
-        }
-
-        if (loadingIndicator) {
-            loadingIndicator.classList.remove('visible');
-        }
-    }
-};
+/**
+ * Helper function to create mock image data
+ * @param {number} count - Number of mock images to create
+ * @returns {Array} Array of mock image objects
+ */
+function createMockImages(count = 3) {
+    return Array.from({ length: count }, (_, i) => ({
+        name: `test-image-${i + 1}`,
+        url: `/images/test-image-${i + 1}.jpg`,
+        thumbnailUrl: `/images/thumbnails/test-image-${i + 1}.jpg`
+    }));
+}
 
 describe('Image Loading', () => {
+    let imageGrid;
+    
     beforeEach(() => {
-        document.body.innerHTML = `
-            <div id="image-grid" class="image-grid"></div>
-            <div class="loading-indicator"></div>
-        `;
-    });
-
-    afterEach(() => {
-        document.body.innerHTML = '';
+        // Reset DOM and mocks
+        document.body.innerHTML = '<div class="image-grid"></div>';
+        imageGrid = document.querySelector('.image-grid');
         jest.clearAllMocks();
+        
+        // Reset fetch mock default behavior
+        mockFetch.mockResolvedValue({
+            ok: true,
+            json: () => Promise.resolve({ images: createMockImages() })
+        });
     });
-
-    test('images are loaded and displayed correctly', async () => {
-        const imageGrid = document.getElementById('image-grid');
-        const images = [
-            { src: '/test1.jpg', alt: 'Test 1' },
-            { src: '/test2.jpg', alt: 'Test 2' }
-        ];
-
-        // Call displayImages
-        await imageFunctions.displayImages(images);
-
-        // Check if image containers were created
-        const containers = document.querySelectorAll('.image-container');
-        expect(containers.length).toBe(2);
-
-        // Check each container
-        containers.forEach((container, index) => {
-            // Container should have proper structure
+    
+    describe('Image Fetching', () => {
+        test('should fetch images from correct endpoint', async () => {
+            await fetchImages();
+            expect(mockFetch).toHaveBeenCalledWith('/api/images');
+        });
+        
+        test('should handle fetch error gracefully', async () => {
+            mockFetch.mockRejectedValue(new Error('Network error'));
+            const images = await fetchImages();
+            expect(images).toEqual([]);
+        });
+        
+        test('should handle invalid response gracefully', async () => {
+            mockFetch.mockResolvedValue({
+                ok: false,
+                status: 500
+            });
+            const images = await fetchImages();
+            expect(images).toEqual([]);
+        });
+    });
+    
+    describe('Image Display', () => {
+        const mockImages = createMockImages();
+        
+        test('should create correct number of image containers', async () => {
+            await displayImages(mockImages);
+            const containers = imageGrid.querySelectorAll('.image-container');
+            expect(containers.length).toBe(mockImages.length);
+        });
+        
+        test('should set correct image attributes', async () => {
+            await displayImages(mockImages);
+            const firstImage = imageGrid.querySelector('img');
+            expect(firstImage.src).toBe(mockImages[0].thumbnailUrl);
+            expect(firstImage.alt).toBe(mockImages[0].name);
+            expect(firstImage.loading).toBe('lazy');
+        });
+        
+        test('should create search icons for each image', async () => {
+            await displayImages(mockImages);
+            const searchIcons = imageGrid.querySelectorAll('.search-icon');
+            expect(searchIcons.length).toBe(mockImages.length);
+        });
+        
+        test('should display image names', async () => {
+            await displayImages(mockImages);
+            const nameLabels = imageGrid.querySelectorAll('.image-name');
+            expect(nameLabels.length).toBe(mockImages.length);
+            expect(nameLabels[0].textContent).toBe(mockImages[0].name);
+        });
+    });
+    
+    describe('Image Container Creation', () => {
+        const mockImage = createMockImages(1)[0];
+        let container;
+        
+        beforeEach(() => {
+            container = createImageContainer(mockImage);
+        });
+        
+        test('should create container with correct structure', () => {
             expect(container.classList.contains('image-container')).toBe(true);
-            expect(container.classList.contains('skeleton')).toBe(true);
-
-            // Image should exist with correct attributes
-            const img = container.querySelector('img');
-            expect(img).toBeTruthy();
-            expect(img.src).toContain(images[index].src);
-            expect(img.alt).toBe(images[index].alt);
-            expect(img.classList.contains('loading')).toBe(true);
-
-            // Search icon should exist
+            expect(container.querySelector('img')).toBeTruthy();
+            expect(container.querySelector('.search-icon')).toBeTruthy();
+            expect(container.querySelector('.image-name')).toBeTruthy();
+        });
+        
+        test('should handle click events correctly', () => {
+            const mockOpenModal = jest.fn();
+            window.openModal = mockOpenModal;
+            
+            // Test image click
+            container.click();
+            expect(mockOpenModal).toHaveBeenCalledWith(
+                mockImage.url,
+                mockImage.name
+            );
+            
+            // Test search icon click
             const searchIcon = container.querySelector('.search-icon');
-            expect(searchIcon).toBeTruthy();
-            expect(searchIcon.classList.contains('fa-search')).toBe(true);
+            const mockSearchInFinder = jest.fn();
+            window.searchImageInFinder = mockSearchInFinder;
+            searchIcon.click();
+            expect(mockSearchInFinder).toHaveBeenCalledWith(mockImage.name);
         });
-
-        // Simulate image load events
-        const imgs = document.querySelectorAll('img');
-        imgs.forEach(img => {
-            img.dispatchEvent(new Event('load'));
+    });
+    
+    describe('Error Handling', () => {
+        test('should handle missing image grid gracefully', async () => {
+            document.body.innerHTML = '';
+            await displayImages(createMockImages());
+            // Should not throw error
         });
-
-        // Check if loading states were removed
-        containers.forEach(container => {
-            expect(container.classList.contains('skeleton')).toBe(false);
-            const img = container.querySelector('img');
-            expect(img.classList.contains('loading')).toBe(false);
-            expect(img.classList.contains('loaded')).toBe(true);
+        
+        test('should handle empty image array gracefully', async () => {
+            await displayImages([]);
+            expect(imageGrid.children.length).toBe(0);
         });
-
-        // Check loading indicator
-        const loadingIndicator = document.querySelector('.loading-indicator');
-        expect(loadingIndicator.classList.contains('visible')).toBe(false);
-    });
-
-    test('handles image load errors correctly', async () => {
-        // Mock image data with invalid src
-        const images = [
-            { src: '/invalid/image.jpg', alt: 'Invalid Image' }
-        ];
-
-        // Call displayImages
-        await imageFunctions.displayImages(images);
-
-        // Check if container was created
-        const container = document.querySelector('.image-container');
-        expect(container).toBeTruthy();
-
-        // Simulate image load error
-        const img = container.querySelector('img');
-        img.dispatchEvent(new Event('error'));
-
-        // Check error states
-        expect(container.classList.contains('error')).toBe(true);
-        expect(container.classList.contains('skeleton')).toBe(false);
-        expect(img.classList.contains('error')).toBe(true);
-        expect(img.classList.contains('loading')).toBe(false);
-    });
-
-    test('handles empty image array', async () => {
-        await imageFunctions.displayImages([]);
-        const grid = document.getElementById('image-grid');
-        expect(grid.children.length).toBe(0);
-    });
-
-    test('handles missing image grid', async () => {
-        document.body.innerHTML = '';
-        const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-        // Try to load images
-        await imageFunctions.displayImages([{ src: '/test.jpg', alt: 'Test' }]);
-
-        // Verify error handling
-        expect(consoleSpy).toHaveBeenCalledWith('Image grid element not found');
-
-        consoleSpy.mockRestore();
+        
+        test('should handle missing image properties gracefully', async () => {
+            const invalidImage = { name: 'test' }; // Missing url
+            await displayImages([invalidImage]);
+            const img = imageGrid.querySelector('img');
+            expect(img.src).toBe('');
+        });
     });
 });

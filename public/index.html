@@ -125,7 +125,37 @@
                 <div class="header-band">
                     <h2>Collections</h2>
                 </div>
-                <div id="image-grid" class="image-grid"></div>
+                <div class="collections-container">
+                    <div class="controls">
+                        <div class="search-row">
+                            <div class="search-filter">
+                                <span class="filter-label">Search images:</span>
+                                <div class="search-input-container">
+                                    <input type="text" id="search-input" placeholder="Type to search..." />
+                                    <i class="fas fa-search search-icon"></i>
+                                </div>
+                            </div>
+                            <div class="sort-buttons">
+                                <button class="sort-btn" data-sort="asc">
+                                    <i class="fas fa-sort-alpha-down"></i>
+                                    Sort A-Z
+                                </button>
+                                <button class="sort-btn" data-sort="desc">
+                                    <i class="fas fa-sort-alpha-down-alt"></i>
+                                    Sort Z-A
+                                </button>
+                            </div>
+                        </div>
+                        <div class="az-filter" id="az-filter">
+                            <span class="filter-label">Filter by letter:</span>
+                            <div class="letter-buttons">
+                                <button class="letter-btn active" data-letter="all">All</button>
+                                <!-- Letters will be added dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="image-grid" id="image-grid"></div>
+                </div>
                 
                 <!-- Image Modal -->
                 <div id="imageModal" class="modal">

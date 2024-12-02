@@ -1,15 +1,21 @@
 /**
- * Express server configuration for the personal website.
- * Provides static file serving, API endpoints for Finder integration,
- * and gallery functionality. Includes security middleware and request logging.
+ * Personal Website Server
+ * 
+ * Main server application that handles:
+ * - Static file serving
+ * - Image gallery endpoints
+ * - Search functionality
+ * - Error handling and logging
+ * 
+ * Dependencies:
+ * - Express.js for routing and middleware
+ * - Path for file path operations
+ * - FS for file system operations
  */
 
-// Import required Node.js modules and external dependencies
 import express from 'express';
-import sharp from 'sharp';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
-import fs from 'fs';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { exec } from 'child_process';
@@ -21,12 +27,8 @@ const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Configure Express application and set default port
 const app = express();
-const port = 3001;
-
-// Import routes
-import galleryRouter from './routes/gallery.js';
+const port = process.env.PORT || 3001;  // Default to 3001 to avoid Windsurf conflicts
 
 // Middleware Configuration
 // Log all incoming HTTP requests with timestamp
@@ -60,16 +62,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// Handle gallery route directly
-app.get('/gallery', (req, res) => {
-    console.log('Gallery route hit, serving gallery.html');
-    res.sendFile(path.join(__dirname, 'public/gallery.html'));
-});
-
-// Use gallery router for gallery-specific endpoints (like images)
-app.use('/gallery', galleryRouter);
-
-// Static File Serving - only serve from a public directory
+// Serve static files from the public directory
 app.use(express.static(publicPath, {
     extensions: ['html', 'htm'],
     index: ['index.html', 'index.htm'],
@@ -80,6 +73,104 @@ app.use(express.static(publicPath, {
         }
     }
 }));
+
+/**
+ * GET /
+ * Serves the main HTML page
+ */
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+/**
+ * GET /gallery
+ * Serves the gallery HTML page
+ */
+app.get('/gallery', (req, res) => {
+    console.log('Gallery route hit, serving gallery.html');
+    res.sendFile(path.join(__dirname, 'public/gallery.html'));
+});
+
+// Import routes
+import galleryRouter from './routes/gallery.js';
+
+// Use gallery router for gallery-specific endpoints (like images)
+app.use('/gallery', galleryRouter);
+
+/**
+ * GET /api/images
+ * Returns a list of all images in the gallery
+ * 
+ * Response format:
+ * {
+ *   images: [{
+ *     name: string,
+ *     url: string,
+ *     thumbnailUrl: string
+ *   }]
+ * }
+ */
+app.get('/api/images', async (req, res) => {
+    try {
+        const imagesDir = path.join(__dirname, 'public', 'images');
+        const files = await fsPromises.readdir(imagesDir);
+        
+        // Filter for image files and create image objects
+        const images = files
+            .filter(file => /\.(jpg|jpeg|png|gif)$/i.test(file))
+            .map(file => ({
+                name: file.replace(/\.[^/.]+$/, ''),  // Remove file extension
+                url: `/images/${file}`,
+                thumbnailUrl: `/images/thumbnails/${file}`
+            }));
+        
+        res.json({ images });
+    } catch (error) {
+        console.error('Error fetching images:', error);
+        res.status(500).json({ error: 'Failed to fetch images' });
+    }
+});
+
+/**
+ * GET /api/search
+ * Searches for images by name
+ * 
+ * Query parameters:
+ * - q: search query string
+ * 
+ * Response format:
+ * {
+ *   results: [{
+ *     name: string,
+ *     url: string,
+ *     thumbnailUrl: string
+ *   }]
+ * }
+ */
+app.get('/api/search', async (req, res) => {
+    try {
+        const query = req.query.q?.toLowerCase() || '';
+        const imagesDir = path.join(__dirname, 'public', 'images');
+        const files = await fsPromises.readdir(imagesDir);
+        
+        // Filter images based on search query
+        const results = files
+            .filter(file => {
+                const name = file.replace(/\.[^/.]+$/, '').toLowerCase();
+                return /\.(jpg|jpeg|png|gif)$/i.test(file) && name.includes(query);
+            })
+            .map(file => ({
+                name: file.replace(/\.[^/.]+$/, ''),
+                url: `/images/${file}`,
+                thumbnailUrl: `/images/thumbnails/${file}`
+            }));
+        
+        res.json({ results });
+    } catch (error) {
+        console.error('Error searching images:', error);
+        res.status(500).json({ error: 'Failed to search images' });
+    }
+});
 
 /**
  * API endpoint to launch macOS Finder with a search query
@@ -155,16 +246,14 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal Server Error', details: err.message });
 });
 
-// Start the server
+// Start server
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
     console.log('Public directory:', publicPath);
     // List files in public directory
-    fs.readdir(publicPath, (err, files) => {
-        if (err) {
-            console.error('Error reading public directory:', err);
-            return;
-        }
+    fsPromises.readdir(publicPath).then(files => {
         console.log('Files in public directory:', files);
+    }).catch(err => {
+        console.error('Error reading public directory:', err);
     });
 });

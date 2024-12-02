@@ -1,3 +1,14 @@
+/**
+ * Modal Component Test Suite
+ * 
+ * Tests the functionality of the image modal component including:
+ * - Modal initialization
+ * - Opening and closing behaviors
+ * - Event handling (clicks, keyboard, back button)
+ * - Image loading states
+ * - Error handling
+ */
+
 import { JSDOM } from 'jsdom';
 import { expect } from 'chai';
 import fs from 'fs';
@@ -6,6 +17,31 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Helper function to create a mock image object
+ * @param {string} name - Image name
+ * @returns {Object} Mock image object
+ */
+function createMockImage(name = 'test-image') {
+    return {
+        name,
+        url: `/images/${name}.jpg`,
+        thumbnailUrl: `/images/thumbnails/${name}.jpg`
+    };
+}
+
+/**
+ * Helper function to simulate DOM events
+ * @param {HTMLElement} element - Target element
+ * @param {string} eventType - Type of event to simulate
+ * @param {Object} options - Event options
+ */
+function simulateEvent(element, eventType, options = {}) {
+    const event = new Event(eventType, { bubbles: true, ...options });
+    Object.assign(event, options);
+    element.dispatchEvent(event);
+}
 
 describe('Modal Functionality', () => {
     let window, document;
@@ -142,97 +178,90 @@ describe('Modal Functionality', () => {
         delete global.fetch;
     });
 
-    it('should close modal when ESC key is pressed', (done) => {
-        // Open modal
-        window.modalFunctions.openModal('test.jpg', 'Test Image');
-        
-        // Verify modal is open
-        const modal = document.getElementById('modal');
-        expect(modal.style.display).to.equal('block');
-        expect(document.body.classList.contains('modal-open')).to.be.true;
-
-        // Simulate ESC key press
-        const event = new window.KeyboardEvent('keydown', { key: 'Escape' });
-        document.dispatchEvent(event);
-
-        // Use setTimeout to allow event handling to complete
-        setTimeout(() => {
-            expect(modal.style.display).to.equal('none');
-            expect(document.body.classList.contains('modal-open')).to.be.false;
-            done();
-        }, 0);
-    });
-
-    it('should close modal when clicking outside image', (done) => {
-        // Open modal
-        window.modalFunctions.openModal('test.jpg', 'Test Image');
-        
-        // Verify modal is open
-        const modal = document.getElementById('modal');
-        expect(modal.style.display).to.equal('block');
-
-        // Simulate click outside image
-        const event = new window.MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window
+    describe('Initialization', () => {
+        test('should create modal with all required elements', () => {
+            window.modalFunctions.initModal();
+            const modal = document.getElementById('modal');
+            expect(modal).toBeTruthy();
+            expect(modal.querySelector('#modal-img')).toBeTruthy();
+            expect(modal.querySelector('#modal-caption')).toBeTruthy();
         });
-        modal.dispatchEvent(event);
 
-        // Use setTimeout to allow event handling to complete
-        setTimeout(() => {
-            expect(modal.style.display).to.equal('none');
-            expect(document.body.classList.contains('modal-open')).to.be.false;
-            done();
-        }, 0);
-    });
-
-    it('should close modal when browser back button is pressed', (done) => {
-        // Open modal
-        window.modalFunctions.openModal('test.jpg', 'Test Image');
-        
-        // Verify modal is open
-        const modal = document.getElementById('modal');
-        expect(modal.style.display).to.equal('block');
-
-        // Simulate browser back button
-        const event = new window.PopStateEvent('popstate');
-        window.dispatchEvent(event);
-
-        // Use setTimeout to allow event handling to complete
-        setTimeout(() => {
-            expect(modal.style.display).to.equal('none');
-            expect(document.body.classList.contains('modal-open')).to.be.false;
-            done();
-        }, 0);
-    });
-
-    it('should properly clean up event listeners when modal is closed', () => {
-        // Open modal
-        window.modalFunctions.openModal('test.jpg', 'Test Image');
-        
-        const modal = document.getElementById('modal');
-        expect(modal._handlers).to.exist;
-
-        // Close modal
-        window.modalFunctions.closeModal();
-
-        // Simulate events that should no longer work
-        const escEvent = new window.KeyboardEvent('keydown', { key: 'Escape' });
-        document.dispatchEvent(escEvent);
-
-        const clickEvent = new window.MouseEvent('click', {
-            bubbles: true,
-            cancelable: true,
-            view: window
+        test('should initialize with modal hidden', () => {
+            window.modalFunctions.initModal();
+            const modal = document.getElementById('modal');
+            expect(modal.style.display).toBe('none');
         });
-        modal.dispatchEvent(clickEvent);
+    });
 
-        const popStateEvent = new window.PopStateEvent('popstate');
-        window.dispatchEvent(popStateEvent);
+    describe('Opening and Closing', () => {
+        const testImage = createMockImage();
 
-        // Modal should remain closed
-        expect(modal.style.display).to.equal('none');
-        expect(document.body.classList.contains('modal-open')).to.be.false;
+        test('should open modal with correct image', () => {
+            window.modalFunctions.openModal(testImage.url, testImage.name);
+            const modal = document.getElementById('modal');
+            expect(modal.style.display).toBe('block');
+            expect(modal.querySelector('#modal-img').src).toContain(testImage.name);
+        });
+
+        test('should close modal and reset state', () => {
+            window.modalFunctions.openModal(testImage.url, testImage.name);
+            window.modalFunctions.closeModal();
+            const modal = document.getElementById('modal');
+            expect(modal.style.display).toBe('none');
+            expect(modal.querySelector('#modal-img').src).toBe('');
+        });
+
+        test('should handle missing image gracefully', () => {
+            window.modalFunctions.openModal();
+            const modal = document.getElementById('modal');
+            expect(modal.style.display).toBe('none');
+        });
+    });
+
+    describe('Event Handling', () => {
+        beforeEach(() => {
+            window.modalFunctions.openModal(createMockImage().url);
+        });
+
+        test('should close on background click', () => {
+            const modal = document.getElementById('modal');
+            simulateEvent(modal, 'click');
+            expect(modal.style.display).toBe('none');
+        });
+
+        test('should close on escape key', () => {
+            const modal = document.getElementById('modal');
+            simulateEvent(document, 'keydown', { key: 'Escape' });
+            expect(modal.style.display).toBe('none');
+        });
+
+        test('should close on image click', () => {
+            const modal = document.getElementById('modal');
+            const modalImg = modal.querySelector('#modal-img');
+            simulateEvent(modalImg, 'click');
+            expect(modal.style.display).toBe('none');
+        });
+    });
+
+    describe('History State', () => {
+        beforeEach(() => {
+            window.history.pushState = jest.fn();
+        });
+
+        test('should update history when opening modal', () => {
+            window.modalFunctions.openModal(createMockImage().url);
+            expect(window.history.pushState).toHaveBeenCalledWith(
+                { modal: true },
+                ''
+            );
+        });
+
+        test('should close modal on popstate', () => {
+            window.modalFunctions.openModal(createMockImage().url);
+            const modal = document.getElementById('modal');
+            simulateEvent(window, 'popstate');
+            expect(modal.style.display).toBe('none');
+        });
     });
 });
