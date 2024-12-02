@@ -212,11 +212,16 @@ async function displayImages(images) {
             img.loading = 'lazy';
             
             const searchIcon = document.createElement('i');
-            searchIcon.className = 'fas fa-search search-icon';
+            searchIcon.className = 'fa-solid fa-magnifying-glass search-icon';
             searchIcon.onclick = () => searchImageInFinder(image.name);
+            
+            const nameLabel = document.createElement('div');
+            nameLabel.className = 'image-name';
+            nameLabel.textContent = image.name;
             
             container.appendChild(img);
             container.appendChild(searchIcon);
+            container.appendChild(nameLabel);
             grid.appendChild(container);
             
             // Add click event for modal
@@ -254,7 +259,7 @@ function createImageContainer(image) {
     img.loading = 'lazy';
     
     const searchIcon = document.createElement('i');
-    searchIcon.className = 'fas fa-search search-icon';
+    searchIcon.className = 'fa-solid fa-magnifying-glass search-icon';
     
     const nameLabel = document.createElement('div');
     nameLabel.className = 'image-name';
@@ -442,9 +447,16 @@ const filterFunctions = {
     initializeLetterFilter,
     filterImagesBySearch: function(searchTerm) {
         const imageContainers = document.querySelectorAll('.image-container');
+        const searchLower = searchTerm.toLowerCase().trim();
+        
         imageContainers.forEach(container => {
-            const imageName = container.querySelector('img').alt.toLowerCase();
-            container.classList.toggle('hidden', !imageName.includes(searchTerm.toLowerCase()));
+            const nameLabel = container.querySelector('.image-name');
+            if (!nameLabel) return;
+            
+            const imageName = nameLabel.textContent;
+            // Only show images where the name BEGINS with the search term
+            const isVisible = searchLower === '' || imageName.toLowerCase().indexOf(searchLower) === 0;
+            container.classList.toggle('hidden', !isVisible);
         });
     }
 };
@@ -504,16 +516,15 @@ function initializeSearchFilter() {
         const normalizedSearch = searchTerm.toLowerCase().trim();
         
         imageContainers.forEach(container => {
-            const img = container.querySelector('img');
-            const imageName = img.alt.toLowerCase();
+            const nameLabel = container.querySelector('.image-name');
+            if (!nameLabel) return;
             
-            if (normalizedSearch === '' || imageName.includes(normalizedSearch)) {
-                container.classList.remove('filtered');
-                container.classList.remove('hidden');
-            } else {
-                container.classList.add('filtered');
-                container.classList.add('hidden');
-            }
+            const imageName = nameLabel.textContent.toLowerCase();
+            // Only match if the image name starts with the search term
+            const isMatch = normalizedSearch === '' || imageName.indexOf(normalizedSearch) === 0;
+            
+            container.classList.toggle('filtered', !isMatch);
+            container.classList.toggle('hidden', !isMatch);
         });
         
         // Reset letter filter if search is active
