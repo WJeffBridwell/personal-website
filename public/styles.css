@@ -200,42 +200,16 @@ section:last-of-type {
     overflow: hidden;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.3s ease;
+    transition: transform 0.2s ease;
     cursor: pointer;
-}
-
-.image-container:hover {
-    transform: translateY(-2px);
+    background-color: #f8f9fa;
 }
 
 .image-container img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.3s ease;
-}
-
-.image-container:hover img {
-    transform: scale(1.05);
-}
-
-.search-icon {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    padding: 8px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    z-index: 5;
-    pointer-events: auto;
-}
-
-.search-icon:hover {
-    background: var(--primary-color);
-    transform: scale(1.1);
+    transition: transform 0.2s ease;
 }
 
 .image-name {
@@ -243,18 +217,45 @@ section:last-of-type {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 8px;
-    background: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.8);
     color: white;
-    font-size: 0.9rem;
+    padding: 12px;
+    font-size: 14px;
     text-align: center;
-    transition: opacity 0.2s ease;
-    z-index: 5;
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
 }
 
 .image-container:hover .image-name {
     opacity: 1;
+}
+
+.search-icon {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.8);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.image-container:hover .search-icon {
+    opacity: 1;
+}
+
+.search-icon:hover {
+    transform: scale(1.1);
+    background-color: rgba(0, 0, 0, 0.9);
 }
 
 /* Loading States */

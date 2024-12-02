@@ -243,6 +243,8 @@ async function displayImages(images) {
  * @returns {HTMLElement} The configured image container
  */
 function createImageContainer(image) {
+    console.log('Creating image container for:', image.name);
+    
     const container = document.createElement('div');
     container.className = 'image-container';
     
@@ -257,6 +259,7 @@ function createImageContainer(image) {
     const nameLabel = document.createElement('div');
     nameLabel.className = 'image-name';
     nameLabel.textContent = image.name;
+    console.log('Created name label:', nameLabel.outerHTML);
     
     // Set up click handlers
     container.addEventListener('click', (e) => {
@@ -277,6 +280,7 @@ function createImageContainer(image) {
     container.appendChild(searchIcon);
     container.appendChild(nameLabel);
     
+    console.log('Final container HTML:', container.outerHTML);
     return container;
 }
 
@@ -430,6 +434,50 @@ function filterImagesByLetter(letter) {
             }
         });
     }
+}
+
+// Filter functions
+const filterFunctions = {
+    filterImagesByLetter,
+    initializeLetterFilter,
+    filterImagesBySearch: function(searchTerm) {
+        const imageContainers = document.querySelectorAll('.image-container');
+        imageContainers.forEach(container => {
+            const imageName = container.querySelector('img').alt.toLowerCase();
+            container.classList.toggle('hidden', !imageName.includes(searchTerm.toLowerCase()));
+        });
+    }
+};
+
+// Export all functions needed for testing
+const exportedFunctions = {
+    // Filter functions
+    filterFunctions,
+    // Search functions
+    searchImages: null,
+    searchImageInFinder,
+    // Image loading functions
+    fetchImages,
+    displayImages,
+    createImageContainer,
+    // Modal functions
+    initializeModal,
+    openModal,
+    closeModal,
+    // Sort functions
+    initializeSortButtons,
+    // Search filter functions
+    initializeSearchFilter
+};
+
+// Export for testing environments
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = exportedFunctions;
+}
+
+// Make functions available in browser environment
+if (typeof window !== 'undefined') {
+    Object.assign(window, exportedFunctions);
 }
 
 // Initialize search filter
