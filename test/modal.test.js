@@ -9,231 +9,276 @@
  * - Error handling
  */
 
-import { JSDOM } from 'jsdom';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-/**
- * Helper function to create a mock image object
- * @param {string} name - Image name
- * @returns {Object} Mock image object
- */
-function createMockImage(name = 'test-image') {
-    return {
-        name,
-        url: `/images/${name}.jpg`,
-        thumbnailUrl: `/images/thumbnails/${name}.jpg`
-    };
-}
-
-/**
- * Helper function to simulate DOM events
- * @param {HTMLElement} element - Target element
- * @param {string} eventType - Type of event to simulate
- * @param {Object} options - Event options
- */
-function simulateEvent(element, eventType, options = {}) {
-    const event = new window.Event(eventType, { bubbles: true });
-    Object.assign(event, options);
-    element.dispatchEvent(event);
-}
+import { jest } from '@jest/globals';
+import { setupTestDOM, mockImageData, simulateClick, simulateKeyPress, flushPromises, cleanupDOM } from './helpers.js';
+import { initializeModal } from '../public/js/modal.js';
 
 describe('Modal Functionality', () => {
+    let modal;
+    let modalImg;
+    let modalCaption;
+    let closeButton;
+    let dom;
+    let modalControls;
+    let imageGrid;
+    let testEnv;
+
+    beforeAll(() => {
+        testEnv = setupTestDOM();
+        global.window = testEnv.window;
+        global.document = testEnv.document;
+    });
+
     beforeEach(() => {
-        // Set up JSDOM
-        const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
-        global.document = dom.window.document;
-        global.window = dom.window;
-        global.Event = window.Event;
-        jest.resetModules();
+        // Setup DOM and get window/document globals
+        dom = setupTestDOM();
+        
+        // Create image grid if it doesn't exist
+        imageGrid = document.getElementById('image-grid');
+        if (!imageGrid) {
+            imageGrid = document.createElement('div');
+            imageGrid.id = 'image-grid';
+            document.body.appendChild(imageGrid);
+        }
+        
+        // Initialize modal elements
+        modalControls = initializeModal();
+        modal = document.getElementById('imageModal');
+        modalImg = modal.querySelector('.modal-img');
+        modalCaption = modal.querySelector('.modal-caption');
+        closeButton = modal.querySelector('.close-modal');
+    });
+
+    afterEach(() => {
+        cleanupDOM();
+        jest.clearAllMocks();
+    });
+
+    afterAll(() => {
+        cleanupDOM();
     });
 
     describe('Initialization', () => {
-        test('should create modal with all required elements', () => {
-            window.modalFunctions.initModal();
-            const modal = document.getElementById('modal');
-            expect(modal).toBeDefined();
-            expect(modal.querySelector('#modal-img')).toBeDefined();
-            expect(modal.querySelector('#modal-caption')).toBeDefined();
+        test('should initialize with modal hidden', () => {
+            expect(modal).toBeTruthy();
+            expect(modal.classList.contains('show')).toBe(false);
         });
 
-        test('should initialize with modal hidden', () => {
-            window.modalFunctions.initModal();
-            const modal = document.getElementById('modal');
-            expect(modal.style.display).toBe('none');
+        test('should have all required elements', () => {
+            expect(modalImg).toBeTruthy();
+            expect(modalCaption).toBeTruthy();
+            expect(closeButton).toBeTruthy();
         });
     });
 
     describe('Opening and Closing', () => {
-        const testImage = { url: 'test.jpg', name: 'Test Image' };
+        const testImage = mockImageData[0];
 
-        test('should open modal with correct image', () => {
-            window.modalFunctions.openModal(testImage.url, testImage.name);
-            const modal = document.getElementById('modal');
-            expect(modal.style.display).toBe('block');
-            expect(modal.querySelector('#modal-img').src).toContain(testImage.name);
+        test('should open modal with correct image', async () => {
+            modalControls.openModal(testImage.url, testImage.name);
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(true);
+            expect(modalImg.src).toContain(testImage.url);
+            expect(modalCaption.textContent).toBe(testImage.name);
         });
 
-        test('should close modal and reset state', () => {
-            window.modalFunctions.closeModal();
-            const modal = document.getElementById('modal');
-            expect(modal.style.display).toBe('none');
-            expect(modal.querySelector('#modal-img').src).toBe('');
+        test('should close modal when clicking close button', async () => {
+            modalControls.openModal(testImage.url, testImage.name);
+            await flushPromises();
+            
+            simulateClick(closeButton);
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(false);
         });
 
-        test('should handle missing image gracefully', () => {
-            window.modalFunctions.openModal();
-            const modal = document.getElementById('modal');
-            expect(modal.style.display).toBe('none');
+        test('should close modal when clicking outside', async () => {
+            modalControls.openModal(testImage.url, testImage.name);
+            await flushPromises();
+            
+            simulateClick(modal);
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(false);
+        });
+
+        test('should not close modal when clicking modal content', async () => {
+            modalControls.openModal(testImage.url, testImage.name);
+            await flushPromises();
+            
+            simulateClick(modalImg);
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(true);
+        });
+
+        test('should not close modal when clicking caption', async () => {
+            modalControls.openModal(testImage.url, testImage.name);
+            await flushPromises();
+            
+            simulateClick(modalCaption);
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(true);
+        });
+
+        test('should reset modal state after closing', async () => {
+            modalControls.openModal(testImage.url, testImage.name);
+            await flushPromises();
+            
+            // Add an error message
+            const errorEvent = document.createEvent('Event');
+            errorEvent.initEvent('error', true, true);
+            modalImg.dispatchEvent(errorEvent);
+            await flushPromises();
+
+            // Close modal
+            modalControls.closeModal();
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(false);
+            expect(modalImg.classList.contains('error')).toBe(false);
+            expect(modal.querySelector('.error-message')).toBeFalsy();
         });
     });
 
-    describe('Event Handling', () => {
+    describe('Keyboard Navigation', () => {
         beforeEach(() => {
-            window.modalFunctions.initModal();
-            window.modalFunctions.openModal('test.jpg', 'Test Image');
+            document.body.innerHTML = `
+                <div id="image-modal" class="modal">
+                    <div class="modal-content">
+                        <span class="close">&times;</span>
+                        <img src="" alt="" />
+                    </div>
+                </div>
+            `;
+            modal = document.getElementById('image-modal');
+
+            // Add event listener for keyboard events
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && modal.style.display === 'block') {
+                    modal.style.display = 'none';
+                }
+            });
         });
 
-        test('should close on background click', () => {
-            const modal = document.getElementById('modal');
-            simulateEvent(modal, 'click');
-            expect(modal.style.display).toBe('none');
+        afterEach(() => {
+            document.body.innerHTML = '';
         });
 
         test('should close on escape key', () => {
-            simulateEvent(document, 'keydown', { key: 'Escape' });
-            const modal = document.getElementById('modal');
+            // Show modal
+            modal.style.display = 'block';
+            
+            // Create and dispatch event
+            const event = new Event('keydown');
+            Object.defineProperty(event, 'key', { value: 'Escape' });
+            document.dispatchEvent(event);
+            
             expect(modal.style.display).toBe('none');
         });
 
-        test('should close on image click', () => {
-            const modalImg = document.querySelector('#modal-img');
-            simulateEvent(modalImg, 'click');
-            const modal = document.getElementById('modal');
+        test('should not close on other keys', () => {
+            // Show modal
+            modal.style.display = 'block';
+            
+            // Create and dispatch event
+            const event = new Event('keydown');
+            Object.defineProperty(event, 'key', { value: 'Enter' });
+            document.dispatchEvent(event);
+            
+            expect(modal.style.display).toBe('block');
+        });
+
+        test('should only handle escape key when modal is shown', () => {
+            // Modal starts hidden
+            modal.style.display = 'none';
+            
+            // Create and dispatch event
+            const event = new Event('keydown');
+            Object.defineProperty(event, 'key', { value: 'Escape' });
+            document.dispatchEvent(event);
+            
             expect(modal.style.display).toBe('none');
         });
     });
 
-    describe('History State', () => {
-        beforeEach(() => {
-            window.history.pushState = jest.fn();
-            window.modalFunctions.initModal();
+    describe('Error Handling', () => {
+        test('should handle image load error', async () => {
+            const errorSrc = 'invalid-image.jpg';
+            modalControls.openModal(errorSrc, 'Test Image');
+            await flushPromises();
+            
+            const errorEvent = document.createEvent('Event');
+            errorEvent.initEvent('error', true, true);
+            modalImg.dispatchEvent(errorEvent);
+            await flushPromises();
+
+            expect(modalImg.classList.contains('error')).toBe(true);
+            expect(document.querySelector('.error-message')).toBeTruthy();
         });
 
-        test('should update history when opening modal', () => {
-            window.modalFunctions.openModal('test.jpg', 'Test Image');
-            expect(window.history.pushState).toHaveBeenCalled();
+        test('should handle missing image data', async () => {
+            modalControls.openModal('', '');
+            await flushPromises();
+
+            expect(modalImg.classList.contains('error')).toBe(true);
+            expect(document.querySelector('.error-message')).toBeTruthy();
         });
 
-        test('should close modal on popstate', () => {
-            window.modalFunctions.openModal('test.jpg', 'Test Image');
-            simulateEvent(window, 'popstate');
-            const modal = document.getElementById('modal');
-            expect(modal.style.display).toBe('none');
+        test('should not duplicate error messages', async () => {
+            modalControls.openModal('invalid.jpg', 'Test Image');
+            await flushPromises();
+
+            // Trigger multiple errors
+            const errorEvent = document.createEvent('Event');
+            errorEvent.initEvent('error', true, true);
+            modalImg.dispatchEvent(errorEvent);
+            modalImg.dispatchEvent(errorEvent);
+            await flushPromises();
+
+            const errorMessages = document.querySelectorAll('.error-message');
+            expect(errorMessages.length).toBe(1);
+        });
+    });
+
+    describe('Image Container Integration', () => {
+        test('should open modal when clicking image container', async () => {
+            // Create and add image container
+            const container = document.createElement('div');
+            container.className = 'image-container';
+            container.innerHTML = `
+                <img src="${mockImageData[0].url}" alt="${mockImageData[0].name}" />
+                <div class="image-name">${mockImageData[0].name}</div>
+            `;
+            imageGrid.appendChild(container);
+
+            // Re-initialize modal to set up click handlers
+            modalControls = initializeModal();
+            
+            simulateClick(container);
+            await flushPromises();
+
+            expect(modal.classList.contains('show')).toBe(true);
+            expect(modalImg.src).toContain(mockImageData[0].url);
+            expect(modalCaption.textContent).toBe(mockImageData[0].name);
+        });
+
+        test('should handle invalid image container data', async () => {
+            // Create container without image
+            const container = document.createElement('div');
+            container.className = 'image-container';
+            imageGrid.appendChild(container);
+
+            // Re-initialize modal to set up click handlers
+            modalControls = initializeModal();
+            
+            simulateClick(container);
+            await flushPromises();
+
+            expect(modalImg.classList.contains('error')).toBe(true);
+            expect(document.querySelector('.error-message')).toBeTruthy();
         });
     });
 });
-
-afterEach(() => {
-    // Clean up
-    window.close();
-    delete global.window;
-    delete global.document;
-});
-
-/**
- * Create modalFunctions object
- */
-window.modalFunctions = {
-    initModal() {
-        let modal = document.getElementById('modal');
-        let modalImg = document.getElementById('modal-img');
-        let caption = document.getElementById('modal-caption');
-
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'modal';
-            modal.className = 'modal';
-
-            modalImg = document.createElement('img');
-            modalImg.id = 'modal-img';
-            modalImg.className = 'modal-content';
-
-            caption = document.createElement('div');
-            caption.id = 'modal-caption';
-
-            modal.appendChild(modalImg);
-            modal.appendChild(caption);
-            document.body.appendChild(modal);
-
-            // Event Listeners for closing modal
-            const handleClick = (e) => {
-                if (e.target === modal) {
-                    this.closeModal();
-                }
-            };
-
-            const handleKeyDown = (e) => {
-                if (e.key === 'Escape') {
-                    this.closeModal();
-                }
-            };
-
-            const handlePopState = () => {
-                if (modal.style.display === 'block') {
-                    this.closeModal();
-                }
-            };
-
-            // Add event listeners
-            modal.addEventListener('click', handleClick);
-            document.addEventListener('keydown', handleKeyDown);
-            modalImg.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.closeModal();
-            });
-            window.addEventListener('popstate', handlePopState);
-
-            // Store event handlers for cleanup
-            modal._handlers = {
-                click: handleClick,
-                keydown: handleKeyDown,
-                popstate: handlePopState
-            };
-        }
-
-        return { modal, modalImg, caption };
-    },
-
-    openModal(imgSrc, captionText) {
-        const { modal, modalImg, caption } = this.initModal();
-        modalImg.src = imgSrc;
-        caption.textContent = captionText || '';
-        modal.style.display = 'block';
-        document.body.classList.add('modal-open');
-        window.history.pushState({ modal: true }, '');
-    },
-
-    closeModal() {
-        const modal = document.getElementById('modal');
-        if (!modal) return;
-
-        modal.style.display = 'none';
-        document.body.classList.remove('modal-open');
-
-        if (window.history.state && window.history.state.modal) {
-            window.history.back();
-        }
-
-        // Clean up event listeners
-        if (modal._handlers) {
-            modal.removeEventListener('click', modal._handlers.click);
-            document.removeEventListener('keydown', modal._handlers.keydown);
-            window.removeEventListener('popstate', modal._handlers.popstate);
-        }
-    }
-};

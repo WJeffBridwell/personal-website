@@ -20,20 +20,32 @@ console.log('Full HTML:', document.documentElement.outerHTML);
 
 console.log('Script file loaded and starting execution');
 
-// Verify we're on the gallery page
-const isGalleryPage = document.title.includes('Gallery') || window.location.pathname.includes('gallery');
-console.log('Is gallery page:', isGalleryPage);
-console.log('Page title:', document.title);
-console.log('Page URL:', window.location.href);
-console.log('Page pathname:', window.location.pathname);
+// Initialize gallery functionality
+function initializeGallery() {
+    // Only run once
+    if (window._galleryInitialized) return;
+    window._galleryInitialized = true;
 
-// Global state variables
-let currentImages = [];
-let isLoading = false;
-let modal = null;
-let modalImg = null;
-let modalCaption = null;
-let closeBtn = null;
+    // Verify we're on the gallery page
+    const isGalleryPage = document.title.includes('Gallery') || window.location.pathname.includes('gallery');
+    console.log('Is gallery page:', isGalleryPage);
+    console.log('Page title:', document.title);
+    console.log('Page URL:', window.location.href);
+    console.log('Page pathname:', window.location.pathname);
+
+    // Global state variables
+    window._galleryState = {
+        currentImages: [],
+        isLoading: false,
+        modal: null,
+        modalImg: null,
+        modalCaption: null,
+        closeBtn: null
+    };
+}
+
+// Call initialize function
+initializeGallery();
 
 /**
  * Initializes the modal component with all necessary elements and event listeners
@@ -48,51 +60,51 @@ function initializeModal() {
         }
 
         // Create and configure modal elements
-        modal = document.createElement('div');
-        modal.id = 'imageModal';
-        modal.className = 'modal';
-        modal.style.display = 'none';
+        window._galleryState.modal = document.createElement('div');
+        window._galleryState.modal.id = 'imageModal';
+        window._galleryState.modal.className = 'modal';
+        window._galleryState.modal.style.display = 'none';
         
         const modalContent = document.createElement('div');
         modalContent.className = 'modal-content';
         
         // Configure close button
-        closeBtn = document.createElement('span');
-        closeBtn.className = 'modal-close';
-        closeBtn.innerHTML = '&times;';
+        window._galleryState.closeBtn = document.createElement('span');
+        window._galleryState.closeBtn.className = 'modal-close';
+        window._galleryState.closeBtn.innerHTML = '&times;';
         
         // Configure modal image with loading and error states
-        modalImg = document.createElement('img');
-        modalImg.className = 'modal-img';
-        modalImg.style.cursor = 'pointer';
+        window._galleryState.modalImg = document.createElement('img');
+        window._galleryState.modalImg.className = 'modal-img';
+        window._galleryState.modalImg.style.cursor = 'pointer';
         
-        modalImg.addEventListener('load', () => {
-            modalImg.style.opacity = '1';
+        window._galleryState.modalImg.addEventListener('load', () => {
+            window._galleryState.modalImg.style.opacity = '1';
         });
         
-        modalImg.addEventListener('error', (e) => {
+        window._galleryState.modalImg.addEventListener('error', (e) => {
             console.error('Failed to load image:', e);
-            modalCaption.textContent = 'Error loading image';
-            modalImg.style.display = 'none';
+            window._galleryState.modalCaption.textContent = 'Error loading image';
+            window._galleryState.modalImg.style.display = 'none';
         });
         
         // Add click-to-close functionality
-        modalImg.addEventListener('click', (e) => {
+        window._galleryState.modalImg.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
             closeModal();
         });
         
         // Configure caption
-        modalCaption = document.createElement('div');
-        modalCaption.className = 'modal-caption';
+        window._galleryState.modalCaption = document.createElement('div');
+        window._galleryState.modalCaption.className = 'modal-caption';
         
         // Assemble modal structure
-        modalContent.appendChild(closeBtn);
-        modalContent.appendChild(modalImg);
-        modalContent.appendChild(modalCaption);
-        modal.appendChild(modalContent);
-        document.body.appendChild(modal);
+        modalContent.appendChild(window._galleryState.closeBtn);
+        modalContent.appendChild(window._galleryState.modalImg);
+        modalContent.appendChild(window._galleryState.modalCaption);
+        window._galleryState.modal.appendChild(modalContent);
+        document.body.appendChild(window._galleryState.modal);
         
         // Set up event listeners
         setupModalEventListeners();
@@ -108,15 +120,15 @@ function initializeModal() {
  */
 function setupModalEventListeners() {
     // Close on background click
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
+    window._galleryState.modal.addEventListener('click', (e) => {
+        if (e.target === window._galleryState.modal) {
             e.preventDefault();
             closeModal();
         }
     });
     
     // Close on button click
-    closeBtn.addEventListener('click', (e) => {
+    window._galleryState.closeBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         closeModal();
@@ -124,7 +136,7 @@ function setupModalEventListeners() {
     
     // Handle browser back button
     window.addEventListener('popstate', () => {
-        if (modal.style.display === 'block') {
+        if (window._galleryState.modal.style.display === 'block') {
             closeModal();
         }
     });
@@ -144,7 +156,7 @@ function setupModalEventListeners() {
  */
 function openModal(imageSrc, caption) {
     try {
-        if (!modal) {
+        if (!window._galleryState.modal) {
             console.error('Modal not initialized');
             initializeModal();
         }
@@ -154,11 +166,11 @@ function openModal(imageSrc, caption) {
             return;
         }
         
-        modalImg.style.opacity = '0';
-        modalImg.style.display = 'block';
-        modalImg.src = imageSrc;
-        modalCaption.textContent = caption || '';
-        modal.style.display = 'block';
+        window._galleryState.modalImg.style.opacity = '0';
+        window._galleryState.modalImg.style.display = 'block';
+        window._galleryState.modalImg.src = imageSrc;
+        window._galleryState.modalCaption.textContent = caption || '';
+        window._galleryState.modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
         
         // Add history state for back button support
@@ -174,12 +186,12 @@ function openModal(imageSrc, caption) {
  */
 function closeModal() {
     try {
-        if (!modal) return;
+        if (!window._galleryState.modal) return;
         
-        modal.style.display = 'none';
-        modalImg.src = '';
-        modalImg.style.opacity = '0';
-        modalCaption.textContent = '';
+        window._galleryState.modal.style.display = 'none';
+        window._galleryState.modalImg.src = '';
+        window._galleryState.modalImg.style.opacity = '0';
+        window._galleryState.modalCaption.textContent = '';
         document.body.style.overflow = '';
         
     } catch (error) {
@@ -418,6 +430,9 @@ function filterImagesByLetter(letter) {
     const activeSort = document.querySelector('.sort-btn.active')?.dataset.sort;
     
     imageContainers.forEach(container => {
+        // Skip if container is managed by Collections
+        if (container.hasAttribute('data-in-collection')) return;
+        
         const imageName = container.querySelector('img').alt;
         const firstLetter = imageName.charAt(0).toUpperCase();
         const matchesSearch = !searchTerm || imageName.toLowerCase().includes(searchTerm);
@@ -442,61 +457,77 @@ function filterImagesByLetter(letter) {
 }
 
 // Filter functions
-const filterFunctions = {
-    filterImagesByLetter,
-    initializeLetterFilter,
-    filterImagesBySearch: function(searchTerm) {
-        const imageContainers = document.querySelectorAll('.image-container');
-        const searchLower = searchTerm.toLowerCase().trim();
-        
-        imageContainers.forEach(container => {
-            const nameLabel = container.querySelector('.image-name');
-            if (!nameLabel) return;
+if (typeof window._filterFunctions === 'undefined') {
+    window._filterFunctions = {
+        filterImagesByLetter,
+        initializeLetterFilter,
+        filterImagesBySearch: function(searchTerm) {
+            const imageContainers = document.querySelectorAll('.image-container');
+            const searchLower = searchTerm.toLowerCase().trim();
             
-            const imageName = nameLabel.textContent;
-            // Only show images where the name BEGINS with the search term
-            const isVisible = searchLower === '' || imageName.toLowerCase().indexOf(searchLower) === 0;
-            container.classList.toggle('hidden', !isVisible);
-        });
-    }
-};
+            imageContainers.forEach(container => {
+                const nameLabel = container.querySelector('.image-name');
+                if (!nameLabel) return;
+                
+                const imageName = nameLabel.textContent;
+                // Show images where the name contains the search term anywhere
+                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
+                container.classList.toggle('hidden', !isVisible);
+            });
+        },
+        initializeSearchFilter,
+        fetchImages,
+        displayImages,
+        createImageContainer,
+        initializeModal,
+        openModal,
+        closeModal
+    };
+}
 
-// Export all functions needed for testing
-const exportedFunctions = {
-    // Filter functions
-    filterFunctions,
-    // Search functions
-    searchImages: null,
-    searchImageInFinder,
-    // Image loading functions
-    fetchImages,
-    displayImages,
-    createImageContainer,
-    // Modal functions
-    initializeModal,
-    openModal,
-    closeModal,
-    // Sort functions
-    initializeSortButtons,
-    // Search filter functions
-    initializeSearchFilter
-};
-
-// Export for testing environments
+// Export functions for testing
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = exportedFunctions;
+    module.exports = {
+        initializeGallery,
+        initializeModal,
+        openModal,
+        closeModal,
+        displayImages,
+        createImageContainer,
+        fetchImages,
+        searchImageInFinder,
+        initializeSortButtons,
+        initializeLetterFilter,
+        filterImagesByLetter,
+        initializeSearchFilter,
+        setupModalEventListeners
+    };
+} else if (typeof window !== 'undefined') {
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const images = await fetchImages();
+            await displayImages(images);
+        } catch (error) {
+            console.error('Failed to initialize gallery:', error);
+            const grid = document.getElementById('image-grid');
+            if (grid) {
+                grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
+            }
+        }
+    });
 }
 
-// Make functions available in browser environment
-if (typeof window !== 'undefined') {
-    Object.assign(window, exportedFunctions);
-}
-
-// Initialize search filter
+/**
+ * Initializes the search filter component with all necessary elements and event listeners
+ * Handles cleanup of existing filters and sets up error boundaries
+ */
 function initializeSearchFilter() {
     const searchInput = document.getElementById('search-input');
     if (!searchInput) return;
 
+    const allButton = document.querySelector('.letter-btn[data-letter="all"]');
+    
     // Debounce function to limit how often the filter runs
     function debounce(func, wait) {
         let timeout;
@@ -523,8 +554,10 @@ function initializeSearchFilter() {
             // Only match if the image name starts with the search term
             const isMatch = normalizedSearch === '' || imageName.indexOf(normalizedSearch) === 0;
             
-            container.classList.toggle('filtered', !isMatch);
-            container.classList.toggle('hidden', !isMatch);
+            // Only toggle hidden class if container doesn't have collection-based visibility
+            if (!container.hasAttribute('data-in-collection')) {
+                container.classList.toggle('hidden', !isMatch);
+            }
         });
         
         // Reset letter filter if search is active
@@ -532,7 +565,9 @@ function initializeSearchFilter() {
             document.querySelectorAll('.letter-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            document.querySelector('.letter-btn[data-letter="all"]').classList.add('active');
+            if (allButton) {
+                allButton.classList.add('active');
+            }
         }
     }, 200); // 200ms debounce delay
 
@@ -548,22 +583,10 @@ function initializeSearchFilter() {
     };
 
     // Clear search when clicking 'All' in letter filter
-    document.querySelector('.letter-btn[data-letter="all"]').addEventListener('click', clearSearch);
-}
-
-// Initialize when DOM is ready
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        const images = await fetchImages();
-        await displayImages(images);
-    } catch (error) {
-        console.error('Failed to initialize gallery:', error);
-        const grid = document.getElementById('image-grid');
-        if (grid) {
-            grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
-        }
+    if (allButton) {
+        allButton.addEventListener('click', clearSearch);
     }
-});
+}
 
 // Also try on window load
 window.addEventListener('load', () => {
