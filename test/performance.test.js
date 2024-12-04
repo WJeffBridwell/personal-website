@@ -3,7 +3,7 @@
  * Tests the performance characteristics of key application features
  */
 
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
 
 describe('Gallery Performance', () => {
   let imageGrid;
@@ -29,11 +29,11 @@ describe('Gallery Performance', () => {
     const testImages = Array.from({ length: 100 }, (_, i) => ({
       name: `Test Image ${i}`,
       url: `test-${i}.jpg`,
-      date: new Date(2023, 0, i + 1).toISOString()
+      date: new Date(2023, 0, i + 1).toISOString(),
     }));
 
     // Render images
-    testImages.forEach(img => {
+    testImages.forEach((img) => {
       const container = document.createElement('div');
       container.className = 'image-container';
       container.innerHTML = `
@@ -45,7 +45,7 @@ describe('Gallery Performance', () => {
 
     // Verify lazy loading
     const images = imageGrid.querySelectorAll('img');
-    images.forEach(img => {
+    images.forEach((img) => {
       expect(img.getAttribute('loading')).toBe('lazy');
     });
   });
@@ -55,11 +55,11 @@ describe('Gallery Performance', () => {
     const testData = Array.from({ length: 50 }, (_, i) => ({
       name: `Test Image ${i}`,
       url: `test-${i}.jpg`,
-      visible: i < 25 // First half should be visible
+      visible: i < 25, // First half should be visible
     }));
 
     // Render images
-    testData.forEach(data => {
+    testData.forEach((data) => {
       const container = document.createElement('div');
       container.className = 'image-container';
       if (!data.visible) {

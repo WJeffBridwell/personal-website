@@ -18,7 +18,7 @@ jest.unstable_mockModule('helpers', () => ({
       openModalMock({
         src: imageData.path,
         alt: imageData.name,
-        name: imageData.name
+        name: imageData.name,
       });
     });
     // Ensure dataset.date is empty string when undefined
@@ -26,7 +26,7 @@ jest.unstable_mockModule('helpers', () => ({
       container.dataset.date = '';
     }
     return container;
-  }
+  },
 }));
 
 beforeAll(async () => {
@@ -37,7 +37,7 @@ describe('createImageElement', () => {
   beforeEach(() => {
     // Clear mock calls between tests
     jest.clearAllMocks();
-    
+
     // Setup DOM environment
     document.body.innerHTML = `
       <div id="image-grid"></div>
@@ -54,7 +54,7 @@ describe('createImageElement', () => {
     const imageData = {
       name: 'test-image',
       path: '/images/test.jpg',
-      date: '2023-01-01'
+      date: '2023-01-01',
     };
 
     const container = helpers.createImageElement(imageData);
@@ -82,7 +82,7 @@ describe('createImageElement', () => {
     const imageData = {
       name: 'test-image',
       path: '/images/test.jpg',
-      date: '2023-01-01'
+      date: '2023-01-01',
     };
 
     const container = helpers.createImageElement(imageData);
@@ -91,7 +91,7 @@ describe('createImageElement', () => {
     expect(openModalMock).toHaveBeenCalledWith({
       src: expect.stringContaining('/images/test.jpg'),
       alt: 'test-image',
-      name: 'test-image'
+      name: 'test-image',
     });
   });
 
@@ -106,7 +106,7 @@ describe('createImageElement', () => {
   test('handles minimal valid image data', () => {
     const imageData = {
       name: 'test-image',
-      path: '/images/test.jpg'
+      path: '/images/test.jpg',
     };
 
     const container = helpers.createImageElement(imageData);
@@ -118,15 +118,15 @@ describe('createImageElement', () => {
     const imageData = {
       name: '<script>alert("xss")</script>',
       path: 'javascript:alert("xss")',
-      date: '2023-01-01'
+      date: '2023-01-01',
     };
 
     const container = helpers.createImageElement(imageData);
-    
+
     // Check that HTML is escaped
     const name = container.querySelector('.image-name');
     expect(name.innerHTML).toBe('&lt;script&gt;alert("xss")&lt;/script&gt;');
-    
+
     // Check that path is properly set
     const img = container.querySelector('img');
     expect(img.src).toBe('javascript:alert("xss")');

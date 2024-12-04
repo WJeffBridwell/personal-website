@@ -2,10 +2,11 @@
  * @jest-environment jsdom
  */
 
+import { jest } from '@jest/globals';
+
 describe('Image Name Display', () => {
-    beforeEach(() => {
-        // Setup DOM
-        document.body.innerHTML = `
+  beforeEach(() => {
+    document.body.innerHTML = `
             <div id="image-grid" class="image-grid"></div>
             <style>
                 .image-name {
@@ -27,173 +28,166 @@ describe('Image Name Display', () => {
                 }
             </style>
         `;
+  });
 
-        // Import the functions we need
-        const script = document.createElement('script');
-        script.textContent = `
-            function createElement(tag, attributes = {}, children = []) {
-                const element = document.createElement(tag);
-                Object.entries(attributes).forEach(([key, value]) => {
-                    if (key === 'className') {
-                        element.className = value;
-                    } else {
-                        element.setAttribute(key, value);
-                    }
-                });
-                children.forEach(child => element.appendChild(child));
-                return element;
-            }
-        `;
-        document.body.appendChild(script);
-    });
+  afterEach(() => {
+    document.body.innerHTML = '';
+    jest.clearAllMocks();
+  });
 
-    test('image name is added to container', async () => {
-        // Mock image data
-        const images = [{
-            src: '/images/test1.jpg',
-            alt: 'test1'
-        }];
+  test('image name is added to container', async () => {
+    // Mock image data
+    const images = [{
+      src: '/images/test1.jpg',
+      alt: 'test1',
+    }];
 
-        // Display images
-        const imageFunctions = {
-            displayImages: async function(images) {
-                const grid = document.getElementById('image-grid');
-                
-                for (const image of images) {
-                    const container = createElement('div', { className: 'image-container skeleton' });
-        
-                    const img = createElement('img', {
-                        className: 'loading',
-                        alt: image.alt || '',
-                        loading: 'lazy',
-                        src: image.src
-                    });
-        
-                    const searchIcon = createElement('i', { 
-                        className: 'fas fa-search search-icon'
-                    });
-        
-                    const nameLabel = createElement('div', {
-                        className: 'image-name'
-                    });
-                    nameLabel.textContent = image.alt;
-        
-                    container.appendChild(img);
-                    container.appendChild(searchIcon);
-                    container.appendChild(nameLabel);
-                    grid.appendChild(container);
-                }
-            }
-        };
+    // Display images
+    const imageFunctions = {
+      displayImages: async function (images) {
+        const grid = document.getElementById('image-grid');
 
-        await imageFunctions.displayImages(images);
+        for (const image of images) {
+          const container = document.createElement('div');
+          container.className = 'image-container skeleton';
 
-        // Verify image name is present
-        const nameLabel = document.querySelector('.image-name');
-        expect(nameLabel).toBeTruthy();
-        expect(nameLabel.textContent).toBe('test1');
-    });
+          const img = document.createElement('img');
+          img.className = 'loading';
+          img.alt = image.alt || '';
+          img.loading = 'lazy';
+          img.src = image.src;
 
-    test('image name has correct styles', async () => {
-        // Mock image data
-        const images = [{
-            src: '/images/test1.jpg',
-            alt: 'test1'
-        }];
+          const searchIcon = document.createElement('i');
+          searchIcon.className = 'fas fa-search search-icon';
 
-        // Display images
-        const imageFunctions = {
-            displayImages: async function(images) {
-                const grid = document.getElementById('image-grid');
-                
-                for (const image of images) {
-                    const container = createElement('div', { className: 'image-container skeleton' });
-        
-                    const img = createElement('img', {
-                        className: 'loading',
-                        alt: image.alt || '',
-                        loading: 'lazy',
-                        src: image.src
-                    });
-        
-                    const searchIcon = createElement('i', { 
-                        className: 'fas fa-search search-icon'
-                    });
-        
-                    const nameLabel = createElement('div', {
-                        className: 'image-name',
-                        style: 'position: absolute; bottom: 0; opacity: 0; background-color: rgba(0, 0, 0, 0.7);'
-                    });
-                    nameLabel.textContent = image.alt;
-        
-                    container.appendChild(img);
-                    container.appendChild(searchIcon);
-                    container.appendChild(nameLabel);
-                    grid.appendChild(container);
-                }
-            }
-        };
+          const nameLabel = document.createElement('div');
+          nameLabel.className = 'image-name';
+          nameLabel.textContent = image.alt;
 
-        await imageFunctions.displayImages(images);
+          container.appendChild(img);
+          container.appendChild(searchIcon);
+          container.appendChild(nameLabel);
+          grid.appendChild(container);
+        }
+      },
+    };
 
-        // Get elements
-        const nameLabel = document.querySelector('.image-name');
+    await imageFunctions.displayImages(images);
 
-        // Verify styles
-        const styles = window.getComputedStyle(nameLabel);
-        expect(styles.position).toBe('absolute');
-        expect(styles.bottom).toBe('0px');
-        expect(styles.backgroundColor).toBe('rgba(0, 0, 0, 0.7)');
-    });
+    // Verify image name is present
+    const nameLabel = document.querySelector('.image-name');
+    expect(nameLabel).toBeTruthy();
+    expect(nameLabel.textContent).toBe('test1');
+  });
 
-    test('handles empty image name gracefully', async () => {
-        // Mock image data with no alt text
-        const images = [{
-            src: '/images/test1.jpg',
-            alt: ''
-        }];
+  test('image name has correct styles', async () => {
+    // Mock image data
+    const images = [{
+      src: '/images/test1.jpg',
+      alt: 'test1',
+    }];
 
-        // Display images
-        const imageFunctions = {
-            displayImages: async function(images) {
-                const grid = document.getElementById('image-grid');
-                
-                for (const image of images) {
-                    const container = createElement('div', { className: 'image-container skeleton' });
-        
-                    const img = createElement('img', {
-                        className: 'loading',
-                        alt: image.alt || '',
-                        loading: 'lazy',
-                        src: image.src
-                    });
-        
-                    const searchIcon = createElement('i', { 
-                        className: 'fas fa-search search-icon'
-                    });
-        
-                    const nameLabel = createElement('div', {
-                        className: 'image-name'
-                    });
-                    nameLabel.textContent = image.alt;
-        
-                    container.appendChild(img);
-                    container.appendChild(searchIcon);
-                    container.appendChild(nameLabel);
-                    grid.appendChild(container);
-                }
-            }
-        };
+    // Display images
+    const imageFunctions = {
+      displayImages: async function (images) {
+        const grid = document.getElementById('image-grid');
 
-        await imageFunctions.displayImages(images);
+        for (const image of images) {
+          const container = document.createElement('div');
+          container.className = 'image-container skeleton';
 
-        // Verify image name is present but empty
-        const nameLabel = document.querySelector('.image-name');
-        expect(nameLabel).toBeTruthy();
-        expect(nameLabel.textContent).toBe('');
-    });
+          const img = document.createElement('img');
+          img.className = 'loading';
+          img.alt = image.alt || '';
+          img.loading = 'lazy';
+          img.src = image.src;
 
-    afterEach(() => {
-        document.body.innerHTML = '';
-    });
+          const searchIcon = document.createElement('i');
+          searchIcon.className = 'fas fa-search search-icon';
+
+          const nameLabel = document.createElement('div');
+          nameLabel.className = 'image-name';
+          nameLabel.style.position = 'absolute';
+          nameLabel.style.bottom = '0';
+          nameLabel.style.opacity = '0';
+          nameLabel.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+          nameLabel.textContent = image.alt;
+
+          container.appendChild(img);
+          container.appendChild(searchIcon);
+          container.appendChild(nameLabel);
+          grid.appendChild(container);
+        }
+      },
+    };
+
+    await imageFunctions.displayImages(images);
+
+    // Get elements
+    const nameLabel = document.querySelector('.image-name');
+
+    // Verify styles
+    const styles = window.getComputedStyle(nameLabel);
+    expect(styles.position).toBe('absolute');
+    expect(styles.bottom).toBe('0px');
+    expect(styles.backgroundColor).toBe('rgba(0, 0, 0, 0.7)');
+  });
+
+  test('handles empty image name gracefully', async () => {
+    // Mock image data with no alt text
+    const images = [{
+      src: '/images/test1.jpg',
+      alt: '',
+    }];
+
+    // Display images
+    const imageFunctions = {
+      displayImages: async function (images) {
+        const grid = document.getElementById('image-grid');
+
+        for (const image of images) {
+          const container = document.createElement('div');
+          container.className = 'image-container skeleton';
+
+          const img = document.createElement('img');
+          img.className = 'loading';
+          img.alt = image.alt || '';
+          img.loading = 'lazy';
+          img.src = image.src;
+
+          const searchIcon = document.createElement('i');
+          searchIcon.className = 'fas fa-search search-icon';
+
+          const nameLabel = document.createElement('div');
+          nameLabel.className = 'image-name';
+          nameLabel.textContent = image.alt;
+
+          container.appendChild(img);
+          container.appendChild(searchIcon);
+          container.appendChild(nameLabel);
+          grid.appendChild(container);
+        }
+      },
+    };
+
+    await imageFunctions.displayImages(images);
+
+    // Verify image name is present but empty
+    const nameLabel = document.querySelector('.image-name');
+    expect(nameLabel).toBeTruthy();
+    expect(nameLabel.textContent).toBe('');
+  });
+
+  test('creates image container with name', () => {
+    const container = document.createElement('div');
+    container.className = 'image-container';
+    const img = document.createElement('img');
+    img.src = 'test.jpg';
+    img.alt = 'Test Image';
+    container.appendChild(img);
+    document.getElementById('image-grid').appendChild(container);
+
+    expect(container.querySelector('img')).toBeTruthy();
+    expect(container.querySelector('img').alt).toBe('Test Image');
+  });
 });

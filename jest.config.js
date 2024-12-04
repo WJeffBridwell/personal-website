@@ -17,15 +17,15 @@ export default {
   // Module handling
   moduleFileExtensions: ['js', 'json'],
   moduleDirectories: ['node_modules', 'public/js'],
-  
+
   // ES Module settings for Jest
   testEnvironmentOptions: {
-    customExportConditions: ['node', 'node-addons']
+    customExportConditions: ['node', 'node-addons'],
   },
 
   // Module name mapper for ES modules
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1'
+    '^@/(.*)$': '<rootDir>/$1',
   },
 
   // Coverage settings
@@ -35,6 +35,6 @@ export default {
   collectCoverageFrom: [
     'public/js/**/*.js',
     '!public/js/vendor/**',
-    '!**/node_modules/**'
-  ]
+    '!**/node_modules/**',
+  ],
 };

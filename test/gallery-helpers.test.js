@@ -4,12 +4,12 @@ let helpers;
 const mockLocalStorage = {
   getItem: jest.fn(),
   setItem: jest.fn(),
-  clear: jest.fn()
+  clear: jest.fn(),
 };
 
 // Mock localStorage
 Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage
+  value: mockLocalStorage,
 });
 
 // Mock fetch
@@ -23,7 +23,7 @@ describe('Gallery Helper Functions', () => {
   beforeEach(() => {
     // Clear all mocks
     jest.clearAllMocks();
-    
+
     // Setup DOM environment
     document.body.innerHTML = `
       <div id="image-grid">
@@ -59,7 +59,7 @@ describe('Gallery Helper Functions', () => {
         sort: 'name',
         order: 'asc',
         search: '',
-        letter: 'all'
+        letter: 'all',
       });
     });
 
@@ -209,28 +209,28 @@ describe('Gallery Helper Functions', () => {
     test('sorts by name ascending', () => {
       helpers.sortImages('name', 'asc');
       const names = Array.from(document.querySelectorAll('.image-name'))
-        .map(el => el.textContent);
+        .map((el) => el.textContent);
       expect(names).toEqual(['Apple', 'Banana', 'Cherry']);
     });
 
     test('sorts by name descending', () => {
       helpers.sortImages('name', 'desc');
       const names = Array.from(document.querySelectorAll('.image-name'))
-        .map(el => el.textContent);
+        .map((el) => el.textContent);
       expect(names).toEqual(['Cherry', 'Banana', 'Apple']);
     });
 
     test('sorts by date ascending', () => {
       helpers.sortImages('date', 'asc');
       const dates = Array.from(document.querySelectorAll('.image-container'))
-        .map(el => el.dataset.date);
+        .map((el) => el.dataset.date);
       expect(dates).toEqual(['2023-01-01', '2023-01-02', '2023-01-03']);
     });
 
     test('sorts by date descending', () => {
       helpers.sortImages('date', 'desc');
       const dates = Array.from(document.querySelectorAll('.image-container'))
-        .map(el => el.dataset.date);
+        .map((el) => el.dataset.date);
       expect(dates).toEqual(['2023-01-03', '2023-01-02', '2023-01-01']);
     });
 
@@ -242,7 +242,7 @@ describe('Gallery Helper Functions', () => {
 
       helpers.sortImages('date', 'asc');
       const names = Array.from(document.querySelectorAll('.image-name'))
-        .map(el => el.textContent);
+        .map((el) => el.textContent);
       expect(names[0]).toBe('No Date');
     });
 
@@ -256,12 +256,12 @@ describe('Gallery Helper Functions', () => {
     test('loads and displays images', async () => {
       const mockImages = [
         { name: 'test1.jpg', path: '/images/test1.jpg', date: '2023-01-01' },
-        { name: 'test2.jpg', path: '/images/test2.jpg', date: '2023-01-02' }
+        { name: 'test2.jpg', path: '/images/test2.jpg', date: '2023-01-02' },
       ];
 
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockImages)
+        json: () => Promise.resolve(mockImages),
       });
 
       const images = await helpers.loadImages();
@@ -277,7 +277,7 @@ describe('Gallery Helper Functions', () => {
 
     test('handles fetch error', async () => {
       global.fetch.mockResolvedValueOnce({
-        ok: false
+        ok: false,
       });
 
       await expect(helpers.loadImages()).rejects.toThrow('Failed to load images');
@@ -299,7 +299,7 @@ describe('Gallery Helper Functions', () => {
     describe('initializeModal', () => {
       test('sets up modal event listeners', () => {
         helpers.initializeModal();
-        
+
         const modal = document.querySelector('.modal');
         const closeButton = modal.querySelector('.modal-close');
         const modalContent = modal.querySelector('.modal-img');
@@ -331,7 +331,7 @@ describe('Gallery Helper Functions', () => {
         const imageData = {
           src: '/images/test.jpg',
           alt: 'Test Image',
-          name: 'Test Image'
+          name: 'Test Image',
         };
 
         const modal = document.querySelector('.modal');
@@ -376,11 +376,11 @@ describe('Gallery Helper Functions', () => {
       button.dataset.sort = 'name';
       button.dataset.order = 'asc';
       const event = { target: button };
-      
+
       helpers.handleSort(event);
       expect(button.dataset.order).toBe('desc');
       const names = Array.from(document.querySelectorAll('.image-name'))
-        .map(el => el.textContent);
+        .map((el) => el.textContent);
       expect(names).toEqual(['Cherry', 'Banana', 'Apple']);
     });
 
@@ -388,7 +388,7 @@ describe('Gallery Helper Functions', () => {
       const button = document.createElement('button');
       button.dataset.letter = 'b';
       const event = { target: button };
-      
+
       helpers.handleLetterFilter(event);
       const containers = document.querySelectorAll('.image-container');
       expect(containers[0].style.display).toBe('none');
