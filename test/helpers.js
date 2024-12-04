@@ -57,8 +57,6 @@ export function setupTestDOM() {
         referrer: "http://localhost",
         contentType: "text/html",
         includeNodeLocations: true,
-        runScripts: "dangerously",
-        resources: "usable",
         pretendToBeVisual: true
     });
 
@@ -66,27 +64,33 @@ export function setupTestDOM() {
     const window = dom.window;
     const document = window.document;
 
-    // Set up globals
-    global.window = window;
-    global.document = document;
-    global.navigator = window.navigator;
-    global.HTMLElement = window.HTMLElement;
-    global.Element = window.Element;
-    global.Node = window.Node;
-    global.Event = window.Event;
-    global.CustomEvent = window.CustomEvent;
+    // Set up globals if they don't exist
+    if (!global.window) {
+        global.window = window;
+        global.document = document;
+        global.navigator = window.navigator;
+        global.HTMLElement = window.HTMLElement;
+        global.Element = window.Element;
+        global.Node = window.Node;
+        global.Event = window.Event;
+        global.CustomEvent = window.CustomEvent;
+        
+        // Mock browser APIs
+        global.window.matchMedia = () => ({
+            matches: false,
+            addListener: () => {},
+            removeListener: () => {}
+        });
 
-    // Mock browser APIs
-    global.window.matchMedia = () => ({
-        matches: false,
-        addListener: () => {},
-        removeListener: () => {}
-    });
+        global.window.requestAnimationFrame = callback => setTimeout(callback, 0);
+        global.window.cancelAnimationFrame = id => clearTimeout(id);
+    } else {
+        // If globals exist, just update document content
+        global.document.documentElement.innerHTML = dom.window.document.documentElement.innerHTML;
+    }
 
-    global.window.requestAnimationFrame = callback => setTimeout(callback, 0);
-    global.window.cancelAnimationFrame = id => clearTimeout(id);
-
-    return { window, document };
+    // Return window and document for backward compatibility
+    return { window: global.window, document: global.document };
 }
 
 export function simulateInput(element, value) {
@@ -96,12 +100,12 @@ export function simulateInput(element, value) {
     element.value = value;
     
     // Create and dispatch input event
-    const inputEvent = document.createEvent('Event');
+    const inputEvent = global.document.createEvent('Event');
     inputEvent.initEvent('input', true, true);
     element.dispatchEvent(inputEvent);
     
     // Create and dispatch change event
-    const changeEvent = document.createEvent('Event');
+    const changeEvent = global.document.createEvent('Event');
     changeEvent.initEvent('change', true, true);
     element.dispatchEvent(changeEvent);
 }
@@ -110,46 +114,35 @@ export function simulateClick(element) {
     if (!element) throw new Error('Element not found for click simulation');
     
     // Create and dispatch mousedown event
-    const mousedownEvent = document.createEvent('MouseEvents');
+    const mousedownEvent = global.document.createEvent('MouseEvents');
     mousedownEvent.initEvent('mousedown', true, true);
     element.dispatchEvent(mousedownEvent);
     
     // Create and dispatch mouseup event
-    const mouseupEvent = document.createEvent('MouseEvents');
+    const mouseupEvent = global.document.createEvent('MouseEvents');
     mouseupEvent.initEvent('mouseup', true, true);
     element.dispatchEvent(mouseupEvent);
     
     // Create and dispatch click event
-    const clickEvent = document.createEvent('MouseEvents');
+    const clickEvent = global.document.createEvent('MouseEvents');
     clickEvent.initEvent('click', true, true);
     element.dispatchEvent(clickEvent);
 }
 
 export async function flushPromises() {
-    // Use setTimeout with 0ms delay to flush promises
-    return new Promise(resolve => setTimeout(resolve, 0));
+    // Use process.nextTick to flush promises
+    return new Promise(resolve => {
+        setTimeout(resolve, 0);
+        if (typeof jest !== 'undefined') {
+            jest.advanceTimersByTime(0);
+        }
+    });
 }
 
 export function cleanupDOM() {
-    // Reset DOM state
-    if (global.document) {
-        const imageGrid = global.document.querySelector('#image-grid');
-        if (imageGrid) {
-            imageGrid.innerHTML = '';
-        }
+    if (global.document && global.document.body) {
+        global.document.body.innerHTML = '';
     }
-
-    // Clean up globals
-    const globals = [
-        'window', 'document', 'navigator', 'HTMLElement',
-        'Element', 'Node', 'Event', 'CustomEvent'
-    ];
-    
-    globals.forEach(prop => {
-        if (prop in global) {
-            delete global[prop];
-        }
-    });
 }
 
 export function cleanupGlobalState() {
@@ -157,34 +150,48 @@ export function cleanupGlobalState() {
 }
 
 export function simulateKeyPress(key) {
-    const event = new Event('keydown');
-    Object.defineProperty(event, 'key', { value: key });
-    document.dispatchEvent(event);
+    if (!global.document) return;
+    
+    const keydown = new KeyboardEvent('keydown', {
+        key: key,
+        code: key,
+        bubbles: true,
+        cancelable: true
+    });
+    
+    const keypress = new KeyboardEvent('keypress', {
+        key: key,
+        code: key,
+        bubbles: true,
+        cancelable: true
+    });
+    
+    global.document.dispatchEvent(keydown);
+    global.document.dispatchEvent(keypress);
 }
 
-// Gallery-specific helper functions
 export async function loadImages() {
     try {
+        const imageGrid = global.document.querySelector('#image-grid');
+        if (!imageGrid) {
+            throw new Error('Image grid element not found');
+        }
+
         const response = await fetch('/api/images');
         if (!response.ok) {
             throw new Error('Failed to fetch images');
         }
         const images = await response.json();
         
-        const imageGrid = document.querySelector('#image-grid');
-        if (!imageGrid) {
-            throw new Error('Image grid element not found');
-        }
-
         // Clear existing images
         imageGrid.innerHTML = '';
 
         // Create and append image containers
         images.forEach(image => {
-            const container = document.createElement('div');
+            const container = global.document.createElement('div');
             container.className = 'image-container';
             
-            const img = document.createElement('img');
+            const img = global.document.createElement('img');
             img.src = image.url;
             img.alt = image.name || 'Unnamed image';
             img.setAttribute('loading', 'lazy');
@@ -193,7 +200,7 @@ export async function loadImages() {
                 container.dataset.date = image.date;
             }
             
-            const name = document.createElement('div');
+            const name = global.document.createElement('div');
             name.className = 'image-name';
             name.textContent = image.name || 'Unnamed image';
             
@@ -204,7 +211,7 @@ export async function loadImages() {
 
         return images;
     } catch (error) {
-        const errorMessage = document.querySelector('.error-message');
+        const errorMessage = global.document.querySelector('.error-message');
         if (errorMessage) {
             errorMessage.textContent = error.message;
             errorMessage.style.display = 'block';
@@ -214,9 +221,9 @@ export async function loadImages() {
 }
 
 export function initializeGalleryControls() {
-    const searchInput = document.getElementById('search-input');
-    const letterContainer = document.getElementById('letter-filter');
-    const sortButtons = document.querySelectorAll('.sort-btn');
+    const searchInput = global.document.getElementById('search-input');
+    const letterContainer = global.document.getElementById('letter-filter');
+    const sortButtons = global.document.querySelectorAll('.sort-btn');
 
     if (!searchInput || !letterContainer) {
         console.warn('Gallery controls elements not found');
@@ -225,7 +232,7 @@ export function initializeGalleryControls() {
 
     // Create letter filter buttons
     'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(letter => {
-        const button = document.createElement('button');
+        const button = global.document.createElement('button');
         button.textContent = letter;
         button.className = 'letter-btn';
         button.addEventListener('click', () => handleLetterFilter(letter));
@@ -246,7 +253,7 @@ export function initializeGalleryControls() {
 }
 
 export function sortImages(sortBy = 'name', order = 'asc') {
-    const imageGrid = document.getElementById('image-grid');
+    const imageGrid = global.document.getElementById('image-grid');
     if (!imageGrid) {
         throw new Error('Image grid element not found');
     }
@@ -301,7 +308,7 @@ export function handleLetterFilter(event) {
 
 // Image filtering functions
 export function filterImages(searchTerm) {
-    const containers = document.querySelectorAll('.image-container');
+    const containers = global.document.querySelectorAll('.image-container');
     if (!containers) return;
 
     const normalizedSearch = searchTerm.toLowerCase().trim();
@@ -317,7 +324,7 @@ export function filterImages(searchTerm) {
 }
 
 export function filterByLetter(letter) {
-    const containers = document.querySelectorAll('.image-container');
+    const containers = global.document.querySelectorAll('.image-container');
     if (!containers) return;
 
     const normalizedLetter = letter.toLowerCase();
@@ -334,10 +341,10 @@ export function filterByLetter(letter) {
 
 // Helper function to update no results message visibility
 export function updateNoResultsMessage() {
-    const noResults = document.querySelector('.no-results');
+    const noResults = global.document.querySelector('.no-results');
     if (!noResults) return;
     
-    const hasVisibleImages = Array.from(document.querySelectorAll('.image-container'))
+    const hasVisibleImages = Array.from(global.document.querySelectorAll('.image-container'))
         .some(container => container.style.display !== 'none');
     
     noResults.style.display = hasVisibleImages ? 'none' : 'block';
@@ -345,8 +352,8 @@ export function updateNoResultsMessage() {
 
 // Handle sticky behavior of gallery controls
 export function initializeStickyControls() {
-    const controls = document.querySelector('.gallery-controls');
-    const nav = document.querySelector('nav');
+    const controls = global.document.querySelector('.gallery-controls');
+    const nav = global.document.querySelector('nav');
     
     if (controls && nav) {
         // Get nav height
@@ -357,8 +364,8 @@ export function initializeStickyControls() {
         
         // Update sticky position on scroll
         const handleScroll = () => {
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const galleryTop = document.querySelector('.gallery').offsetTop;
+            const scrollTop = global.window.pageYOffset || global.document.documentElement.scrollTop;
+            const galleryTop = global.document.querySelector('.gallery').offsetTop;
             
             if (scrollTop > galleryTop - navHeight) {
                 controls.classList.add('sticky');
@@ -367,7 +374,7 @@ export function initializeStickyControls() {
             }
         };
         
-        window.addEventListener('scroll', handleScroll);
+        global.window.addEventListener('scroll', handleScroll);
         
         // Initial check
         handleScroll();

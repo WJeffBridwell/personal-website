@@ -107,13 +107,16 @@ export class Gallery {
     handleSearch(event) {
         const searchTerm = event.target.value.toLowerCase().trim();
         const containers = this.imageGrid.querySelectorAll('.image-container');
+        let hasResults = false;
         
         containers.forEach(container => {
             const name = container.querySelector('.image-name').textContent.toLowerCase();
-            container.style.display = name.includes(searchTerm) ? 'block' : 'none';
+            const isVisible = name.includes(searchTerm);
+            container.style.display = isVisible ? 'block' : 'none';
+            if (isVisible) hasResults = true;
         });
         
-        this.updateNoResultsMessage();
+        this.updateNoResultsMessage(!hasResults);
     }
 
     updateNoResultsMessage(noResults) {
@@ -199,11 +202,12 @@ export class Gallery {
         
         this.modalImg.src = img.src;
         this.modalCaption.textContent = img.alt;
-        this.modal.classList.add('show');
+        this.modal.classList.remove('hidden');
     }
 
     closeModal() {
-        this.modal?.classList.remove('show');
+        if (!this.modal) return;
+        this.modal.classList.add('hidden');
     }
 
     handleError(error) {

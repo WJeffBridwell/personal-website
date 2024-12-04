@@ -175,6 +175,16 @@ function displayImages(images) {
     });
 }
 
+// Export functions for testing
+export {
+    openModal,
+    closeModalFunction,
+    initializeModalListeners,
+    fetchImages,
+    searchImageInFinder,
+    displayImages
+};
+
 // Initialize gallery when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('DOM loaded, initializing gallery');
