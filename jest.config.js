@@ -1,8 +1,6 @@
 /**
- * Jest Configuration
+ * Jest Configuration for ES Modules
  */
-
-import { TextEncoder, TextDecoder } from 'util';
 
 export default {
   // Test environment
@@ -17,7 +15,26 @@ export default {
   testMatch: ['<rootDir>/test/**/*.test.js'],
 
   // Module handling
+  moduleFileExtensions: ['js', 'json'],
+  moduleDirectories: ['node_modules', 'public/js'],
+  
+  // ES Module settings for Jest
+  testEnvironmentOptions: {
+    customExportConditions: ['node', 'node-addons']
+  },
+
+  // Module name mapper for ES modules
   moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1',
-  }
-}
+    '^@/(.*)$': '<rootDir>/$1'
+  },
+
+  // Coverage settings
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov'],
+  collectCoverageFrom: [
+    'public/js/**/*.js',
+    '!public/js/vendor/**',
+    '!**/node_modules/**'
+  ]
+};

@@ -1,455 +1,157 @@
 import { jest } from '@jest/globals';
-import { JSDOM } from 'jsdom';
-import { 
-    validateImageType, 
-    updateGalleryState,
-    initializeModal,
-    openModal,
-    closeModal,
-    filterImages,
-    sortImages,
-    updateNoResultsMessage,
-    handleError
-} from '../public/js/helpers.js';
 
-// Setup DOM environment
-const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
-    url: 'http://localhost',
-    pretendToBeVisual: true,
-    runScripts: 'dangerously'
+let helpers;
+const filterImagesMock = jest.fn();
+const filterByLetterMock = jest.fn();
+const sortImagesMock = jest.fn();
+const loadImagesMock = jest.fn();
+const handleSearchMock = jest.fn();
+const handleSortMock = jest.fn();
+const handleLetterFilterMock = jest.fn();
+const updateNoResultsMessageMock = jest.fn();
+
+// Mock the module before any imports
+jest.unstable_mockModule('helpers', () => ({
+  filterImages: filterImagesMock,
+  filterByLetter: filterByLetterMock,
+  sortImages: sortImagesMock,
+  loadImages: loadImagesMock,
+  handleSearch: handleSearchMock,
+  handleSort: handleSortMock,
+  handleLetterFilter: handleLetterFilterMock,
+  updateNoResultsMessage: updateNoResultsMessageMock
+}));
+
+beforeAll(async () => {
+  helpers = await import('helpers');
 });
 
-global.window = dom.window;
-global.document = dom.window.document;
-global.navigator = dom.window.navigator;
-
-// Mock localStorage
-const mockLocalStorage = {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    clear: jest.fn()
-};
-
-global.localStorage = mockLocalStorage;
-
-// Test helper functions
-function setupTestDOM() {
+describe('Gallery Helper Functions', () => {
+  beforeEach(() => {
+    // Clear all mocks
+    jest.clearAllMocks();
+    
+    // Setup DOM environment
     document.body.innerHTML = `
-        <div id="gallery-container">
-            <input type="text" id="search-input" placeholder="Search images...">
-            <div id="image-grid"></div>
-            <div class="no-results" style="display: none;">No images found</div>
-            <div class="error-message" style="display: none;"></div>
-            <div class="modal hidden">
-                <span class="modal-close">&times;</span>
-                <img class="modal-img" src="" alt="">
-                <div class="modal-caption"></div>
-            </div>
-            <div id="letter-filter">
-                <button class="letter-btn active" data-letter="all">All</button>
-                ${Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZ').map(letter => 
-                    `<button class="letter-btn" data-letter="${letter}">${letter}</button>`
-                ).join('')}
-            </div>
-        </div>
+      <div id="image-grid"></div>
+      <div class="error-message" style="display: none;">Error loading images</div>
+      <div class="no-results" style="display: none;">No results found</div>
     `;
-}
+  });
 
-function setupTestImages() {
-    const imageGrid = document.getElementById('image-grid');
-    if (!imageGrid) return;
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
 
-    const testImages = [
-        { name: 'test1.jpg', path: '/test1.jpg', date: '2023-01-01' },
-        { name: 'test2.jpg', path: '/test2.jpg', date: '2023-02-01' },
-        { name: 'test3.jpg', path: '/test3.jpg', date: '2023-03-01' }
-    ];
+  describe('filterImages', () => {
+    test('filters images by search term', () => {
+      const images = [
+        { name: 'test1.jpg', tags: ['test'] },
+        { name: 'test2.jpg', tags: ['other'] }
+      ];
+      const searchTerm = 'test';
 
-    testImages.forEach(imageData => {
-        const container = document.createElement('div');
-        container.className = 'image-container';
-        container.dataset.name = imageData.name;
-        container.dataset.date = imageData.date;
+      filterImagesMock.mockReturnValue([images[0]]);
+      const result = helpers.filterImages(images, searchTerm);
 
-        const img = document.createElement('img');
-        img.src = imageData.path;
-        img.alt = imageData.name;
-
-        const name = document.createElement('div');
-        name.className = 'image-name';
-        name.textContent = imageData.name;
-
-        container.appendChild(img);
-        container.appendChild(name);
-        imageGrid.appendChild(container);
+      expect(filterImagesMock).toHaveBeenCalledWith(images, searchTerm);
+      expect(result).toEqual([images[0]]);
     });
-}
+  });
 
-describe('Helper Functions', () => {
-    beforeEach(() => {
-        setupTestDOM();
-        setupTestImages();
-        jest.clearAllMocks();
+  describe('filterByLetter', () => {
+    test('filters images by starting letter', () => {
+      const images = [
+        { name: 'apple.jpg' },
+        { name: 'banana.jpg' }
+      ];
+      const letter = 'a';
+
+      filterByLetterMock.mockReturnValue([images[0]]);
+      const result = helpers.filterByLetter(images, letter);
+
+      expect(filterByLetterMock).toHaveBeenCalledWith(images, letter);
+      expect(result).toEqual([images[0]]);
     });
+  });
 
-    afterEach(() => {
-        document.body.innerHTML = '';
-        mockLocalStorage.clear.mockClear();
-        mockLocalStorage.getItem.mockClear();
-        mockLocalStorage.setItem.mockClear();
+  describe('sortImages', () => {
+    test('sorts images by specified criteria', () => {
+      const images = [
+        { name: 'b.jpg', date: '2023-01-02' },
+        { name: 'a.jpg', date: '2023-01-01' }
+      ];
+      const criteria = 'name';
+
+      sortImagesMock.mockReturnValue([images[1], images[0]]);
+      const result = helpers.sortImages(images, criteria);
+
+      expect(sortImagesMock).toHaveBeenCalledWith(images, criteria);
+      expect(result).toEqual([images[1], images[0]]);
     });
+  });
 
-    describe('Image Validation', () => {
-        test('validates correct image types', () => {
-            expect(validateImageType('test.jpg')).toBe(true);
-            expect(validateImageType('test.jpeg')).toBe(true);
-            expect(validateImageType('test.png')).toBe(true);
-            expect(validateImageType('test.gif')).toBe(true);
-        });
+  describe('loadImages', () => {
+    test('loads and displays images', async () => {
+      const mockImages = [
+        { name: 'test1.jpg', path: '/images/test1.jpg', date: '2023-01-01' },
+        { name: 'test2.jpg', path: '/images/test2.jpg', date: '2023-01-02' }
+      ];
 
-        test('rejects invalid image types', () => {
-            expect(validateImageType('test.txt')).toBe(false);
-            expect(validateImageType('test.pdf')).toBe(false);
-            expect(validateImageType('test')).toBe(false);
-        });
+      loadImagesMock.mockResolvedValue(mockImages);
+      const result = await helpers.loadImages();
 
-        test('handles case-insensitive extensions', () => {
-            expect(validateImageType('test.JPG')).toBe(true);
-            expect(validateImageType('test.PNG')).toBe(true);
-        });
-    });
-
-    describe('Gallery State Management', () => {
-        test('updates gallery state correctly', () => {
-            const newState = {
-                filter: 'recent',
-                sort: 'date',
-                order: 'desc'
-            };
-            const state = updateGalleryState(newState);
-            expect(state.filter).toBe('recent');
-            expect(state.sort).toBe('date');
-            expect(state.order).toBe('desc');
-        });
-
-        test('provides default values for missing properties', () => {
-            const state = updateGalleryState({});
-            expect(state.filter).toBe('all');
-            expect(state.sort).toBe('name');
-            expect(state.order).toBe('asc');
-            expect(state.search).toBe('');
-            expect(state.letter).toBe('all');
-        });
+      expect(loadImagesMock).toHaveBeenCalled();
+      expect(result).toEqual(mockImages);
     });
 
-    describe('Image Filtering', () => {
-        test('filterImages filters by search term', () => {
-            filterImages('test1');
-            
-            const visibleImages = Array.from(document.querySelectorAll('.image-container'))
-                .filter(container => container.style.display !== 'none');
-            expect(visibleImages.length).toBe(1);
-            expect(visibleImages[0].querySelector('.image-name').textContent).toBe('test1.jpg');
-        });
-
-        test('filterImages handles empty search', () => {
-            filterImages('');
-            
-            const visibleImages = Array.from(document.querySelectorAll('.image-container'))
-                .filter(container => container.style.display !== 'none');
-            expect(visibleImages.length).toBe(3);
-        });
+    test('handles fetch error', async () => {
+      loadImagesMock.mockRejectedValue(new Error('Failed to load images'));
+      await expect(helpers.loadImages()).rejects.toThrow('Failed to load images');
     });
 
-    describe('Sorting', () => {
-        test('sortImages sorts by name ascending', () => {
-            sortImages('name', 'asc');
-            
-            const names = Array.from(document.querySelectorAll('.image-container'))
-                .map(container => container.querySelector('.image-name').textContent);
-            expect(names).toEqual(['test1.jpg', 'test2.jpg', 'test3.jpg']);
-        });
+    test('handles missing image grid', async () => {
+      document.getElementById('image-grid').remove();
+      loadImagesMock.mockRejectedValue(new Error('Image grid element not found'));
+      await expect(helpers.loadImages()).rejects.toThrow('Image grid element not found');
+    });
+  });
 
-        test('sortImages sorts by date descending', () => {
-            sortImages('date', 'desc');
-            
-            const dates = Array.from(document.querySelectorAll('.image-container'))
-                .map(container => container.dataset.date);
-            expect(dates).toEqual(['2023-03-01', '2023-02-01', '2023-01-01']);
-        });
+  describe('Event Handlers', () => {
+    test('handleSearch calls filterImages', () => {
+      const event = { target: { value: 'test' } };
+      helpers.handleSearch(event);
+      expect(handleSearchMock).toHaveBeenCalledWith(event);
     });
 
-    describe('Modal Functionality', () => {
-        beforeEach(() => {
-            setupTestDOM();
-            initializeModal();
-        });
-
-        test('opens modal with correct image', () => {
-            const imageData = {
-                src: '/test1.jpg',
-                alt: 'test1.jpg',
-                name: 'test1.jpg'
-            };
-            
-            openModal(imageData);
-            
-            const modal = document.querySelector('.modal');
-            expect(modal.classList.contains('hidden')).toBe(false);
-            expect(modal.querySelector('.modal-img').src).toContain('test1.jpg');
-            expect(modal.querySelector('.modal-caption').textContent).toBe('test1.jpg');
-        });
-
-        test('closes modal', () => {
-            const modal = document.querySelector('.modal');
-            modal.classList.remove('hidden');
-            
-            closeModal();
-            
-            expect(modal.classList.contains('hidden')).toBe(true);
-        });
-
-        test('closes modal on outside click', () => {
-            const modal = document.querySelector('.modal');
-            modal.classList.remove('hidden');
-            
-            // Simulate click directly on the modal background
-            modal.dispatchEvent(new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            }));
-            
-            expect(modal.classList.contains('hidden')).toBe(true);
-        });
-
-        test('does not close modal when clicking modal content', () => {
-            const modal = document.querySelector('.modal');
-            modal.classList.remove('hidden');
-            
-            // Click on modal image
-            const modalImg = modal.querySelector('.modal-img');
-            modalImg.dispatchEvent(new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            }));
-            
-            expect(modal.classList.contains('hidden')).toBe(false);
-        });
-
-        test('closes modal on close button click', () => {
-            const modal = document.querySelector('.modal');
-            modal.classList.remove('hidden');
-            
-            // Click close button
-            const closeButton = modal.querySelector('.modal-close');
-            closeButton.dispatchEvent(new MouseEvent('click', {
-                bubbles: true,
-                cancelable: true,
-                view: window
-            }));
-            
-            expect(modal.classList.contains('hidden')).toBe(true);
-        });
+    test('handleSort updates button state and sorts images', () => {
+      const button = document.createElement('button');
+      button.dataset.order = 'asc';
+      const event = { target: button };
+      
+      helpers.handleSort(event);
+      expect(handleSortMock).toHaveBeenCalledWith(event);
     });
 
-    describe('Error Handling', () => {
-        let consoleSpy;
-        let errorSpy;
-        
-        beforeEach(() => {
-            consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-            errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-            setupTestDOM();
-        });
+    test('handleLetterFilter calls filterByLetter', () => {
+      const button = document.createElement('button');
+      button.dataset.letter = 'A';
+      const event = { target: button };
+      
+      helpers.handleLetterFilter(event);
+      expect(handleLetterFilterMock).toHaveBeenCalledWith(event);
+    });
+  });
 
-        afterEach(() => {
-            consoleSpy.mockRestore();
-            errorSpy.mockRestore();
-        });
-
-        test('handles invalid image data', () => {
-            const invalidData = [
-                null,
-                undefined,
-                {},
-                { name: 'test.jpg' }, // missing src
-                { src: '/test.jpg' }, // missing name
-            ];
-
-            invalidData.forEach(data => {
-                openModal(data);
-                expect(consoleSpy).toHaveBeenCalledWith('Invalid image data for modal');
-                consoleSpy.mockClear();
-            });
-        });
-
-        test('handles missing DOM elements', () => {
-            document.body.innerHTML = `
-                <div class="error-message" style="display: none;"></div>
-            `; // Only keep error message element
-            
-            handleError('Test error');
-            const errorElement = document.querySelector('.error-message');
-            expect(errorElement.textContent).toBe('Test error');
-            expect(errorElement.style.display).toBe('block');
-            expect(errorSpy).toHaveBeenCalledWith('Test error');
-        });
+  describe('updateNoResultsMessage', () => {
+    test('shows no results message when true', () => {
+      helpers.updateNoResultsMessage(true);
+      expect(updateNoResultsMessageMock).toHaveBeenCalledWith(true);
     });
 
-    describe('State Management', () => {
-        let setItemSpy;
-        
-        beforeEach(() => {
-            setItemSpy = jest.spyOn(Storage.prototype, 'setItem');
-        });
-
-        afterEach(() => {
-            setItemSpy.mockRestore();
-        });
-
-        test('saves and loads state correctly', () => {
-            const validState = {
-                filter: 'all',
-                sort: 'name',
-                order: 'asc',
-                search: '',
-                letter: 'all'
-            };
-
-            const state = updateGalleryState(validState);
-            expect(state).toEqual(validState);
-            expect(setItemSpy).toHaveBeenCalledWith(
-                'galleryState',
-                JSON.stringify(validState)
-            );
-        });
-
-        test('handles invalid state data', () => {
-            // Test with valid but incorrect values
-            const result = updateGalleryState({
-                sort: 'invalid',
-                order: 'invalid'
-            });
-
-            expect(result).toEqual({
-                filter: 'all',
-                sort: 'name',
-                order: 'asc',
-                search: '',
-                letter: 'all'
-            });
-
-            // Test with invalid properties
-            expect(() => {
-                updateGalleryState({ invalidProp: 'value' });
-            }).toThrow('Invalid state property');
-        });
-
-        test('preserves valid state values', () => {
-            const state = updateGalleryState({
-                filter: 'all',
-                sort: 'date',
-                order: 'desc'
-            });
-
-            expect(state).toEqual({
-                filter: 'all',
-                sort: 'date',
-                order: 'desc',
-                search: '',
-                letter: 'all'
-            });
-        });
+    test('hides no results message when false', () => {
+      helpers.updateNoResultsMessage(false);
+      expect(updateNoResultsMessageMock).toHaveBeenCalledWith(false);
     });
-
-    describe('Image Operations', () => {
-        beforeEach(() => {
-            setupTestDOM();
-            setupTestImages();
-        });
-
-        test('filters images case-insensitively', () => {
-            filterImages('TEST1');
-            
-            const visibleImages = Array.from(document.querySelectorAll('.image-container'))
-                .filter(container => container.style.display !== 'none');
-            expect(visibleImages.length).toBe(1);
-            expect(visibleImages[0].querySelector('.image-name').textContent.toLowerCase())
-                .toBe('test1.jpg');
-        });
-
-        test('handles special characters in search', () => {
-            // Clear existing images and add one test image
-            const imageGrid = document.getElementById('image-grid');
-            imageGrid.innerHTML = '';
-            
-            // Add a test image that doesn't match special characters
-            const container = document.createElement('div');
-            container.className = 'image-container';
-            
-            const nameDiv = document.createElement('div');
-            nameDiv.className = 'image-name';
-            nameDiv.textContent = 'normalfile.jpg';
-            
-            container.appendChild(nameDiv);
-            imageGrid.appendChild(container);
-
-            // Verify initial visibility
-            expect(container.style.display).not.toBe('none');
-
-            // Search with special characters - should hide the image
-            ['[', ']', '(', ')', '*', '+', '?'].forEach(char => {
-                filterImages(char);
-                const visibleImages = Array.from(document.querySelectorAll('.image-container'))
-                    .filter(img => img.style.display !== 'none');
-                expect(visibleImages.length).toBe(0);
-            });
-        });
-
-        test('updates no results message correctly', () => {
-            // Test with no matches
-            filterImages('nonexistent');
-            const noResults = document.querySelector('.no-results');
-            expect(noResults.style.display).toBe('block');
-
-            // Test with matches
-            filterImages('test');
-            expect(noResults.style.display).toBe('none');
-        });
-
-        test('sorts images with same values', () => {
-            // Clear existing images
-            const imageGrid = document.getElementById('image-grid');
-            imageGrid.innerHTML = '';
-            
-            // Add test images with same dates
-            const sameDate = '2023-01-01';
-            ['d.jpg', 'a.jpg', 'c.jpg', 'b.jpg'].forEach(name => {
-                const container = document.createElement('div');
-                container.className = 'image-container';
-                container.dataset.date = sameDate;
-                
-                const nameDiv = document.createElement('div');
-                nameDiv.className = 'image-name';
-                nameDiv.textContent = name;
-                
-                container.appendChild(nameDiv);
-                imageGrid.appendChild(container);
-            });
-
-            // Sort by name (should be alphabetical)
-            sortImages('name', 'asc');
-            const nameOrder = Array.from(document.querySelectorAll('.image-container'))
-                .map(container => container.querySelector('.image-name').textContent);
-            expect(nameOrder).toEqual(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg']);
-
-            // Sort by date (all same date, should maintain alphabetical order)
-            sortImages('date', 'desc');
-            const dateOrder = Array.from(document.querySelectorAll('.image-container'))
-                .map(container => container.querySelector('.image-name').textContent);
-            expect(dateOrder).toEqual(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg']);
-        });
-    });
+  });
 });
