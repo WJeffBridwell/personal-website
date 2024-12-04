@@ -1,0 +1,53 @@
+@startuml Personal Website Sequence Diagram
+
+skinparam sequence {
+    ArrowColor #666666
+    LifeLineBackgroundColor White
+    ParticipantBackgroundColor White
+}
+
+actor User
+participant "Browser" as B
+participant "Gallery UI" as GUI
+participant "Modal" as M
+participant "Express Server" as S
+participant "Gallery Route" as GR
+participant "Image Processor" as IP
+
+== Page Load ==
+User -> B: Visit website
+B -> S: GET /
+S -> B: Return index.html
+B -> GUI: Initialize gallery
+GUI -> S: GET /api/images
+S -> GR: Route request
+GR -> IP: Process images
+IP -> GR: Return processed images
+GR -> GUI: Return image data
+GUI -> B: Render gallery grid
+
+== Image Interaction ==
+User -> GUI: Click image
+GUI -> M: Open modal
+M -> B: Display full image
+
+== Search & Filter ==
+User -> GUI: Enter search term
+GUI -> GUI: Filter images locally
+GUI -> B: Update display
+
+User -> GUI: Click letter filter
+GUI -> GUI: Filter by letter
+GUI -> B: Update display
+
+== Sort ==
+User -> GUI: Click sort button
+GUI -> GUI: Sort images
+GUI -> B: Update display
+
+== Error Handling ==
+User -> GUI: Invalid action
+GUI -> B: Show error message
+B -> User: Display feedback
+
+@enduml

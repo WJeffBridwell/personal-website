@@ -316,6 +316,22 @@ export function filterImages(searchTerm) {
     updateNoResultsMessage();
 }
 
+export function filterByLetter(letter) {
+    const containers = document.querySelectorAll('.image-container');
+    if (!containers) return;
+
+    const normalizedLetter = letter.toLowerCase();
+    
+    containers.forEach(container => {
+        const name = container.querySelector('.image-name').textContent;
+        const visible = normalizedLetter === 'all' || 
+                       name.toLowerCase().startsWith(normalizedLetter);
+        container.style.display = visible ? '' : 'none';
+    });
+    
+    updateNoResultsMessage();
+}
+
 // Helper function to update no results message visibility
 export function updateNoResultsMessage() {
     const noResults = document.querySelector('.no-results');

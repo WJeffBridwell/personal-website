@@ -98,9 +98,8 @@ router.get('/images', async (req, res) => {
         } catch (err) {
             console.error('Directory access error:', err);
             return res.status(500).json({ 
-                error: 'Directory not accessible', 
-                details: err.message,
-                path: directoryPath
+                error: 'Failed to read directory',
+                details: err.message
             });
         }
 
@@ -121,7 +120,7 @@ router.get('/images', async (req, res) => {
             }));
 
         console.log(`Returning ${images.length} images`);
-        res.json({ images });
+        res.json(images);
         
     } catch (error) {
         console.error('Error in /gallery/images:', error);
@@ -160,7 +159,7 @@ router.get('/images/:imageName', async (req, res) => {
             console.error('Image file not found:', imagePath, err);
             res.status(404).json({ 
                 error: 'Image not found',
-                details: err.message,
+                details: `${err.code}: ${err.message}, access '${imagePath}'`,
                 path: imagePath
             });
         }

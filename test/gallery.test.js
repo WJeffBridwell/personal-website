@@ -1,191 +1,61 @@
 import { jest } from '@jest/globals';
-import { setupTestDOM, mockImageData, simulateClick, simulateKeyPress, simulateInput, flushPromises } from './helpers.js';
-import express from 'express';
-import request from 'supertest';
-import galleryRouter from '../routes/gallery.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { Gallery } from '../public/js/gallery';
+import { 
+    filterImages, 
+    sortImages,
+    initializeModal,
+    openModal,
+    closeModal 
+} from '../public/js/helpers.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Mock fs/promises
-const mockReadFile = jest.fn();
-const mockWriteFile = jest.fn();
-const mockReaddir = jest.fn();
-const mockAccess = jest.fn();
-
-jest.mock('fs/promises', () => ({
-    readFile: (...args) => mockReadFile(...args),
-    writeFile: (...args) => mockWriteFile(...args),
-    readdir: (...args) => mockReaddir(...args),
-    access: (...args) => mockAccess(...args)
-}));
-
-// Mock child_process.exec
-jest.mock('child_process', () => ({
-    exec: jest.fn((command, callback) => callback(null, 'Success', ''))
-}));
-
-// Mock path
-jest.mock('path', () => ({
-    ...jest.requireActual('path'),
-    join: jest.fn().mockImplementation((...args) => args.join('/'))
-}));
-
-describe('Gallery Tests', () => {
-    let app;
-    let mockReadFile;
-    let mockAccess;
-    let mockReaddir;
-    let mockImageData;
-    let imageGrid;
-    let searchInput;
-    let sortNameBtn;
-    let sortDateBtn;
+describe('Gallery Module', () => {
+    let gallery;
+    let mockImages;
 
     beforeEach(() => {
-        // Reset all mocks
-        jest.clearAllMocks();
-
-        // Set up mocks
-        mockReadFile = jest.fn();
-        mockAccess = jest.fn();
-        mockReaddir = jest.fn();
-
-        // Set up DOM
         document.body.innerHTML = `
-            <div id="image-grid" class="image-grid"></div>
-            <input type="text" id="search-input" />
-            <button id="sort-name">Sort by Name</button>
-            <button id="sort-date">Sort by Date</button>
-            <div class="no-results" style="display: none;">No results found</div>
+            <div id="gallery-container">
+                <div class="gallery-controls">
+                    <div id="sort-container">
+                        <button data-sort="name">Sort by Name</button>
+                        <button data-sort="date">Sort by Date</button>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Search images...">
+                    <div id="letter-filter"></div>
+                </div>
+                <div id="image-grid">
+                    <div class="image-container" data-name="test1.jpg" data-date="2023-01-01">
+                        <img src="/test1.jpg" alt="test1.jpg">
+                        <div class="image-name">test1.jpg</div>
+                    </div>
+                    <div class="image-container" data-name="test2.jpg" data-date="2023-02-01">
+                        <img src="/test2.jpg" alt="test2.jpg">
+                        <div class="image-name">test2.jpg</div>
+                    </div>
+                    <div class="image-container" data-name="test3.jpg" data-date="2023-03-01">
+                        <img src="/test3.jpg" alt="test3.jpg">
+                        <div class="image-name">test3.jpg</div>
+                    </div>
+                </div>
+                <div class="no-results" style="display: none;">No images found</div>
+                <div class="error-message" style="display: none;"></div>
+                <div class="modal hidden">
+                    <span class="modal-close">&times;</span>
+                    <img class="modal-img" src="" alt="">
+                    <div class="modal-caption"></div>
+                </div>
+            </div>
         `;
 
-        imageGrid = document.getElementById('image-grid');
-        searchInput = document.getElementById('search-input');
-        sortNameBtn = document.getElementById('sort-name');
-        sortDateBtn = document.getElementById('sort-date');
-
-        // Mock image data
-        mockImageData = [
-            { url: '/images/test1.jpg', name: 'Test Image 1', date: '2023-01-01' },
-            { url: '/images/test2.jpg', name: 'Test Image 2', date: '2023-01-02' }
+        mockImages = [
+            { name: 'test1.jpg', path: '/images/test1.jpg', date: '2023-01-01' },
+            { name: 'test2.jpg', path: '/images/test2.jpg', date: '2023-02-01' }
         ];
 
-        // Mock fetch
-        global.fetch = jest.fn(() =>
-            Promise.resolve({
-                ok: true,
-                json: () => Promise.resolve({ images: mockImageData })
-            })
-        );
-
-        // Define loadImages function
-        window.loadImages = async function() {
-            try {
-                const response = await fetch('/gallery/images');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch images');
-                }
-                const data = await response.json();
-                
-                imageGrid.innerHTML = '';
-                data.images.forEach(img => {
-                    const container = document.createElement('div');
-                    container.className = 'image-container';
-                    
-                    const imgElement = document.createElement('img');
-                    imgElement.src = img.url;
-                    imgElement.alt = img.name;
-                    imgElement.dataset.date = img.date;
-                    
-                    container.appendChild(imgElement);
-                    imageGrid.appendChild(container);
-                });
-            } catch (error) {
-                const errorElement = document.createElement('div');
-                errorElement.className = 'error-message';
-                errorElement.textContent = error.message;
-                imageGrid.appendChild(errorElement);
-            }
-        };
-
-        // Add sort by name functionality
-        sortNameBtn.addEventListener('click', () => {
-            const images = Array.from(imageGrid.querySelectorAll('.image-container'));
-            images.sort((a, b) => {
-                const nameA = a.querySelector('img').alt.toLowerCase();
-                const nameB = b.querySelector('img').alt.toLowerCase();
-                return nameA.localeCompare(nameB);
-            });
-            
-            imageGrid.innerHTML = '';
-            images.forEach(img => imageGrid.appendChild(img));
-        });
-
-        // Add sort by date functionality
-        sortDateBtn.addEventListener('click', () => {
-            const images = Array.from(imageGrid.querySelectorAll('.image-container'));
-            images.sort((a, b) => {
-                const dateA = new Date(a.querySelector('img').dataset.date);
-                const dateB = new Date(b.querySelector('img').dataset.date);
-                return dateB - dateA;
-            });
-            
-            imageGrid.innerHTML = '';
-            images.forEach(img => imageGrid.appendChild(img));
-        });
-
-        // Add search functionality
-        searchInput.addEventListener('input', () => {
-            const searchTerm = searchInput.value.toLowerCase();
-            const images = Array.from(imageGrid.querySelectorAll('.image-container'));
-            const noResults = document.querySelector('.no-results');
-            
-            let hasVisibleImages = false;
-            images.forEach(container => {
-                const img = container.querySelector('img');
-                const name = img.alt.toLowerCase();
-                if (name.includes(searchTerm)) {
-                    container.style.display = '';
-                    hasVisibleImages = true;
-                } else {
-                    container.style.display = 'none';
-                }
-            });
-            
-            noResults.style.display = hasVisibleImages ? 'none' : 'block';
-        });
-
-        // Create Express app
-        app = express();
-        app.use(express.json());
-
-        // Mock route handlers
-        app.get('/gallery', (req, res) => {
-            const filePath = path.join(process.cwd(), 'public', 'gallery.html');
-            mockAccess(filePath);
-            res.send(mockReadFile(filePath));
-        });
-
-        app.get('/gallery/images/:imageName', (req, res) => {
-            const imagePath = path.join(process.cwd(), 'public', 'images', req.params.imageName);
-            mockAccess(imagePath);
-            res.send(mockReadFile(imagePath));
-        });
-
-        app.get('/gallery/images', (req, res) => {
-            const imagesDir = path.join(process.cwd(), 'public', 'images');
-            const files = mockReaddir(imagesDir);
-            const images = files.map(file => ({
-                url: `/gallery/images/${file}`,
-                name: file.replace(/\.[^/.]+$/, ''),
-                date: new Date('2023-01-01').toISOString()
-            }));
-            res.json({ images });
-        });
+        gallery = new Gallery('gallery-container');
+        gallery.images = mockImages;
+        gallery.renderImages();
+        initializeModal();
     });
 
     afterEach(() => {
@@ -193,214 +63,218 @@ describe('Gallery Tests', () => {
         document.body.innerHTML = '';
     });
 
-    describe('Route Handlers', () => {
-        test('GET /gallery returns gallery page', async () => {
-            const mockContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Gallery</title>
-</head>
-<body>
-    <div id="gallery-container">
-        <div id="image-grid"></div>
-        <input type="text" id="search-input" />
-        <button id="sort-name">Sort by Name</button>
-        <button id="sort-date">Sort by Date</button>
-    </div>
-</body>
-</html>`;
-
-            mockReadFile.mockReturnValueOnce(mockContent);
-            mockAccess.mockResolvedValueOnce();
-
-            const response = await request(app).get('/gallery');
-            expect(response.status).toBe(200);
-            expect(response.text.trim()).toBe(mockContent.trim());
-            expect(mockAccess).toHaveBeenCalled();
+    describe('Gallery Initialization', () => {
+        test('initializes with correct elements', () => {
+            expect(gallery.container).toBeTruthy();
+            expect(gallery.imageGrid).toBeTruthy();
+            expect(gallery.searchInput).toBeTruthy();
+            expect(gallery.letterFilter).toBeTruthy();
         });
 
-        test('GET /gallery/images/:imageName returns image data', async () => {
-            const imageName = 'test.jpg';
-            const imagePath = path.join(process.cwd(), 'public', 'images', imageName);
-            const mockImageData = Buffer.from('fake-image-data');
-
-            mockReadFile.mockReturnValueOnce(mockImageData);
-            mockAccess.mockResolvedValueOnce();
-
-            const response = await request(app)
-                .get(`/gallery/images/${imageName}`);
-
-            expect(response.status).toBe(200);
-            expect(Buffer.from(response.body)).toEqual(mockImageData);
-            expect(mockAccess).toHaveBeenCalledWith(imagePath);
-        });
-
-        test('GET /gallery/images returns list of images', async () => {
-            const mockFiles = ['image1.jpg', 'image2.jpg'];
-            mockReaddir.mockReturnValueOnce(mockFiles);
-
-            const response = await request(app)
-                .get('/gallery/images');
-
-            expect(response.status).toBe(200);
-            expect(response.body).toHaveProperty('images');
-            expect(Array.isArray(response.body.images)).toBe(true);
-            expect(response.body.images.length).toBe(2);
-            expect(response.body.images[0]).toHaveProperty('url');
-            expect(response.body.images[0]).toHaveProperty('name');
-            expect(mockReaddir).toHaveBeenCalled();
+        test('sets up event listeners', () => {
+            expect(gallery.searchInput.oninput).toBeDefined();
         });
     });
 
-    describe('Gallery Initialization', () => {
-        test('loads images on init', async () => {
-            await window.loadImages();
-            await flushPromises();
-
-            const images = imageGrid.querySelectorAll('img');
-            expect(images.length).toBe(mockImageData.length);
-            images.forEach((img, index) => {
-                expect(img.src).toContain(mockImageData[index].url);
-                expect(img.alt).toBe(mockImageData[index].name);
+    describe('Image Loading', () => {
+        test('loads images successfully', async () => {
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: true,
+                json: () => Promise.resolve(mockImages)
             });
+
+            const result = await gallery.loadImages();
+            
+            expect(result).toEqual(mockImages);
+            expect(global.fetch).toHaveBeenCalledWith('/api/images');
         });
 
-        test('handles fetch errors gracefully', async () => {
-            const errorMessage = 'Failed to fetch images';
-            global.fetch.mockImplementationOnce(() =>
-                Promise.reject(new Error(errorMessage))
-            );
+        test('handles network errors', async () => {
+            global.fetch = jest.fn().mockRejectedValueOnce(new Error('Network error'));
 
-            await window.loadImages();
-            await flushPromises();
+            const result = await gallery.loadImages();
+            expect(result).toEqual([]);
+            expect(document.querySelector('.error-message')).toBeTruthy();
+        });
 
-            const errorElement = document.createElement('div');
-            errorElement.className = 'error-message';
-            errorElement.textContent = errorMessage;
-            imageGrid.appendChild(errorElement);
+        test('handles API errors', async () => {
+            global.fetch = jest.fn().mockResolvedValueOnce({
+                ok: false,
+                status: 500,
+                statusText: 'Server Error'
+            });
 
-            const error = imageGrid.querySelector('.error-message');
-            expect(error).toBeTruthy();
-            expect(error.textContent).toBe(errorMessage);
+            const result = await gallery.loadImages();
+            expect(result).toEqual([]);
+            expect(document.querySelector('.error-message')).toBeTruthy();
+        });
+    });
+
+    describe('Image Filtering', () => {
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <div id="gallery-container">
+                    <div id="image-grid">
+                        <div class="image-container">
+                            <img src="/test1.jpg" alt="test1.jpg">
+                            <div class="image-name">test1.jpg</div>
+                        </div>
+                        <div class="image-container">
+                            <img src="/test2.jpg" alt="test2.jpg">
+                            <div class="image-name">test2.jpg</div>
+                        </div>
+                        <div class="image-container">
+                            <img src="/test3.jpg" alt="test3.jpg">
+                            <div class="image-name">test3.jpg</div>
+                        </div>
+                    </div>
+                    <div class="no-results" style="display: none;">No images found</div>
+                </div>
+            `;
+        });
+
+        test('filters images by search term', () => {
+            filterImages('test1');
+            
+            const containers = Array.from(document.querySelectorAll('.image-container'));
+            const visibleContainers = containers.filter(c => c.style.display !== 'none');
+            expect(visibleContainers.length).toBe(1);
+            expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('test1.jpg');
+        });
+
+        test('handles case-insensitive search', () => {
+            filterImages('TEST1');
+            
+            const containers = Array.from(document.querySelectorAll('.image-container'));
+            const visibleContainers = containers.filter(c => c.style.display !== 'none');
+            expect(visibleContainers.length).toBe(1);
+            expect(visibleContainers[0].querySelector('.image-name').textContent.toLowerCase())
+                .toBe('test1.jpg');
+        });
+
+        test('shows all images when search is cleared', () => {
+            // First filter some images
+            filterImages('test1');
+            // Then clear the filter
+            filterImages('');
+            
+            const containers = Array.from(document.querySelectorAll('.image-container'));
+            const visibleContainers = containers.filter(c => c.style.display !== 'none');
+            expect(visibleContainers.length).toBe(3);
         });
     });
 
     describe('Image Sorting', () => {
-        beforeEach(async () => {
-            await window.loadImages();
-            await flushPromises();
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <div id="gallery-container">
+                    <div id="image-grid">
+                        <div class="image-container" data-date="2023-01-01">
+                            <img src="/test1.jpg" alt="test1.jpg">
+                            <div class="image-name">test1.jpg</div>
+                        </div>
+                        <div class="image-container" data-date="2023-02-01">
+                            <img src="/test2.jpg" alt="test2.jpg">
+                            <div class="image-name">test2.jpg</div>
+                        </div>
+                        <div class="image-container" data-date="2023-03-01">
+                            <img src="/test3.jpg" alt="test3.jpg">
+                            <div class="image-name">test3.jpg</div>
+                        </div>
+                    </div>
+                </div>
+            `;
         });
 
-        test('sorts images by name', async () => {
-            sortNameBtn.click();
-            await flushPromises();
-
-            const images = Array.from(imageGrid.querySelectorAll('img'));
-            const imageNames = images.map(img => img.alt);
-            const sortedNames = [...imageNames].sort((a, b) => 
-                a.toLowerCase().localeCompare(b.toLowerCase())
-            );
-            expect(imageNames).toEqual(sortedNames);
+        test('sorts by date descending', () => {
+            sortImages('date', 'desc');
+            
+            const containers = Array.from(document.querySelectorAll('.image-container'));
+            const dates = containers.map(el => el.dataset.date);
+            expect(dates).toEqual(['2023-03-01', '2023-02-01', '2023-01-01']);
         });
 
-        test('sorts images by date', async () => {
-            sortDateBtn.click();
-            await flushPromises();
-
-            const images = Array.from(imageGrid.querySelectorAll('img'));
-            const imageDates = images.map(img => img.dataset.date);
-            const sortedDates = [...imageDates].sort((a, b) => 
-                new Date(b) - new Date(a)
-            );
-            expect(imageDates).toEqual(sortedDates);
+        test('sorts by name ascending', () => {
+            sortImages('name', 'asc');
+            
+            const containers = Array.from(document.querySelectorAll('.image-container'));
+            const names = containers.map(el => el.querySelector('.image-name').textContent);
+            expect(names).toEqual(['test1.jpg', 'test2.jpg', 'test3.jpg']);
         });
     });
 
-    describe('Search Functionality', () => {
-        beforeEach(async () => {
-            await window.loadImages();
-            await flushPromises();
+    describe('Modal Functionality', () => {
+        beforeEach(() => {
+            document.body.innerHTML = `
+                <div id="gallery-container">
+                    <div id="image-grid">
+                        <div class="image-container">
+                            <img src="/test1.jpg" alt="test1.jpg">
+                            <div class="image-name">test1.jpg</div>
+                        </div>
+                    </div>
+                    <div class="modal hidden">
+                        <span class="modal-close">&times;</span>
+                        <img class="modal-img" src="" alt="">
+                        <div class="modal-caption"></div>
+                    </div>
+                </div>
+            `;
+            initializeModal();
         });
 
-        test('filters images by search term', async () => {
-            const searchTerm = 'Test';
-            const event = new Event('input');
-            searchInput.value = searchTerm;
-            searchInput.dispatchEvent(event);
-            await flushPromises();
-
-            const visibleImages = Array.from(imageGrid.querySelectorAll('.image-container')).filter(
-                container => container.style.display !== 'none'
-            );
-            expect(visibleImages.length).toBeGreaterThan(0);
-            visibleImages.forEach(container => {
-                const img = container.querySelector('img');
-                expect(img.alt.toLowerCase()).toContain(searchTerm.toLowerCase());
-            });
-        });
-
-        test('shows all images when search is cleared', async () => {
-            // First filter
-            searchInput.value = 'Test';
-            searchInput.dispatchEvent(new Event('input'));
-            await flushPromises();
-
-            // Then clear
-            searchInput.value = '';
-            searchInput.dispatchEvent(new Event('input'));
-            await flushPromises();
-
-            const visibleImages = imageGrid.querySelectorAll('.image-container:not(.hidden)');
-            expect(visibleImages.length).toBe(mockImageData.length);
+        test('opens modal with correct image', () => {
+            const imageData = {
+                src: '/test1.jpg',
+                alt: 'test1.jpg',
+                name: 'test1.jpg'
+            };
             
-            const noResults = document.querySelector('.no-results');
-            expect(noResults.style.display).toBe('none');
-        });
-
-        test('handles no search results', async () => {
-            searchInput.value = 'nonexistent';
-            searchInput.dispatchEvent(new Event('input'));
-            await flushPromises();
-
-            const visibleImages = Array.from(imageGrid.querySelectorAll('.image-container')).filter(
-                container => container.style.display !== 'none'
-            );
-            expect(visibleImages.length).toBe(0);
+            openModal(imageData);
             
-            const noResults = document.querySelector('.no-results');
-            expect(noResults.style.display).toBe('block');
+            const modal = document.querySelector('.modal');
+            expect(modal.classList.contains('hidden')).toBe(false);
+            expect(modal.querySelector('.modal-img').src).toContain('test1.jpg');
+            expect(modal.querySelector('.modal-caption').textContent).toBe('test1.jpg');
         });
-    });
 
-    describe('Error Handling', () => {
-        test('handles image load errors', async () => {
-            const container = document.createElement('div');
-            container.className = 'image-container';
-            const img = document.createElement('img');
-            img.src = 'nonexistent.jpg';
-            container.appendChild(img);
-            imageGrid.appendChild(container);
+        test('closes modal', () => {
+            // First open the modal
+            const modal = document.querySelector('.modal');
+            modal.classList.remove('hidden');
+            
+            closeModal();
+            
+            expect(modal.classList.contains('hidden')).toBe(true);
+        });
 
-            // Add error handler
-            img.addEventListener('error', () => {
-                img.classList.add('error');
-                const errorMessage = document.createElement('div');
-                errorMessage.className = 'error-message';
-                errorMessage.textContent = 'Failed to load image';
-                container.appendChild(errorMessage);
-            });
+        test('closes modal on outside click', () => {
+            // First open the modal
+            const modal = document.querySelector('.modal');
+            modal.classList.remove('hidden');
+            
+            // Simulate click on modal background
+            modal.dispatchEvent(new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true
+            }));
+            
+            expect(modal.classList.contains('hidden')).toBe(true);
+        });
 
-            // Trigger error event
-            const errorEvent = new Event('error');
-            img.dispatchEvent(errorEvent);
-            await flushPromises();
-
-            expect(img.classList.contains('error')).toBe(true);
-            const errorMessage = container.querySelector('.error-message');
-            expect(errorMessage).toBeTruthy();
-            expect(errorMessage.textContent).toBe('Failed to load image');
+        test('closes modal on close button click', () => {
+            // First open the modal
+            const modal = document.querySelector('.modal');
+            modal.classList.remove('hidden');
+            
+            // Click close button
+            const closeButton = modal.querySelector('.modal-close');
+            closeButton.dispatchEvent(new MouseEvent('click', {
+                bubbles: true,
+                cancelable: true
+            }));
+            
+            expect(modal.classList.contains('hidden')).toBe(true);
         });
     });
 });

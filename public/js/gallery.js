@@ -58,8 +58,15 @@ export class Gallery {
             
             container.innerHTML = `
                 <img src="${imgUrl}" alt="${imgName}" loading="lazy" />
+                <div class="search-icon">
+                    <i class="fas fa-search"></i>
+                </div>
                 <div class="image-name">${imgName}</div>
             `;
+
+            // Add click handler to container
+            container.addEventListener('click', () => this.openModal(img));
+            
             this.imageGrid.appendChild(container);
         });
     }

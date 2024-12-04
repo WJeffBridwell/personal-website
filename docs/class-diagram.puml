@@ -1,0 +1,75 @@
+@startuml Personal Website Class Diagram
+
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor White
+    ArrowColor #666666
+    BorderColor #666666
+}
+
+package "Frontend" {
+    class Gallery {
+        - imageGrid: HTMLElement
+        - searchInput: HTMLElement
+        - letterButtons: HTMLElement[]
+        - sortButtons: HTMLElement[]
+        + initialize(): void
+        + handleSearch(query: string): void
+        + handleLetterFilter(letter: string): void
+        + handleSort(direction: string): void
+        + renderImages(images: Image[]): void
+    }
+
+    class Modal {
+        - modal: HTMLElement
+        - modalImage: HTMLElement
+        - modalCaption: HTMLElement
+        + show(imageSrc: string, caption: string): void
+        + hide(): void
+        + handleKeyPress(event: KeyboardEvent): void
+    }
+
+    class ImageCard {
+        - container: HTMLElement
+        - image: HTMLElement
+        - name: string
+        + createCard(): HTMLElement
+        + handleClick(): void
+    }
+}
+
+package "Backend" {
+    class Server {
+        + start(): void
+        + setupMiddleware(): void
+        + setupRoutes(): void
+        + handleErrors(): void
+    }
+
+    class GalleryRoute {
+        + getImages(): Image[]
+        + processImage(image: Image): Image
+        + validateRequest(req: Request): boolean
+    }
+
+    class ImageProcessor {
+        + resize(image: Buffer): Buffer
+        + optimize(image: Buffer): Buffer
+        + generateThumbnail(image: Buffer): Buffer
+    }
+
+    class SecurityMiddleware {
+        + rateLimiter: RateLimit
+        + helmet: Helmet
+        + validateInput(input: any): boolean
+    }
+}
+
+' Relationships
+Gallery --> Modal : uses
+Gallery --> ImageCard : creates
+Server --> GalleryRoute : routes to
+GalleryRoute --> ImageProcessor : processes
+Server --> SecurityMiddleware : uses
+
+@enduml

@@ -1,0 +1,69 @@
+@startuml Personal Website Infrastructure Diagram
+
+!define RECTANGLE class
+
+skinparam rectangle {
+    BackgroundColor White
+    BorderColor #666666
+}
+
+cloud "Internet" as internet {
+    [Client Browser]
+}
+
+rectangle "Development Environment" as dev {
+    rectangle "Local Machine" as local {
+        [Node.js Runtime]
+        [NPM]
+        [Express Server]
+        [File System]
+        
+        database "Static Assets" as assets {
+            [Images]
+            [HTML/CSS/JS]
+        }
+    }
+    
+    rectangle "Development Tools" as tools {
+        [Git]
+        [ESLint]
+        [Jest]
+        [Nodemon]
+    }
+}
+
+rectangle "CI/CD Pipeline" as cicd {
+    [GitHub Actions]
+    [Automated Tests]
+    [Linting]
+}
+
+rectangle "Production Environment" as prod {
+    [Web Server]
+    [Node.js Process Manager]
+    [Security Layer]
+    database "Production Assets"
+}
+
+internet --> local : Development
+internet --> prod : Production
+local --> tools : Uses
+local --> cicd : Pushes to
+cicd --> prod : Deploys to
+
+note right of local
+  Development server
+  runs on port 3000
+end note
+
+note right of prod
+  Secured with Helmet
+  and rate limiting
+end note
+
+note right of cicd
+  Runs tests and checks
+  before deployment
+end note
+
+@enduml
