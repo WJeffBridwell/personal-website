@@ -120,7 +120,7 @@ router.get('/images', async (req, res) => {
             }));
 
         console.log(`Returning ${images.length} images`);
-        res.json(images);
+        res.json({ images });
         
     } catch (error) {
         console.error('Error in /gallery/images:', error);
