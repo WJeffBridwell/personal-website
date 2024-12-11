@@ -29,10 +29,12 @@ export class Gallery {
     this.sortNameButton = document.getElementById('sort-name');
     this.sortDateButton = document.getElementById('sort-date');
     this.images = [];
+    this.controls = document.querySelector('.gallery-controls');
 
     this.initializeEventListeners();
     this.createLetterFilter();
     this.initializeStickyControls();
+    this.initSearch();
   }
 
   /**
@@ -109,25 +111,20 @@ export class Gallery {
    * @returns {void}
    */
   initializeEventListeners() {
-    // Search input with debouncing
-    if (this.searchInput) {
-      const debouncedSearch = this.debounce(this.handleSearch.bind(this), 300);
-      this.searchInput.addEventListener('input', debouncedSearch);
-    }
-
     // Sort buttons
     this.sortNameButton?.addEventListener('click', () => this.sortByName());
     this.sortDateButton?.addEventListener('click', () => this.sortByDate());
 
-    // Letter filter
-    if (this.letterFilter) {
-      this.letterFilter.addEventListener('click', (event) => {
-        if (event.target.classList.contains('letter-button')) {
-          const letter = event.target.dataset.letter;
-          this.filterByLetter(letter);
+    // Image click for modal
+    this.imageGrid?.addEventListener('click', (e) => {
+      const container = e.target.closest('.image-container');
+      if (container) {
+        const img = container.querySelector('img');
+        if (img) {
+          this.openModal(img);
         }
-      });
-    }
+      }
+    });
 
     // Modal events
     this.modal?.addEventListener('click', (e) => {
@@ -142,6 +139,21 @@ export class Gallery {
   }
 
   /**
+   * Initializes the search functionality
+   */
+  initSearch() {
+    if (!this.searchInput) return;
+
+    let timeoutId;
+    this.searchInput.addEventListener('input', (e) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        this.handleSearch(e);
+      }, 300);
+    });
+  }
+
+  /**
    * Handles search input events.
    * Debounces search to prevent excessive filtering.
    * 
@@ -149,13 +161,15 @@ export class Gallery {
    * @returns {void}
    */
   handleSearch(event) {
+    if (!event?.target) return;
     const searchTerm = event.target.value.toLowerCase().trim();
     const containers = this.imageGrid.querySelectorAll('.image-container');
     let hasResults = false;
 
     containers.forEach((container) => {
-      const name = container.querySelector('.image-name').textContent.toLowerCase();
+      const name = container.querySelector('.image-name')?.textContent.toLowerCase() || '';
       const isVisible = name.includes(searchTerm);
+      container.classList.toggle('hidden', !isVisible);
       container.style.display = isVisible ? 'block' : 'none';
       if (isVisible) hasResults = true;
     });
@@ -212,44 +226,56 @@ export class Gallery {
    * @returns {void}
    */
   filterByLetter(letter) {
-    const containers = this.imageGrid?.querySelectorAll('.image-container') ?? [];
+    if (!letter) return;
+    
+    const containers = this.imageGrid.querySelectorAll('.image-container');
+    const isAll = letter.toLowerCase() === 'all';
+    let hasResults = false;
+
     containers.forEach((container) => {
-      const name = container.querySelector('.image-name')?.textContent ?? '';
-      container.style.display =
-                letter === 'All' || name.startsWith(letter) ? '' : 'none';
+      const name = container.querySelector('.image-name')?.textContent || '';
+      const isVisible = isAll || name.startsWith(letter);
+      container.classList.toggle('hidden', !isVisible);
+      container.style.display = isVisible ? 'block' : 'none';
+      if (isVisible) hasResults = true;
     });
+
+    this.updateNoResultsMessage(!hasResults);
   }
 
   /**
-   * Initializes sticky controls for gallery.
+   * Initializes sticky behavior for gallery controls
+   * Makes controls stick to top of viewport when scrolling
    * 
-   * @private
    * @returns {void}
    */
   initializeStickyControls() {
-    const controls = document.querySelector('.gallery-controls');
-    if (!controls || !this.imageGrid) return;
+    if (!this.controls) return;
 
-    const updateSticky = () => {
-      if (!this.imageGrid) return;
-      const galleryTop = this.imageGrid.offsetTop;
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const handleScroll = () => this.updateStickyState();
+    const debouncedScroll = this.debounce(handleScroll, 10);
 
-      if (scrollTop >= galleryTop) {
-        controls.classList.add('sticky');
-      } else {
-        controls.classList.remove('sticky');
-      }
-    };
-
-    // Add event listeners
-    window.addEventListener('scroll', updateSticky);
-    window.addEventListener('resize', this.debounce(() => {
-      updateSticky();
-    }, 100));
-
+    window.addEventListener('scroll', debouncedScroll);
+    window.addEventListener('resize', debouncedScroll);
+    
     // Initial check
-    updateSticky();
+    this.updateStickyState();
+  }
+
+  /**
+   * Updates sticky state of controls based on scroll position
+   * @private
+   * @returns {void}
+   */
+  updateStickyState() {
+    if (!this.controls || !this.container) return;
+    
+    const rect = this.container.getBoundingClientRect();
+    if (rect.top <= 0) {
+      this.controls.classList.add('sticky');
+    } else {
+      this.controls.classList.remove('sticky');
+    }
   }
 
   /**
@@ -258,8 +284,7 @@ export class Gallery {
    * @returns {void}
    */
   sortByName() {
-    this.sortImages('name');
-    this.renderImages();
+    this.sortImages('name', 'desc');
   }
 
   /**
@@ -280,22 +305,24 @@ export class Gallery {
    * @returns {void}
    */
   sortImages(sortBy = 'name', order = 'asc') {
-    this.images.sort((a, b) => a[sortBy].localeCompare(b[sortBy]));
+    this.images.sort((a, b) => {
+      const comparison = a[sortBy].localeCompare(b[sortBy]);
+      return order === 'asc' ? comparison : -comparison;
+    });
     this.renderImages();
   }
 
   /**
    * Opens modal with image details.
    * 
-   * @param {Object} img - Image object
+   * @param {HTMLImageElement} img - Image element
    * @returns {void}
    */
   openModal(img) {
-    if (!this.modal || !this.modalImg || !this.modalCaption) return;
-
-    this.modalImg.src = img.src;
-    this.modalCaption.textContent = img.alt;
-    this.modal.style.display = 'block';
+    if (this.modal && this.modalImg) {
+      this.modalImg.src = img.src;
+      this.modal.style.display = 'block';
+    }
   }
 
   /**
@@ -304,8 +331,9 @@ export class Gallery {
    * @returns {void}
    */
   closeModal() {
-    if (!this.modal) return;
-    this.modal.style.display = 'none';
+    if (this.modal) {
+      this.modal.style.display = 'none';
+    }
   }
 
   /**
@@ -328,13 +356,14 @@ export class Gallery {
    * @param {Function} func - Function to debounce
    * @param {number} wait - Milliseconds to wait
    * @returns {Function} Debounced function
+   * @private
    */
   debounce(func, wait) {
     let timeout;
-    return function executedFunction(...args) {
+    return (...args) => {
       const later = () => {
         clearTimeout(timeout);
-        func(...args);
+        func.apply(this, args);
       };
       clearTimeout(timeout);
       timeout = setTimeout(later, wait);
@@ -590,7 +619,7 @@ export function filterByLetter(letter) {
     const name = nameElement.textContent || '';
     const firstLetter = name.charAt(0).toLowerCase();
     const visible = letter === 'all' || firstLetter === letter.toLowerCase();
-    container.style.display = visible ? '' : 'none';
+    container.style.display = visible ? 'block' : 'none';
   });
 
   updateNoResultsMessage();
