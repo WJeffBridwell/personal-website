@@ -1,7 +1,7 @@
 /**
  * Content Gallery functionality
  */
-class ContentGallery {
+export class ContentGallery {
     constructor() {
         this.container = document.getElementById('gallery-container');
         this.imageGrid = document.getElementById('image-grid');
@@ -11,6 +11,10 @@ class ContentGallery {
         this.sortDateButton = document.getElementById('sort-date');
         this.content = [];
         this.contentPlayer = null;
+        this.page = 1;
+        this.pageSize = 20;
+        this.loading = false;
+        this.hasMore = true;
         
         // Get the name parameter from URL if present
         const urlParams = new URLSearchParams(window.location.search);
@@ -40,6 +44,125 @@ class ContentGallery {
         if (this.sortDateButton) {
             this.sortDateButton.addEventListener('click', () => this.sortByDate());
         }
+
+        // Add scroll event listener for infinite scroll
+        window.addEventListener('scroll', () => {
+            if (this.shouldLoadMore()) {
+                this.loadMoreContent();
+            }
+        });
+    }
+
+    shouldLoadMore() {
+        if (this.loading || !this.hasMore) return false;
+        
+        const scrollHeight = document.documentElement.scrollHeight;
+        const scrollTop = window.scrollY || document.documentElement.scrollTop;
+        const clientHeight = window.innerHeight || document.documentElement.clientHeight;
+        
+        return scrollHeight - scrollTop - clientHeight < 200; // Load more when within 200px of bottom
+    }
+
+    async loadMoreContent() {
+        if (this.loading || !this.hasMore) return;
+        
+        this.loading = true;
+        try {
+            const apiUrl = `http://localhost:8081/image-content?page=${this.page}&pageSize=${this.pageSize}${this.nameFilter ? `&image_name=${this.nameFilter}` : ''}`;
+            console.log('Making API call to:', apiUrl);
+            
+            const response = await fetch(apiUrl);
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const jsonData = await response.json();
+            console.log('Received data:', jsonData);
+            
+            // Handle both array response and {items: [...]} response
+            const items = Array.isArray(jsonData) ? jsonData : jsonData.items;
+            
+            if (!Array.isArray(items)) {
+                throw new Error('Invalid API response format - expected array of items');
+            }
+
+            // If response includes hasMore flag, use it; otherwise assume more if we got a full page
+            this.hasMore = jsonData.hasMore !== undefined ? jsonData.hasMore : (items.length >= this.pageSize);
+            this.content = [...this.content, ...items];
+            this.page++;
+            
+            this.renderNewContent(items);
+        } catch (error) {
+            console.error('Error loading content:', error);
+            this.showError(`Failed to load content: ${error.message}`);
+        } finally {
+            this.loading = false;
+        }
+    }
+
+    renderNewContent(newItems) {
+        if (!this.imageGrid) return;
+        
+        newItems.forEach(item => {
+            const container = document.createElement('div');
+            container.className = 'image-container';
+            container.dataset.name = item.content_name?.toLowerCase() || '';
+            
+            const previewContainer = document.createElement('div');
+            previewContainer.className = 'preview-container';
+
+            if (item.content_name?.toLowerCase().endsWith('.mp4')) {
+                const video = document.createElement('video');
+                video.className = 'preview-content';
+                video.src = this.getContentUrl(item.content_url);
+                video.controls = true;
+                video.preload = 'none';
+                video.playsInline = true;
+                video.addEventListener('click', () => {
+                    if (video.paused) {
+                        video.play().catch(err => {
+                            console.error('Error playing video:', err);
+                        });
+                    }
+                });
+                previewContainer.appendChild(video);
+            } else {
+                const img = document.createElement('img');
+                img.className = 'preview-content';
+                img.src = this.getContentUrl(item.content_url);
+                img.alt = item.content_name || 'Content';
+                img.loading = 'lazy';
+                previewContainer.appendChild(img);
+            }
+
+            const nameLabel = document.createElement('div');
+            nameLabel.className = 'content-name';
+            nameLabel.textContent = item.content_name || 'Untitled';
+            
+            const metadataContainer = document.createElement('div');
+            metadataContainer.className = 'content-metadata';
+            
+            if (item.content_tags && item.content_tags.length > 0) {
+                const tagsDiv = document.createElement('div');
+                tagsDiv.className = 'content-tags';
+                tagsDiv.textContent = `Tags: ${item.content_tags.join(', ')}`;
+                metadataContainer.appendChild(tagsDiv);
+            }
+            
+            if (item.content_size) {
+                const sizeDiv = document.createElement('div');
+                sizeDiv.className = 'content-size';
+                sizeDiv.textContent = `Size: ${this.formatFileSize(item.content_size)}`;
+                metadataContainer.appendChild(sizeDiv);
+            }
+            
+            container.appendChild(previewContainer);
+            container.appendChild(nameLabel);
+            container.appendChild(metadataContainer);
+            this.imageGrid.appendChild(container);
+        });
     }
 
     initializeWithContentPlayer(contentPlayer) {
@@ -49,46 +172,24 @@ class ContentGallery {
     getContentUrl(contentPath) {
         if (!contentPath) return '';
         
-        // For video content, route through our video endpoint
-        if (contentPath.toLowerCase().endsWith('.mp4')) {
-            return `/video-content?path=${encodeURIComponent(contentPath)}`;
+        if (!contentPath.startsWith('/')) {
+            // If it's not an absolute path, treat as relative
+            return contentPath;
         }
-        
-        // For other content, return as is
+        // For video content, use the video-content endpoint with the full path
+        if (contentPath.toLowerCase().endsWith('.mp4')) {
+            return `/gallery/video-content?path=${encodeURIComponent(contentPath)}`;
+        }
+        // For other content with absolute paths, use as is
         return contentPath;
     }
 
     async loadContent() {
-        try {
-            const apiUrl = `http://localhost:8081/image-content?image_name=${this.nameFilter}`;
-            console.log('Making API call to:', apiUrl);
-            console.log('Name filter value:', this.nameFilter);
-            
-            // Get content metadata from the images API
-            const response = await fetch(apiUrl);
-            console.log('Server response status:', response.status);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const jsonData = await response.json();
-            console.log('API Response data (first item):', jsonData[0]);
-            console.log('Number of items returned:', jsonData.length);
-
-            if (Array.isArray(jsonData)) {
-                this.content = jsonData;
-            } else if (jsonData.error) {
-                throw new Error(`API error: ${jsonData.error}`);
-            } else {
-                throw new Error('Invalid API response format');
-            }
-
-            this.renderContent();
-        } catch (error) {
-            console.error('Error loading content:', error);
-            this.showError(`Failed to load content: ${error.message}`);
-        }
+        this.page = 1;
+        this.content = [];
+        this.hasMore = true;
+        this.imageGrid.innerHTML = '';
+        await this.loadMoreContent();
     }
 
     showError(message) {
@@ -107,117 +208,6 @@ class ContentGallery {
             this.imageGrid.innerHTML = '';
             this.imageGrid.appendChild(errorDiv);
         }
-    }
-
-    renderContent() {
-        if (!this.imageGrid) return;
-
-        this.imageGrid.innerHTML = '';
-        
-        if (!Array.isArray(this.content)) {
-            this.showError('Invalid content data received');
-            return;
-        }
-
-        if (this.content.length === 0) {
-            const noContentDiv = document.createElement('div');
-            noContentDiv.className = 'error-message';
-            noContentDiv.textContent = 'No content found';
-            this.imageGrid.appendChild(noContentDiv);
-            return;
-        }
-
-        this.content.forEach(item => {
-            const container = document.createElement('div');
-            container.className = 'image-container';
-            container.dataset.name = item.content_name?.toLowerCase() || '';
-            
-            // Preview container
-            const previewContainer = document.createElement('div');
-            previewContainer.className = 'preview-container';
-
-            // Create preview based on content type
-            const isVideo = item.content_name?.toLowerCase().endsWith('.mp4');
-            if (isVideo) {
-                const video = document.createElement('video');
-                const videoUrl = this.getContentUrl(item.content_url);
-                console.log('Loading video from URL:', videoUrl);
-                
-                video.src = videoUrl;
-                video.controls = true;
-                video.playsInline = true;
-                
-                // Add error handling
-                video.onerror = (e) => {
-                    console.error('Video error:', e);
-                    console.error('Error details:', video.error);
-                };
-
-                // Add load handling
-                video.onloadeddata = () => {
-                    console.log('Video loaded successfully');
-                };
-
-                // Try direct URL if video endpoint fails
-                video.addEventListener('error', () => {
-                    console.log('Trying direct URL as fallback');
-                    video.src = item.content_url;
-                });
-
-                previewContainer.appendChild(video);
-                container.onclick = null;
-            } else {
-                const img = document.createElement('img');
-                img.src = this.getContentUrl(item.content_url);
-                img.alt = item.content_name || 'Content';
-                img.loading = 'lazy';
-                previewContainer.appendChild(img);
-            }
-
-            // Content info section
-            const infoContainer = document.createElement('div');
-            infoContainer.className = 'content-info';
-            
-            // Name
-            const nameLabel = document.createElement('div');
-            nameLabel.className = 'content-name';
-            nameLabel.textContent = item.content_name || 'Untitled';
-            
-            // Tags
-            const tagsContainer = document.createElement('div');
-            tagsContainer.className = 'content-tags';
-            if (item.content_tags && Array.isArray(item.content_tags)) {
-                item.content_tags.forEach(tag => {
-                    const tagSpan = document.createElement('span');
-                    tagSpan.className = 'tag';
-                    tagSpan.textContent = tag;
-                    tagsContainer.appendChild(tagSpan);
-                });
-            }
-
-            // Size
-            const sizeLabel = document.createElement('div');
-            sizeLabel.className = 'content-size';
-            sizeLabel.textContent = this.formatFileSize(item.content_size || 0);
-
-            infoContainer.appendChild(nameLabel);
-            if (item.content_tags?.length > 0) {
-                infoContainer.appendChild(tagsContainer);
-            }
-            infoContainer.appendChild(sizeLabel);
-
-            container.appendChild(previewContainer);
-            container.appendChild(infoContainer);
-            this.imageGrid.appendChild(container);
-        });
-    }
-
-    formatFileSize(bytes) {
-        if (!bytes) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     }
 
     handleSearch() {
@@ -261,5 +251,13 @@ class ContentGallery {
 
     reorderContainers(containers) {
         containers.forEach(container => this.imageGrid.appendChild(container));
+    }
+
+    formatFileSize(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     }
 }
