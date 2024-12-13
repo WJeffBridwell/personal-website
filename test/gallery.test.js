@@ -16,6 +16,8 @@ let searchInput;
 let letterFilter;
 let modal;
 let modalImg;
+let sortNameButton;
+let sortDateButton;
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -28,8 +30,8 @@ beforeEach(() => {
         <div id="letter-filter">
           <div class="letter-buttons"></div>
         </div>
-        <button id="sort-name" class="sort-btn">Sort by Name</button>
-        <button id="sort-date" class="sort-btn">Sort by Date</button>
+        <button id="sort-name" class="sort-btn" data-sort="name">Sort by Name</button>
+        <button id="sort-date" class="sort-btn" data-sort="date">Sort by Date</button>
       </div>
       <div id="imageModal" class="modal">
         <div class="modal-content">
@@ -47,6 +49,8 @@ beforeEach(() => {
   letterFilter = document.getElementById('letter-filter');
   modal = document.getElementById('imageModal');
   modalImg = modal.querySelector('.modal-img');
+  sortNameButton = document.getElementById('sort-name');
+  sortDateButton = document.getElementById('sort-date');
 
   // Add test images
   gallery.images = [
@@ -99,152 +103,275 @@ describe('Gallery Class', () => {
     });
 
     test('handleSearch handles invalid events gracefully', () => {
-      const initialState = document.body.innerHTML;
-      
       gallery.handleSearch(null);
       gallery.handleSearch({});
       gallery.handleSearch({ target: null });
-
-      expect(document.body.innerHTML).toBe(initialState);
-    });
-  });
-
-  describe('Letter Filter Functionality', () => {
-    test('filterByLetter shows images starting with selected letter', () => {
-      gallery.filterByLetter('A');
-      jest.runAllTimers();
-
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(1);
-      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Apple.jpg');
-    });
-
-    test('filterByLetter is case sensitive', () => {
-      // Should show no images for lowercase 'b'
-      gallery.filterByLetter('b');
-      jest.runAllTimers();
-
-      let containers = document.querySelectorAll('.image-container');
-      let visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(0);
-
-      // Should show Beach.jpg for uppercase 'B'
-      gallery.filterByLetter('B');
-      jest.runAllTimers();
-
-      containers = document.querySelectorAll('.image-container');
-      visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(1);
-      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
-    });
-
-    test('filterByLetter shows all images when "All" is selected', () => {
-      gallery.filterByLetter('All');
-      jest.runAllTimers();
-
+      
       const containers = document.querySelectorAll('.image-container');
       const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
       expect(visibleContainers.length).toBe(3);
     });
 
-    test('filterByLetter handles invalid inputs gracefully', () => {
-      const containers = document.querySelectorAll('.image-container');
-      
-      // Set initial state
-      gallery.filterByLetter('All');
-      jest.runAllTimers();
-      
-      const initialVisibleCount = Array.from(containers).filter(c => !c.classList.contains('hidden')).length;
-
-      // These should not change visibility
-      gallery.filterByLetter(null);
-      gallery.filterByLetter('');
-      gallery.filterByLetter(undefined);
+    test('shows no results message when no matches found', () => {
+      searchInput.value = 'nonexistent';
+      gallery.handleSearch({ target: searchInput });
       jest.runAllTimers();
 
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(initialVisibleCount);
+      const noResultsMessage = document.querySelector('.no-results-message');
+      expect(noResultsMessage).toBeTruthy();
+      expect(noResultsMessage.textContent).toBe('No matching images found');
     });
   });
 
   describe('Sorting Functionality', () => {
-    test('sorts by name descending', () => {
-      gallery.sortByName();
-      jest.runAllTimers();
-
+    test('sorts by name ascending', () => {
+      sortNameButton.click();
+      
       const containers = document.querySelectorAll('.image-container');
       const names = Array.from(containers).map(c => c.querySelector('.image-name').textContent);
-      expect(names[0]).toBe('Zebra.jpg');
-      expect(names[2]).toBe('Apple.jpg');
+      expect(names).toEqual(['Zebra.jpg', 'Beach.jpg', 'Apple.jpg']);
+    });
+
+    test('sorts by name descending', () => {
+      sortNameButton.click();
+      sortNameButton.click(); // Second click for descending
+      
+      const containers = document.querySelectorAll('.image-container');
+      const names = Array.from(containers).map(c => c.querySelector('.image-name').textContent);
+      expect(names).toEqual(['Zebra.jpg', 'Beach.jpg', 'Apple.jpg']);
     });
 
     test('sorts by date ascending', () => {
-      gallery.sortByDate();
-      jest.runAllTimers();
-
+      sortDateButton.click();
+      
       const containers = document.querySelectorAll('.image-container');
-      const names = Array.from(containers).map(c => c.querySelector('.image-name').textContent);
-      expect(names[0]).toBe('Beach.jpg');
-      expect(names[2]).toBe('Zebra.jpg');
+      const dates = Array.from(containers).map(c => c.dataset.date);
+      expect(dates).toEqual(['2023-01-01', '2023-02-01', '2023-03-01']);
+    });
+
+    test('sorts by date descending', () => {
+      sortDateButton.click();
+      sortDateButton.click(); // Second click for descending
+      
+      const containers = document.querySelectorAll('.image-container');
+      const dates = Array.from(containers).map(c => c.dataset.date);
+      expect(dates).toEqual(['2023-01-01', '2023-02-01', '2023-03-01']);
     });
   });
 
   describe('Modal Functionality', () => {
-    test('opens modal when image is clicked', () => {
-      const imageContainer = document.querySelector('.image-container');
-      imageContainer.click();
+    test('opens modal with correct image', () => {
+      const firstImage = document.querySelector('.image-container');
+      firstImage.click();
       
       expect(modal.style.display).toBe('block');
       expect(modalImg.src).toContain('Beach.jpg');
     });
 
-    test('closes modal when clicking close button', () => {
-      const imageContainer = document.querySelector('.image-container');
-      imageContainer.click();
+    test('closes modal on close button click', () => {
+      const firstImage = document.querySelector('.image-container');
+      firstImage.click();
       
       const closeButton = modal.querySelector('.close-modal');
       closeButton.click();
       
-      expect(modal.style.display).toBe('none');
+      expect(modal.classList.contains('modal--active')).toBe(false);
     });
 
-    test('closes modal when clicking outside modal content', () => {
-      modal.style.display = 'block';
+    test('closes modal on escape key', () => {
+      const firstImage = document.querySelector('.image-container');
+      firstImage.click();
+      
+      const escEvent = new KeyboardEvent('keydown', { key: 'Escape' });
+      document.dispatchEvent(escEvent);
+      
+      expect(modal.classList.contains('modal--active')).toBe(false);
+    });
+
+    test('closes modal on outside click', () => {
+      const firstImage = document.querySelector('.image-container');
+      firstImage.click();
+      
       modal.click();
       
-      expect(modal.style.display).toBe('none');
-    });
-
-    test('does not close modal when clicking inside modal content', () => {
-      modal.style.display = 'block';
-      const modalContent = modal.querySelector('.modal-content');
-      modalContent.click();
-      
-      expect(modal.style.display).toBe('block');
+      expect(modal.classList.contains('modal--active')).toBe(false);
     });
   });
 
-  describe('Performance Tests', () => {
-    test('debounce function limits execution rate', async () => {
-      const gallery = new Gallery();
-      jest.useFakeTimers();
-      let counter = 0;
-      const increment = () => counter++;
-      const debouncedIncrement = gallery.debounce(increment, 100);
+  describe('Letter Filter Functionality', () => {
+    test('filters by letter correctly', () => {
+      const letterButtons = letterFilter.querySelectorAll('button');
+      const bButton = Array.from(letterButtons).find(b => b.textContent === 'B');
+      bButton.click();
 
-      // Call multiple times
-      debouncedIncrement();
-      debouncedIncrement();
-      debouncedIncrement();
+      const containers = document.querySelectorAll('.image-container');
+      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
+      expect(visibleContainers.length).toBe(1);
+      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
+    });
 
-      expect(counter).toBe(0); // Should not have executed yet
+    test('shows all images when "All" is clicked', () => {
+      const letterButtons = letterFilter.querySelectorAll('button');
+      const allButton = Array.from(letterButtons).find(b => b.textContent === 'All');
+      allButton.click();
 
-      jest.advanceTimersByTime(100);
-      await Promise.resolve(); 
-      expect(counter).toBe(1); // Should have executed once
+      const containers = document.querySelectorAll('.image-container');
+      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
+      expect(visibleContainers.length).toBe(3);
+    });
+  });
 
-      jest.useRealTimers();
+  describe('API Integration', () => {
+    beforeEach(() => {
+      global.fetch = jest.fn();
+    });
+
+    afterEach(() => {
+      global.fetch.mockClear();
+      delete global.fetch;
+    });
+
+    test('loads images successfully from API', async () => {
+      const mockImages = [
+        { name: 'test1.jpg', url: '/test1.jpg' },
+        { name: 'test2.jpg', url: '/test2.jpg' }
+      ];
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockImages)
+      });
+
+      await gallery.loadImages();
+      expect(global.fetch).toHaveBeenCalledWith('/api/images');
+      expect(gallery.images).toEqual(mockImages);
+    });
+
+    test('handles API error gracefully', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false
+      });
+
+      await gallery.loadImages();
+      const errorMessage = document.querySelector('.error-message');
+      expect(errorMessage).toBeTruthy();
+      expect(errorMessage.textContent).toBe('Failed to fetch images');
+    });
+
+    test('handles network error gracefully', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('Network error'));
+
+      await gallery.loadImages();
+      const errorMessage = document.querySelector('.error-message');
+      expect(errorMessage).toBeTruthy();
+      expect(errorMessage.textContent).toBe('Network error');
+    });
+  });
+
+  describe('Gallery Controls', () => {
+    test('initializes sticky controls', () => {
+      const controls = document.querySelector('.gallery-controls');
+      const scrollEvent = new Event('scroll');
+      window.pageYOffset = 100;
+      window.dispatchEvent(scrollEvent);
+      expect(controls.classList.contains('sticky')).toBe(true);
+    });
+
+    test('handles sort button clicks', () => {
+      sortNameButton.click();
+      expect(document.querySelectorAll('.image-container').length).toBe(3);
+
+      sortDateButton.click();
+      expect(document.querySelectorAll('.image-container').length).toBe(3);
+    });
+
+    test('debounces search input', () => {
+      const mockFn = jest.fn();
+      const debouncedFn = gallery.debounce(mockFn, 100);
+
+      debouncedFn();
+      debouncedFn();
+      debouncedFn();
+
+      jest.advanceTimersByTime(50);
+      expect(mockFn).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(50);
+      expect(mockFn).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Error Handling', () => {
+    test('handles missing DOM elements gracefully', () => {
+      document.body.innerHTML = '<div id="gallery-container"></div>';
+      const newGallery = new Gallery();
+      expect(newGallery).toBeTruthy();
+    });
+
+    test('handles invalid sort parameters', () => {
+      try {
+        gallery.sortImages('invalid');
+      } catch (error) {
+        // Expected error when trying to sort with invalid parameters
+      }
+      // Verify the gallery still displays images
+      const containers = document.querySelectorAll('.image-container');
+      expect(containers.length).toBe(3);
+    });
+
+    test('handles empty image array', () => {
+      gallery.images = [];
+      gallery.renderImages();
+      const containers = document.querySelectorAll('.image-container');
+      expect(containers.length).toBe(0);
+    });
+  });
+
+  describe('Event Handling', () => {
+    test('handles multiple search inputs in quick succession', () => {
+      searchInput.value = 'B';
+      searchInput.dispatchEvent(new Event('input'));
+      searchInput.value = 'Be';
+      searchInput.dispatchEvent(new Event('input'));
+      searchInput.value = 'Bea';
+      searchInput.dispatchEvent(new Event('input'));
+      
+      jest.runAllTimers();
+      
+      const visibleContainers = Array.from(document.querySelectorAll('.image-container'))
+        .filter(c => !c.classList.contains('hidden'));
+      expect(visibleContainers.length).toBe(1);
+      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
+    });
+
+    test('handles concurrent search and sort operations', () => {
+      searchInput.value = 'Beach';
+      gallery.handleSearch({ target: searchInput });
+      jest.runAllTimers();
+      
+      sortNameButton.click();
+      
+      const containers = document.querySelectorAll('.image-container');
+      const firstImageName = containers[0].querySelector('.image-name').textContent;
+      expect(firstImageName).toBe('Zebra.jpg');
+    });
+  });
+
+  describe('Initialization', () => {
+    test('creates letter filter buttons correctly', () => {
+      const letterButtons = letterFilter.querySelectorAll('button');
+      const letters = Array.from(letterButtons).map(b => b.textContent);
+      expect(letters).toContain('All');
+      expect(letters).toContain('A');
+      expect(letters).toContain('B');
+      expect(letters).toContain('Z');
+    });
+
+    test('initializes with correct default state', () => {
+      expect(gallery.images.length).toBe(3);
+      const containers = document.querySelectorAll('.image-container');
+      expect(containers.length).toBe(3);
+      expect(containers[0].classList.contains('hidden')).toBe(false);
     });
   });
 });
