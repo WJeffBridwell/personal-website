@@ -1,0 +1,47 @@
+/* Atoms */
+@import 'atoms/_variables.css';
+@import 'atoms/_buttons.css';
+
+/* Molecules */
+@import 'molecules/_cards.css';
+@import 'molecules/_controls.css';
+@import 'molecules/_navigation.css';
+
+/* Organisms */
+@import 'organisms/_content-gallery.css';
+@import 'organisms/_content-player.css';
+
+/* Templates */
+@import 'templates/_layouts.css';
+
+/* Reset and base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-primary);
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+  color: var(--color-dark);
+  background-color: var(--color-light);
+}
+
+/* Container */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+/* Utility classes */
+.text-center { text-align: center; }
+.mt-1 { margin-top: var(--spacing-sm); }
+.mt-2 { margin-top: var(--spacing-md); }
+.mt-3 { margin-top: var(--spacing-lg); }
+.mb-1 { margin-bottom: var(--spacing-sm); }
+.mb-2 { margin-bottom: var(--spacing-md); }
+.mb-3 { margin-bottom: var(--spacing-lg); }
