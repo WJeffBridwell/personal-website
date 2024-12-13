@@ -14,22 +14,23 @@ export class Gallery {
   /**
    * Creates a new Gallery instance.
    * 
-   * @param {string} [containerId='gallery-container'] - ID of the gallery container element
+   * @param {HTMLElement} galleryElement - Gallery element
    * @throws {Error} If required DOM elements are not found
    */
-  constructor(containerId = 'gallery-container') {
-    this.container = document.getElementById(containerId);
-    this.imageGrid = document.getElementById('image-grid');
-    this.searchInput = document.getElementById('search-input');
-    this.letterFilter = document.getElementById('letter-filter');
-    this.modal = document.getElementById('imageModal');
+  constructor(galleryElement) {
+    this.gallery = galleryElement;
+    this.container = galleryElement.querySelector('.gallery-container');
+    this.imageGrid = galleryElement.querySelector('#image-grid');
+    this.searchInput = galleryElement.querySelector('#search-input');
+    this.letterFilter = galleryElement.querySelector('#letter-filter');
+    this.modal = galleryElement.querySelector('#imageModal');
     this.modalImg = this.modal?.querySelector('.modal-img');
     this.modalCaption = this.modal?.querySelector('.modal-caption');
     this.closeButton = this.modal?.querySelector('.close-modal');
-    this.sortNameButton = document.getElementById('sort-name');
-    this.sortDateButton = document.getElementById('sort-date');
+    this.sortNameButton = galleryElement.querySelector('#sort-name');
+    this.sortDateButton = galleryElement.querySelector('#sort-date');
     this.images = [];
-    this.controls = document.querySelector('.gallery-controls');
+    this.controls = galleryElement.querySelector('.gallery-controls');
 
     this.initializeEventListeners();
     this.createLetterFilter();
@@ -651,7 +652,7 @@ export function debounce(func, wait) {
  * @returns {Promise<void>}
  */
 async function loadGalleryImages() {
-  const gallery = new Gallery();
+  const gallery = new Gallery(document.getElementById('gallery'));
   return gallery.loadImages();
 }
 

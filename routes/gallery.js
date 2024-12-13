@@ -107,20 +107,42 @@ router.get('/images', async (req, res) => {
         const files = await fs.readdir(directoryPath, { withFileTypes: true });
         console.log(`Found ${files.length} total files in directory`);
         
-        // Filter for images
-        const images = files
+        // Filter for images and videos
+        const content = files
             .filter(file => {
-                const isImage = !file.isDirectory() && /\.(jpg|jpeg|png|webp)$/i.test(file.name);
-                if (isImage) console.log('Found image:', file.name);
-                return isImage;
+                const isMedia = !file.isDirectory() && 
+                    (/\.(jpg|jpeg|png|webp|mp4|webm|mov)$/i.test(file.name));
+                if (isMedia) console.log('Found media file:', file.name);
+                return isMedia;
             })
-            .map(file => ({
-                name: file.name,
-                url: `/gallery/images/${encodeURIComponent(file.name)}`
-            }));
+            .map(file => {
+                const ext = path.extname(file.name).toLowerCase();
+                const isVideo = ['.mp4', '.webm', '.mov'].includes(ext);
+                
+                try {
+                    const stats = fs.statSync(path.join(directoryPath, file.name));
+                    return {
+                        content_name: file.name,
+                        content_url: isVideo ? `/gallery/video/${encodeURIComponent(file.name)}` : `/gallery/images/${encodeURIComponent(file.name)}`,
+                        content_type: isVideo ? 'video' : 'image',
+                        content_size: stats.size,
+                        content_created: stats.birthtime,
+                        content_tags: []  // Add empty tags array for future use
+                    };
+                } catch (err) {
+                    console.error(`Error processing file ${file.name}:`, err);
+                    return null;
+                }
+            })
+            .filter(item => item !== null);  // Remove any failed items
 
-        console.log(`Returning ${images.length} images`);
-        res.json({ images });
+        console.log(`Returning ${content.length} media files:`, content.map(c => ({
+            name: c.content_name,
+            type: c.content_type,
+            url: c.content_url
+        })));
+        
+        res.json({ content });
         
     } catch (error) {
         console.error('Error in /gallery/images:', error);
@@ -131,44 +153,190 @@ router.get('/images', async (req, res) => {
     }
 });
 
-// Serve individual images
+// Serve individual media files
 router.get('/images/:imageName', async (req, res) => {
     const imageName = decodeURIComponent(req.params.imageName);
     console.log('GET /gallery/images/:imageName endpoint hit for:', imageName);
     
     try {
-        const imagePath = path.join('/Volumes/VideosNew/Models', imageName);
-        console.log('Attempting to serve image from:', imagePath);
+        const filePath = path.join('/Volumes/VideosNew/Models', imageName);
+        console.log('Attempting to serve file from:', filePath);
         
         try {
-            await fs.access(imagePath);
-            console.log('Image file exists, serving:', imagePath);
+            await fs.access(filePath);
+            console.log('File exists, serving:', filePath);
             
             // Determine content type based on file extension
             const ext = path.extname(imageName).toLowerCase();
             let contentType = 'image/jpeg';  // default
+            
             if (ext === '.png') contentType = 'image/png';
             else if (ext === '.webp') contentType = 'image/webp';
-            
-            res.sendFile(imagePath, {
-                headers: {
-                    'Content-Type': contentType
+            else if (ext === '.mp4') contentType = 'video/mp4';
+            else if (ext === '.webm') contentType = 'video/webm';
+            else if (ext === '.mov') contentType = 'video/quicktime';
+
+            // Handle video thumbnail requests
+            if (req.query.poster && ['.mp4', '.webm', '.mov'].includes(ext)) {
+                // Generate or fetch video thumbnail
+                const thumbnailPath = path.join(path.dirname(filePath), '.thumbnails', `${path.basename(filePath, ext)}.jpg`);
+                
+                try {
+                    await fs.access(thumbnailPath);
+                    res.sendFile(thumbnailPath, {
+                        headers: { 'Content-Type': 'image/jpeg' }
+                    });
+                    return;
+                } catch (err) {
+                    // If thumbnail doesn't exist, send a default video thumbnail or generate one
+                    const defaultThumbnailPath = path.join(__dirname, '../public/images/video-thumbnail.jpg');
+                    res.sendFile(defaultThumbnailPath, {
+                        headers: { 'Content-Type': 'image/jpeg' }
+                    });
+                    return;
                 }
+            }
+
+            // Set appropriate headers for range requests (video streaming)
+            if (['.mp4', '.webm', '.mov'].includes(ext)) {
+                const stat = await fs.stat(filePath);
+                const fileSize = stat.size;
+                const range = req.headers.range;
+
+                if (range) {
+                    const parts = range.replace(/bytes=/, "").split("-");
+                    const start = parseInt(parts[0], 10);
+                    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+                    const chunksize = (end - start) + 1;
+                    const file = await fs.open(filePath, 'r');
+                    const stream = file.createReadStream({ start, end });
+
+                    res.writeHead(206, {
+                        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                        'Accept-Ranges': 'bytes',
+                        'Content-Length': chunksize,
+                        'Content-Type': contentType
+                    });
+
+                    stream.pipe(res);
+                    return;
+                }
+            }
+
+            // For non-range requests, send the file normally
+            res.sendFile(filePath, {
+                headers: { 'Content-Type': contentType }
             });
         } catch (err) {
-            console.error('Image file not found:', imagePath, err);
+            console.error('File not found:', filePath, err);
             res.status(404).json({ 
-                error: 'Image not found',
-                details: `${err.code}: ${err.message}, access '${imagePath}'`,
-                path: imagePath
+                error: 'File not found',
+                details: `${err.code}: ${err.message}, access '${filePath}'`,
+                path: filePath
             });
         }
     } catch (error) {
-        console.error('Error serving image:', error);
+        console.error('Error serving file:', error);
         res.status(500).json({ 
-            error: 'Failed to serve image',
+            error: 'Failed to serve file',
             details: error.message
         });
+    }
+});
+
+// Serve video files
+router.get('/video/:videoName', async (req, res) => {
+    const videoName = decodeURIComponent(req.params.videoName);
+    console.log('\n=== Video Request ===');
+    console.log('Video name:', videoName);
+    
+    try {
+        // Get the directory path from the query or use default
+        const directoryPath = '/Volumes/VideosNew/Models';
+        const videoPath = path.join(directoryPath, videoName);
+        console.log('Full video path:', videoPath);
+        
+        // Check if file exists
+        try {
+            await fs.access(videoPath);
+            console.log('Video file exists');
+        } catch (err) {
+            console.error('Video file not found:', videoPath);
+            console.error('Error details:', err);
+            return res.status(404).json({ error: 'Video not found' });
+        }
+        
+        // Get video stats
+        const stat = await fs.stat(videoPath);
+        const fileSize = stat.size;
+        const range = req.headers.range;
+        console.log('File size:', fileSize);
+        console.log('Range header:', range);
+
+        if (range) {
+            // Handle range requests for video streaming
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+            
+            console.log('Streaming chunk:', { start, end, chunksize });
+            
+            const file = await fs.open(videoPath, 'r');
+            const stream = file.createReadStream({ start, end });
+
+            const head = {
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Accept-Ranges': 'bytes',
+                'Content-Length': chunksize,
+                'Content-Type': 'video/mp4',
+                'Cache-Control': 'no-cache',
+                'Cross-Origin-Resource-Policy': 'cross-origin'
+            };
+
+            res.writeHead(206, head);
+            
+            // Handle stream errors
+            stream.on('error', (error) => {
+                console.error('Stream error:', error);
+                file.close();
+                res.end();
+            });
+
+            stream.on('end', () => {
+                console.log('Stream ended successfully');
+                file.close();
+            });
+
+            stream.pipe(res);
+        } else {
+            // Handle non-range requests
+            console.log('Sending full file (no range request)');
+            const head = {
+                'Content-Length': fileSize,
+                'Content-Type': 'video/mp4',
+                'Cache-Control': 'no-cache',
+                'Cross-Origin-Resource-Policy': 'cross-origin'
+            };
+            res.writeHead(200, head);
+            
+            const stream = await fs.createReadStream(videoPath);
+            
+            // Handle stream errors
+            stream.on('error', (error) => {
+                console.error('Stream error:', error);
+                res.end();
+            });
+
+            stream.on('end', () => {
+                console.log('Stream ended successfully');
+            });
+
+            stream.pipe(res);
+        }
+    } catch (error) {
+        console.error('Error serving video:', error);
+        res.status(500).json({ error: 'Error serving video file', details: error.message });
     }
 });
 

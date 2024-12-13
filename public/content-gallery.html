@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Content Gallery | Jeff Bridwell</title>
     <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/molecules/video-player.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Modal styles */
@@ -49,8 +50,15 @@
             object-fit: contain;
         }
 
+        .modal__caption {
+            color: #f1f1f1;
+            margin-top: 15px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
         /* Content-specific styles */
-        .gallery__item {
+        .o-gallery__item {
             background: #ffffff;
             border-radius: 8px;
             padding: 20px;
@@ -62,19 +70,19 @@
             height: 100%;
         }
 
-        .gallery__item:hover {
+        .o-gallery__item:hover {
             transform: translateY(-5px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
 
-        .card__title {
+        .a-card__title {
             font-weight: bold;
             margin-bottom: 15px;
             font-size: 1.1em;
             word-break: break-word;
         }
 
-        .card__media {
+        .m-card__media {
             margin: 0 0 15px 0;
             flex-grow: 1;
             display: flex;
@@ -86,14 +94,14 @@
             min-height: 200px;
         }
 
-        .card__media video,
-        .card__media img {
+        .m-card__media video,
+        .m-card__media img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        .card__metadata {
+        .a-card__metadata {
             font-size: 0.9em;
             color: #666;
             margin-top: 8px;
@@ -101,7 +109,7 @@
             border-top: 1px solid #eee;
         }
 
-        .gallery__grid {
+        .o-gallery__grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 25px;
@@ -112,37 +120,65 @@
     </style>
 </head>
 <body>
-    <div class="gallery">
-        <div class="gallery__controls">
-            <input type="text" id="search-input" class="search-input" placeholder="Search content...">
-            <div id="letter-filter" class="filter-group"></div>
-            <div class="filter-group">
-                <button id="sort-name" class="button button--secondary">Sort by Name</button>
-                <button id="sort-date" class="button button--secondary">Sort by Date</button>
-            </div>
-        </div>
-        
-        <div id="image-grid" class="gallery__grid"></div>
-        
-        <!-- Content Modal -->
-        <div id="contentModal" class="modal">
-            <div class="modal__content">
-                <button class="modal__close close-button">&times;</button>
-                <div class="content-player"></div>
-            </div>
+    <div class="container">
+        <header class="header">
+            <nav class="nav">
+                <div class="nav__logo">JB</div>
+                <ul class="nav__list">
+                    <li class="nav__item"><a href="index.html" class="nav__link">Home</a></li>
+                    <li class="nav__item"><a href="index.html#about" class="nav__link">About</a></li>
+                    <li class="nav__item"><a href="index.html#projects" class="nav__link">Projects</a></li>
+                    <li class="nav__item"><a href="gallery.html" class="nav__link">My Collections</a></li>
+                    <li class="nav__item"><a href="index.html#contact" class="nav__link">Contact</a></li>
+                </ul>
+            </nav>
+        </header>
+
+        <main class="main">
+            <section class="o-gallery">
+                <div class="o-gallery__header">
+                    <h2 class="a-gallery__title">Content Gallery</h2>
+                </div>
+                <div class="o-gallery__controls">
+                    <div class="m-search-container">
+                        <i class="fas fa-search a-search-icon"></i>
+                        <input type="text" id="search-input" class="a-search-input" placeholder="Search content...">
+                    </div>
+                    <div class="m-filter-group">
+                        <button id="sort-name" class="a-button a-button--secondary">Sort by Name</button>
+                        <button id="sort-date" class="a-button a-button--secondary">Sort by Date</button>
+                    </div>
+                </div>
+                <div id="image-grid" class="o-gallery__grid">
+                    <!-- Content will be loaded here dynamically -->
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p class="footer__text">&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
+        </footer>
+    </div>
+
+    <!-- Content Modal -->
+    <div id="contentModal" class="modal">
+        <div class="modal__content">
+            <button class="modal__close close-button">&times;</button>
+            <div class="content-player"></div>
+            <div id="modalCaption" class="modal__caption"></div>
         </div>
     </div>
 
     <template id="content-template">
-        <div class="card gallery__item">
-            <div class="card__media">
+        <div class="o-gallery__item">
+            <div class="m-card__media">
                 <!-- Media content will be inserted here -->
             </div>
-            <div class="card__overlay">
-                <h3 class="card__title"></h3>
-                <div class="card__metadata">
-                    <span class="content-size"></span>
-                    <span class="content-tags"></span>
+            <div class="m-card__overlay">
+                <h3 class="a-card__title"></h3>
+                <div class="a-card__metadata">
+                    <span class="a-content-size"></span>
+                    <span class="a-content-tags"></span>
                 </div>
             </div>
         </div>
@@ -153,8 +189,11 @@
         import { ContentGallery } from './js/content-gallery.js';
 
         document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const imageName = urlParams.get('image_name') || '';
+            
             const contentPlayer = new ContentPlayer('contentModal');
-            const gallery = new ContentGallery();
+            const gallery = new ContentGallery('image-grid', 'http://localhost:8081/image-content', imageName);
             gallery.initializeWithContentPlayer(contentPlayer);
             gallery.loadContent();
         });

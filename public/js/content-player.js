@@ -28,23 +28,45 @@ export class ContentPlayer {
         });
     }
 
-    open(contentUrl) {
-        if (!contentUrl) {
-            console.error('No content URL provided');
+    open(content) {
+        if (!content) {
+            console.error('No content provided');
             return;
         }
 
         this.contentElement.innerHTML = '';
         
-        if (this.isVideo(contentUrl)) {
+        if (content.isVideo) {
             const video = document.createElement('video');
-            video.src = contentUrl;
             video.controls = true;
             video.autoplay = true;
+            video.playsInline = true;
+            
+            // Use the content URL directly since it's already properly formatted by the server
+            video.poster = content.content_url + '?poster=true';
+
+            const source = document.createElement('source');
+            source.src = content.content_url;
+            source.type = this.getVideoMimeType(content.content_name);
+
+            video.appendChild(source);
+
+            // Add error handling
+            video.addEventListener('error', (e) => {
+                console.error('Video error:', e.target.error);
+                this.contentElement.innerHTML = `
+                    <div class="a-error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>Error loading video: ${e.target.error?.message || 'Unknown error'}</span>
+                    </div>`;
+            });
+
             this.contentElement.appendChild(video);
         } else {
+            // Handle images
             const img = document.createElement('img');
-            img.src = contentUrl;
+            img.src = content.content_url;
+            img.alt = content.content_name;
             this.contentElement.appendChild(img);
         }
 
@@ -55,10 +77,24 @@ export class ContentPlayer {
     close() {
         this.modal.classList.remove('modal--active');
         document.body.style.overflow = ''; // Restore scrolling
+        
+        // Stop video playback if present
+        const video = this.contentElement.querySelector('video');
+        if (video) {
+            video.pause();
+            video.currentTime = 0;
+        }
+        
         this.contentElement.innerHTML = '';
     }
 
-    isVideo(url) {
-        return url.match(/\.(mp4|webm|ogg)$/i);
+    getVideoMimeType(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        const mimeTypes = {
+            'mp4': 'video/mp4',
+            'webm': 'video/webm',
+            'mov': 'video/quicktime'
+        };
+        return mimeTypes[ext] || 'video/mp4';
     }
 }

@@ -1,15 +1,18 @@
 /* Atoms */
 @import 'atoms/_variables.css';
 @import 'atoms/_buttons.css';
+@import 'atoms/gallery-item.css';
 
 /* Molecules */
 @import 'molecules/_cards.css';
 @import 'molecules/_controls.css';
 @import 'molecules/_navigation.css';
+@import 'molecules/gallery-controls.css';
 
 /* Organisms */
 @import 'organisms/_content-gallery.css';
 @import 'organisms/_content-player.css';
+@import 'organisms/gallery.css';
 
 /* Templates */
 @import 'templates/_layouts.css';
