@@ -1,263 +1,165 @@
 /**
- * Content Gallery functionality
+ * Content Gallery
+ * Handles displaying and filtering content in a grid layout
  */
 export class ContentGallery {
-    constructor() {
-        this.container = document.getElementById('gallery-container');
-        this.imageGrid = document.getElementById('image-grid');
-        this.searchInput = document.getElementById('search-input');
-        this.letterFilter = document.getElementById('letter-filter');
-        this.sortNameButton = document.getElementById('sort-name');
-        this.sortDateButton = document.getElementById('sort-date');
-        this.content = [];
-        this.contentPlayer = null;
-        this.page = 1;
-        this.pageSize = 20;
-        this.loading = false;
-        this.hasMore = true;
-        
-        // Get the name parameter from URL if present
-        const urlParams = new URLSearchParams(window.location.search);
-        this.nameFilter = urlParams.get('image_name');
-        
-        this.initializeEventListeners();
-    }
-
-    initializeEventListeners() {
-        if (this.searchInput) {
-            this.searchInput.addEventListener('input', () => this.handleSearch());
+    constructor(galleryId, apiEndpoint) {
+        this.gallery = document.getElementById(galleryId);
+        if (!this.gallery) {
+            throw new Error(`Gallery with ID ${galleryId} not found`);
         }
 
-        if (this.letterFilter) {
-            this.letterFilter.addEventListener('click', (e) => {
-                if (e.target.tagName === 'BUTTON') {
-                    const letter = e.target.textContent;
-                    this.filterByLetter(letter);
+        this.apiEndpoint = apiEndpoint;
+        this.content = [];
+        this.searchInput = document.getElementById('search-input');
+        this.letterFilters = document.getElementById('letter-filters');
+        this.sortButtons = document.querySelectorAll('.sort-button');
+        this.tagFilters = document.getElementById('tag-filters');
+
+        this.setupEventListeners();
+        this.loadContent();
+    }
+
+    setupEventListeners() {
+        if (this.searchInput) {
+            this.searchInput.addEventListener('input', () => this.filterContent());
+        }
+
+        if (this.letterFilters) {
+            this.letterFilters.addEventListener('click', (e) => {
+                if (e.target.classList.contains('letter-filter')) {
+                    this.filterContent();
                 }
             });
         }
 
-        if (this.sortNameButton) {
-            this.sortNameButton.addEventListener('click', () => this.sortByName());
-        }
-
-        if (this.sortDateButton) {
-            this.sortDateButton.addEventListener('click', () => this.sortByDate());
-        }
-
-        // Add scroll event listener for infinite scroll
-        window.addEventListener('scroll', () => {
-            if (this.shouldLoadMore()) {
-                this.loadMoreContent();
-            }
-        });
-    }
-
-    shouldLoadMore() {
-        if (this.loading || !this.hasMore) return false;
-        
-        const scrollHeight = document.documentElement.scrollHeight;
-        const scrollTop = window.scrollY || document.documentElement.scrollTop;
-        const clientHeight = window.innerHeight || document.documentElement.clientHeight;
-        
-        return scrollHeight - scrollTop - clientHeight < 200; // Load more when within 200px of bottom
-    }
-
-    async loadMoreContent() {
-        if (this.loading || !this.hasMore) return;
-        
-        this.loading = true;
-        try {
-            const apiUrl = `http://localhost:8081/image-content?page=${this.page}&pageSize=${this.pageSize}${this.nameFilter ? `&image_name=${this.nameFilter}` : ''}`;
-            console.log('Making API call to:', apiUrl);
-            
-            const response = await fetch(apiUrl);
-            console.log('Response status:', response.status);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const jsonData = await response.json();
-            console.log('Received data:', jsonData);
-            
-            // Handle both array response and {items: [...]} response
-            const items = Array.isArray(jsonData) ? jsonData : jsonData.items;
-            
-            if (!Array.isArray(items)) {
-                throw new Error('Invalid API response format - expected array of items');
-            }
-
-            // If response includes hasMore flag, use it; otherwise assume more if we got a full page
-            this.hasMore = jsonData.hasMore !== undefined ? jsonData.hasMore : (items.length >= this.pageSize);
-            this.content = [...this.content, ...items];
-            this.page++;
-            
-            this.renderNewContent(items);
-        } catch (error) {
-            console.error('Error loading content:', error);
-            this.showError(`Failed to load content: ${error.message}`);
-        } finally {
-            this.loading = false;
-        }
-    }
-
-    renderNewContent(newItems) {
-        if (!this.imageGrid) return;
-        
-        newItems.forEach(item => {
-            const container = document.createElement('div');
-            container.className = 'image-container';
-            container.dataset.name = item.content_name?.toLowerCase() || '';
-            
-            const previewContainer = document.createElement('div');
-            previewContainer.className = 'preview-container';
-
-            if (item.content_name?.toLowerCase().endsWith('.mp4')) {
-                const video = document.createElement('video');
-                video.className = 'preview-content';
-                video.src = this.getContentUrl(item.content_url);
-                video.controls = true;
-                video.preload = 'none';
-                video.playsInline = true;
-                video.addEventListener('click', () => {
-                    if (video.paused) {
-                        video.play().catch(err => {
-                            console.error('Error playing video:', err);
-                        });
-                    }
+        if (this.sortButtons) {
+            this.sortButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    this.sortContent(button.dataset.sort);
                 });
-                previewContainer.appendChild(video);
-            } else {
-                const img = document.createElement('img');
-                img.className = 'preview-content';
-                img.src = this.getContentUrl(item.content_url);
-                img.alt = item.content_name || 'Content';
-                img.loading = 'lazy';
-                previewContainer.appendChild(img);
-            }
-
-            const nameLabel = document.createElement('div');
-            nameLabel.className = 'content-name';
-            nameLabel.textContent = item.content_name || 'Untitled';
-            
-            const metadataContainer = document.createElement('div');
-            metadataContainer.className = 'content-metadata';
-            
-            if (item.content_tags && item.content_tags.length > 0) {
-                const tagsDiv = document.createElement('div');
-                tagsDiv.className = 'content-tags';
-                tagsDiv.textContent = `Tags: ${item.content_tags.join(', ')}`;
-                metadataContainer.appendChild(tagsDiv);
-            }
-            
-            if (item.content_size) {
-                const sizeDiv = document.createElement('div');
-                sizeDiv.className = 'content-size';
-                sizeDiv.textContent = `Size: ${this.formatFileSize(item.content_size)}`;
-                metadataContainer.appendChild(sizeDiv);
-            }
-            
-            container.appendChild(previewContainer);
-            container.appendChild(nameLabel);
-            container.appendChild(metadataContainer);
-            this.imageGrid.appendChild(container);
-        });
-    }
-
-    initializeWithContentPlayer(contentPlayer) {
-        this.contentPlayer = contentPlayer;
-    }
-
-    getContentUrl(contentPath) {
-        if (!contentPath) return '';
-        
-        if (!contentPath.startsWith('/')) {
-            // If it's not an absolute path, treat as relative
-            return contentPath;
+            });
         }
-        // For video content, use the video-content endpoint with the full path
-        if (contentPath.toLowerCase().endsWith('.mp4')) {
-            return `/gallery/video-content?path=${encodeURIComponent(contentPath)}`;
+
+        if (this.tagFilters) {
+            this.tagFilters.addEventListener('click', (e) => {
+                if (e.target.classList.contains('tag-filter')) {
+                    this.filterContent();
+                }
+            });
         }
-        // For other content with absolute paths, use as is
-        return contentPath;
     }
 
     async loadContent() {
-        this.page = 1;
-        this.content = [];
-        this.hasMore = true;
-        this.imageGrid.innerHTML = '';
-        await this.loadMoreContent();
-    }
-
-    showError(message) {
-        if (this.imageGrid) {
-            console.error('Gallery Error:', message);
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.style.padding = '20px';
-            errorDiv.style.color = '#721c24';
-            errorDiv.style.backgroundColor = '#f8d7da';
-            errorDiv.style.border = '1px solid #f5c6cb';
-            errorDiv.style.borderRadius = '4px';
-            errorDiv.style.margin = '20px';
-            errorDiv.style.textAlign = 'center';
-            errorDiv.textContent = message;
-            this.imageGrid.innerHTML = '';
-            this.imageGrid.appendChild(errorDiv);
+        try {
+            const response = await fetch(this.apiEndpoint);
+            if (!response.ok) {
+                throw new Error('Failed to fetch content');
+            }
+            this.content = await response.json();
+            this.renderContent();
+            this.updateTagFilters();
+        } catch (error) {
+            console.error('Error loading content:', error);
+            this.gallery.innerHTML = '<p>Error loading content. Please try again later.</p>';
         }
     }
 
-    handleSearch() {
-        const searchTerm = this.searchInput.value.toLowerCase();
-        const containers = this.imageGrid.getElementsByClassName('image-container');
+    renderContent() {
+        this.gallery.innerHTML = '';
+        const filteredContent = this.getFilteredContent();
         
-        Array.from(containers).forEach(container => {
-            const name = container.dataset.name;
-            container.style.display = name.includes(searchTerm) ? '' : 'none';
+        filteredContent.forEach(item => {
+            const element = document.createElement('div');
+            element.className = 'gallery-item';
+            element.innerHTML = `
+                <img src="${item.thumbnail}" alt="${item.title}">
+                <div class="gallery-item__info">
+                    <h3>${item.title}</h3>
+                    <p>${item.description}</p>
+                </div>
+            `;
+            element.addEventListener('click', () => {
+                const event = new CustomEvent('contentSelected', { detail: item });
+                this.gallery.dispatchEvent(event);
+            });
+            this.gallery.appendChild(element);
         });
     }
 
-    filterByLetter(letter) {
-        const containers = this.imageGrid.getElementsByClassName('image-container');
-        
-        Array.from(containers).forEach(container => {
-            const name = container.dataset.name;
-            if (letter === 'All') {
-                container.style.display = '';
-            } else {
-                container.style.display = name.startsWith(letter.toLowerCase()) ? '' : 'none';
+    getFilteredContent() {
+        let filtered = [...this.content];
+
+        // Apply search filter
+        if (this.searchInput && this.searchInput.value) {
+            const searchTerm = this.searchInput.value.toLowerCase();
+            filtered = filtered.filter(item => 
+                item.title.toLowerCase().includes(searchTerm) ||
+                item.description.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        // Apply letter filter
+        if (this.letterFilters) {
+            const activeLetterFilter = this.letterFilters.querySelector('.letter-filter.active');
+            if (activeLetterFilter && activeLetterFilter.dataset.letter !== 'all') {
+                const letter = activeLetterFilter.dataset.letter;
+                filtered = filtered.filter(item => 
+                    item.title.toLowerCase().startsWith(letter.toLowerCase())
+                );
+            }
+        }
+
+        // Apply tag filters
+        if (this.tagFilters) {
+            const activeTags = Array.from(this.tagFilters.querySelectorAll('.tag-filter.active'))
+                .map(tag => tag.dataset.tag);
+            if (activeTags.length > 0) {
+                filtered = filtered.filter(item =>
+                    item.tags && item.tags.some(tag => activeTags.includes(tag))
+                );
+            }
+        }
+
+        return filtered;
+    }
+
+    sortContent(sortType) {
+        switch (sortType) {
+            case 'title':
+                this.content.sort((a, b) => a.title.localeCompare(b.title));
+                break;
+            case 'date':
+                this.content.sort((a, b) => new Date(b.date) - new Date(a.date));
+                break;
+            default:
+                console.warn('Unknown sort type:', sortType);
+                return;
+        }
+        this.renderContent();
+    }
+
+    filterContent() {
+        this.renderContent();
+    }
+
+    updateTagFilters() {
+        if (!this.tagFilters) return;
+
+        const allTags = new Set();
+        this.content.forEach(item => {
+            if (item.tags) {
+                item.tags.forEach(tag => allTags.add(tag));
             }
         });
-    }
 
-    sortByName() {
-        const containers = Array.from(this.imageGrid.getElementsByClassName('image-container'));
-        containers.sort((a, b) => {
-            return a.dataset.name.localeCompare(b.dataset.name);
+        this.tagFilters.innerHTML = '';
+        allTags.forEach(tag => {
+            const button = document.createElement('button');
+            button.className = 'tag-filter';
+            button.dataset.tag = tag;
+            button.textContent = tag;
+            this.tagFilters.appendChild(button);
         });
-        this.reorderContainers(containers);
-    }
-
-    sortByDate() {
-        const containers = Array.from(this.imageGrid.getElementsByClassName('image-container'));
-        containers.sort((a, b) => {
-            return (parseInt(b.dataset.date) || 0) - (parseInt(a.dataset.date) || 0);
-        });
-        this.reorderContainers(containers);
-    }
-
-    reorderContainers(containers) {
-        containers.forEach(container => this.imageGrid.appendChild(container));
-    }
-
-    formatFileSize(bytes) {
-        if (!bytes) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
     }
 }

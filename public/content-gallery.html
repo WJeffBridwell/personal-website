@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Content Gallery | Jeff Bridwell</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="content-gallery.css">
+    <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Modal styles */
@@ -21,7 +20,7 @@
             overflow: auto;
         }
 
-        .modal-content {
+        .modal__content {
             position: relative;
             margin: auto;
             padding: 0;
@@ -34,7 +33,7 @@
             justify-content: center;
         }
 
-        .close-modal {
+        .modal__close {
             position: absolute;
             right: 20px;
             top: 10px;
@@ -51,7 +50,7 @@
         }
 
         /* Content-specific styles */
-        .content-tile {
+        .gallery__item {
             background: #ffffff;
             border-radius: 8px;
             padding: 20px;
@@ -63,19 +62,19 @@
             height: 100%;
         }
 
-        .content-tile:hover {
+        .gallery__item:hover {
             transform: translateY(-5px);
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
 
-        .content-name {
+        .card__title {
             font-weight: bold;
             margin-bottom: 15px;
             font-size: 1.1em;
             word-break: break-word;
         }
 
-        .media-container {
+        .card__media {
             margin: 0 0 15px 0;
             flex-grow: 1;
             display: flex;
@@ -87,14 +86,14 @@
             min-height: 200px;
         }
 
-        .media-container video,
-        .media-container img {
+        .card__media video,
+        .card__media img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
 
-        .content-size, .content-tags {
+        .card__metadata {
             font-size: 0.9em;
             color: #666;
             margin-top: 8px;
@@ -102,7 +101,7 @@
             border-top: 1px solid #eee;
         }
 
-        #image-grid {
+        .gallery__grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 25px;
@@ -113,30 +112,46 @@
     </style>
 </head>
 <body>
-    <div id="gallery-container">
-        <div class="gallery-controls">
-            <input type="text" id="search-input" placeholder="Search content...">
-            <div id="letter-filter"></div>
-            <div class="sort-buttons">
-                <button id="sort-name" class="sort-btn">Sort by Name</button>
-                <button id="sort-date" class="sort-btn">Sort by Date</button>
+    <div class="gallery">
+        <div class="gallery__controls">
+            <input type="text" id="search-input" class="search-input" placeholder="Search content...">
+            <div id="letter-filter" class="filter-group"></div>
+            <div class="filter-group">
+                <button id="sort-name" class="button button--secondary">Sort by Name</button>
+                <button id="sort-date" class="button button--secondary">Sort by Date</button>
             </div>
         </div>
         
-        <div id="image-grid"></div>
+        <div id="image-grid" class="gallery__grid"></div>
         
         <!-- Content Modal -->
         <div id="contentModal" class="modal">
-            <div class="modal-content">
-                <span class="close-modal">&times;</span>
+            <div class="modal__content">
+                <button class="modal__close close-button">&times;</button>
                 <div class="content-player"></div>
             </div>
         </div>
     </div>
 
-    <script src="js/content-player.js"></script>
-    <script src="js/content-gallery.js"></script>
-    <script>
+    <template id="content-template">
+        <div class="card gallery__item">
+            <div class="card__media">
+                <!-- Media content will be inserted here -->
+            </div>
+            <div class="card__overlay">
+                <h3 class="card__title"></h3>
+                <div class="card__metadata">
+                    <span class="content-size"></span>
+                    <span class="content-tags"></span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script type="module">
+        import { ContentPlayer } from './js/content-player.js';
+        import { ContentGallery } from './js/content-gallery.js';
+
         document.addEventListener('DOMContentLoaded', () => {
             const contentPlayer = new ContentPlayer('contentModal');
             const gallery = new ContentGallery();

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Collections | Jeff Bridwell</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles/main.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Modal styles */
@@ -20,7 +20,7 @@
             overflow: auto;
         }
 
-        .modal-content {
+        .modal__content {
             position: relative;
             margin: auto;
             padding: 0;
@@ -33,13 +33,13 @@
             justify-content: center;
         }
 
-        #modalImage {
+        .modal__image {
             max-width: 100%;
             max-height: 85vh;
             object-fit: contain;
         }
 
-        .close-modal {
+        .modal__close {
             position: absolute;
             right: 20px;
             top: 10px;
@@ -49,7 +49,7 @@
             cursor: pointer;
         }
 
-        #modalCaption {
+        .modal__caption {
             color: #f1f1f1;
             margin-top: 15px;
             text-align: center;
@@ -59,44 +59,57 @@
 </head>
 <body>
     <div class="container">
-        <header>
-            <nav>
-                <div class="logo">JB</div>
-                <ul>
-                    <li><a href="index.html">Home</a></li>
-                    <li><a href="index.html#about">About</a></li>
-                    <li><a href="index.html#projects">Projects</a></li>
-                    <li><a href="gallery.html" class="active">My Collections</a></li>
-                    <li><a href="index.html#contact">Contact</a></li>
+        <header class="header">
+            <nav class="nav">
+                <div class="nav__logo">JB</div>
+                <ul class="nav__list">
+                    <li class="nav__item"><a href="index.html" class="nav__link">Home</a></li>
+                    <li class="nav__item"><a href="index.html#about" class="nav__link">About</a></li>
+                    <li class="nav__item"><a href="index.html#projects" class="nav__link">Projects</a></li>
+                    <li class="nav__item"><a href="gallery.html" class="nav__link nav__link--active">My Collections</a></li>
+                    <li class="nav__item"><a href="index.html#contact" class="nav__link">Contact</a></li>
                 </ul>
             </nav>
         </header>
 
-        <main>
+        <main class="main">
             <section class="gallery">
-                <div class="header-band">
-                    <h2>My Collections</h2>
+                <div class="gallery__header">
+                    <h2 class="gallery__title">My Collections</h2>
                 </div>
-                <div id="image-grid" class="image-grid">
+                <div id="image-grid" class="gallery__grid">
                     <!-- Images will be loaded here dynamically -->
                 </div>
             </section>
         </main>
 
-        <footer>
-            <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
+        <footer class="footer">
+            <p class="footer__text">&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
         </footer>
     </div>
 
     <!-- Image Modal -->
     <div id="imageModal" class="modal">
-        <div class="modal-content">
-            <span class="close-modal">&times;</span>
-            <img id="modalImage" src="" alt="">
-            <div id="modalCaption"></div>
+        <div class="modal__content">
+            <button class="modal__close close-button">&times;</button>
+            <img id="modalImage" class="modal__image" src="" alt="">
+            <div id="modalCaption" class="modal__caption"></div>
         </div>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <!-- Card Template -->
+    <template id="gallery-card-template">
+        <div class="card gallery__item">
+            <div class="card__media">
+                <img class="card__image" src="" alt="">
+            </div>
+            <div class="card__overlay">
+                <h3 class="card__title"></h3>
+                <p class="card__description"></p>
+            </div>
+        </div>
+    </template>
+
+    <script type="module" src="js/gallery.js"></script>
 </body>
 </html>
