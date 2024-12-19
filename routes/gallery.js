@@ -13,8 +13,9 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { exec } from 'child_process';
-import { promises as fs } from 'fs';
+import fs from 'fs'; // For synchronous operations
 import path from 'path';
+import { promisify } from 'util';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -40,6 +41,40 @@ router.get('/test', (req, res) => {
     res.json({ message: 'Gallery router is working' });
 });
 
+// Test endpoint to check directory access
+router.get('/test-directory', (req, res) => {
+    console.log('Testing directory access');
+    const directoryPath = '/Volumes/VideosNew/Models';
+    
+    try {
+        // Check if directory exists
+        if (!fs.existsSync(directoryPath)) {
+            return res.status(404).json({
+                error: 'Directory not found',
+                path: directoryPath
+            });
+        }
+
+        // Try to read directory contents
+        const files = fs.readdirSync(directoryPath, { withFileTypes: true });
+        
+        return res.json({
+            success: true,
+            fileCount: files.length,
+            firstFewFiles: files.slice(0, 5).map(f => ({
+                name: f.name,
+                isDirectory: f.isDirectory()
+            }))
+        });
+    } catch (error) {
+        return res.status(500).json({
+            error: error.message,
+            code: error.code,
+            path: directoryPath
+        });
+    }
+});
+
 /**
  * Serve the main gallery page
  * @route GET /gallery
@@ -52,11 +87,14 @@ router.get('/', async (req, res) => {
     
     try {
         // Verify file exists
-        await fs.access(galleryPath);
-        console.log('Gallery file exists at path');
+        if (!fs.existsSync(galleryPath)) {
+            console.error('Gallery file does not exist at path');
+            res.status(404).send('Gallery file not found');
+            return;
+        }
         
         // Read file contents for verification
-        const contents = await fs.readFile(galleryPath, 'utf8');
+        const contents = fs.readFileSync(galleryPath, 'utf8');
         console.log('Gallery file length:', contents.length);
         console.log('Contains modal:', contents.includes('id="imageModal"'));
         
@@ -86,68 +124,140 @@ router.get('/', async (req, res) => {
  * @throws {500} If there's an error reading the directory
  */
 router.get('/images', async (req, res) => {
+    const startTime = process.hrtime();
+    const getElapsedTime = () => {
+        const elapsed = process.hrtime(startTime);
+        return (elapsed[0] * 1000 + elapsed[1] / 1000000).toFixed(2);
+    };
+
+    const logPerf = (operation, count = null) => {
+        const memUsage = process.memoryUsage();
+        console.log(`[PERF] ${operation} - ${getElapsedTime()}ms`);
+        console.log(`[MEM] Heap: ${(memUsage.heapUsed / 1024 / 1024).toFixed(2)}MB / ${(memUsage.heapTotal / 1024 / 1024).toFixed(2)}MB`);
+        if (count !== null) {
+            console.log(`[COUNT] Items processed: ${count}`);
+        }
+    };
+
     console.log('GET /gallery/images endpoint hit');
+    logPerf('Start');
+
     try {
+        // Parse query parameters
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const includeBase64 = req.query.includeBase64 === 'true';
+        const maxBase64Size = 1024 * 1024; // 1MB limit for base64 encoding
+
         const directoryPath = '/Volumes/VideosNew/Models';
         console.log('Checking directory:', directoryPath);
         
-        // Check if directory exists and is accessible
         try {
-            await fs.access(directoryPath);
-            console.log('Directory exists and is accessible');
-        } catch (err) {
-            console.error('Directory access error:', err);
+            await fs.promises.access(directoryPath);
+        } catch (error) {
+            console.error('Directory access error:', error);
             return res.status(500).json({ 
-                error: 'Failed to read directory',
-                details: err.message
+                error: 'Failed to access directory',
+                details: error.message
             });
         }
 
-        // Read directory contents
-        const files = await fs.readdir(directoryPath, { withFileTypes: true });
-        console.log(`Found ${files.length} total files in directory`);
+        console.log(`Reading directory: ${directoryPath}`);
+        const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
+        logPerf('Directory read', files.length);
         
-        // Filter for images and videos
-        const content = files
-            .filter(file => {
-                const isMedia = !file.isDirectory() && 
-                    (/\.(jpg|jpeg|png|webp|mp4|webm|mov)$/i.test(file.name));
-                if (isMedia) console.log('Found media file:', file.name);
-                return isMedia;
-            })
-            .map(file => {
-                const ext = path.extname(file.name).toLowerCase();
-                const isVideo = ['.mp4', '.webm', '.mov'].includes(ext);
+        const content = files.filter(file => {
+            const isMedia = !file.isDirectory() && /\.(jpg|jpeg|png|webp|gif|mp4|webm|mov)$/i.test(file.name);
+            return isMedia;
+        });
+        logPerf('Files filtered', content.length);
+
+        // Calculate pagination
+        const startIndex = (page - 1) * limit;
+        const endIndex = page * limit;
+        const paginatedContent = content.slice(startIndex, endIndex);
+        logPerf('Pagination calculated', paginatedContent.length);
+
+        console.log(`Processing page ${page} (${startIndex}-${endIndex}) of ${content.length} files`);
+        
+        // Process files in chunks to avoid memory issues
+        const chunkSize = 10;
+        const chunks = [];
+        for (let i = 0; i < paginatedContent.length; i += chunkSize) {
+            const chunk = paginatedContent.slice(i, i + chunkSize);
+            chunks.push(chunk);
+        }
+
+        let processedFiles = [];
+        for (const [chunkIndex, chunk] of chunks.entries()) {
+            const chunkResults = await Promise.all(chunk.map(async (file) => {
+                const filePath = path.join(directoryPath, file.name);
                 
                 try {
-                    const stats = fs.statSync(path.join(directoryPath, file.name));
+                    const stats = await fs.promises.stat(filePath);
+                    
+                    // Get Finder tags
+                    let tags = [];
+                    try {
+                        const { stdout } = await promisify(exec)(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -- -`);
+                        if (stdout) {
+                            const parsedTags = JSON.parse(stdout);
+                            tags = parsedTags.map(tag => tag.replace(/\d*$/, '').trim());
+                        }
+                    } catch (tagError) {
+                        // Ignore tag errors
+                    }
+
+                    // Only include base64 if requested and file is under size limit
+                    let base64 = null;
+                    if (includeBase64 && stats.size <= maxBase64Size) {
+                        const imageBuffer = await fs.promises.readFile(filePath);
+                        base64 = `data:image/${path.extname(file.name).substring(1)};base64,${imageBuffer.toString('base64')}`;
+                    }
+
                     return {
-                        content_name: file.name,
-                        content_url: isVideo ? `/gallery/video/${encodeURIComponent(file.name)}` : `/gallery/images/${encodeURIComponent(file.name)}`,
-                        content_type: isVideo ? 'video' : 'image',
-                        content_size: stats.size,
-                        content_created: stats.birthtime,
-                        content_tags: []  // Add empty tags array for future use
+                        name: file.name,
+                        path: filePath,
+                        size: stats.size,
+                        modified: stats.mtime,
+                        type: path.extname(file.name).toLowerCase(),
+                        tags: tags,
+                        base64: base64
                     };
-                } catch (err) {
-                    console.error(`Error processing file ${file.name}:`, err);
+                } catch (error) {
+                    console.error(`Error processing file ${file.name}:`, error);
                     return null;
                 }
-            })
-            .filter(item => item !== null);  // Remove any failed items
+            }));
 
-        console.log(`Returning ${content.length} media files:`, content.map(c => ({
-            name: c.content_name,
-            type: c.content_type,
-            url: c.content_url
-        })));
+            processedFiles = [...processedFiles, ...chunkResults];
+            logPerf(`Chunk ${chunkIndex + 1}/${chunks.length} processed`, processedFiles.length);
+        }
+
+        const validContent = processedFiles.filter(item => item !== null);
+        logPerf('Invalid items filtered', validContent.length);
         
-        res.json({ content });
+        // Prepare pagination metadata
+        const totalFiles = content.length;
+        const totalPages = Math.ceil(totalFiles / limit);
+
+        const response = {
+            page,
+            totalPages,
+            totalFiles,
+            filesPerPage: limit,
+            processingTimeMs: parseFloat(getElapsedTime()),
+            files: validContent
+        };
+
+        logPerf('End of processing');
+        res.json(response);
         
     } catch (error) {
-        console.error('Error in /gallery/images:', error);
+        console.error('Error in /images endpoint:', error);
+        logPerf('Error occurred');
         res.status(500).json({ 
-            error: 'Failed to read directory',
+            error: 'Failed to process directory',
             details: error.message
         });
     }
@@ -163,7 +273,15 @@ router.get('/images/:imageName', async (req, res) => {
         console.log('Attempting to serve file from:', filePath);
         
         try {
-            await fs.access(filePath);
+            if (!fs.existsSync(filePath)) {
+                console.error('File not found:', filePath);
+                res.status(404).json({ 
+                    error: 'File not found',
+                    details: `File not found at ${filePath}`,
+                    path: filePath
+                });
+                return;
+            }
             console.log('File exists, serving:', filePath);
             
             // Determine content type based on file extension
@@ -172,6 +290,7 @@ router.get('/images/:imageName', async (req, res) => {
             
             if (ext === '.png') contentType = 'image/png';
             else if (ext === '.webp') contentType = 'image/webp';
+            else if (ext === '.gif') contentType = 'image/gif';
             else if (ext === '.mp4') contentType = 'video/mp4';
             else if (ext === '.webm') contentType = 'video/webm';
             else if (ext === '.mov') contentType = 'video/quicktime';
@@ -182,16 +301,24 @@ router.get('/images/:imageName', async (req, res) => {
                 const thumbnailPath = path.join(path.dirname(filePath), '.thumbnails', `${path.basename(filePath, ext)}.jpg`);
                 
                 try {
-                    await fs.access(thumbnailPath);
+                    if (!fs.existsSync(thumbnailPath)) {
+                        console.error('Thumbnail not found:', thumbnailPath);
+                        // If thumbnail doesn't exist, send a default video thumbnail or generate one
+                        const defaultThumbnailPath = path.join(__dirname, '../public/images/video-thumbnail.jpg');
+                        res.sendFile(defaultThumbnailPath, {
+                            headers: { 'Content-Type': 'image/jpeg' }
+                        });
+                        return;
+                    }
                     res.sendFile(thumbnailPath, {
                         headers: { 'Content-Type': 'image/jpeg' }
                     });
                     return;
                 } catch (err) {
-                    // If thumbnail doesn't exist, send a default video thumbnail or generate one
-                    const defaultThumbnailPath = path.join(__dirname, '../public/images/video-thumbnail.jpg');
-                    res.sendFile(defaultThumbnailPath, {
-                        headers: { 'Content-Type': 'image/jpeg' }
+                    console.error('Error serving thumbnail:', err);
+                    res.status(500).json({ 
+                        error: 'Failed to serve thumbnail',
+                        details: err.message
                     });
                     return;
                 }
@@ -199,7 +326,7 @@ router.get('/images/:imageName', async (req, res) => {
 
             // Set appropriate headers for range requests (video streaming)
             if (['.mp4', '.webm', '.mov'].includes(ext)) {
-                const stat = await fs.stat(filePath);
+                const stat = fs.statSync(filePath);
                 const fileSize = stat.size;
                 const range = req.headers.range;
 
@@ -208,8 +335,7 @@ router.get('/images/:imageName', async (req, res) => {
                     const start = parseInt(parts[0], 10);
                     const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
                     const chunksize = (end - start) + 1;
-                    const file = await fs.open(filePath, 'r');
-                    const stream = file.createReadStream({ start, end });
+                    const file = fs.createReadStream(filePath, { start, end });
 
                     res.writeHead(206, {
                         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -218,7 +344,7 @@ router.get('/images/:imageName', async (req, res) => {
                         'Content-Type': contentType
                     });
 
-                    stream.pipe(res);
+                    file.pipe(res);
                     return;
                 }
             }
@@ -231,7 +357,7 @@ router.get('/images/:imageName', async (req, res) => {
             console.error('File not found:', filePath, err);
             res.status(404).json({ 
                 error: 'File not found',
-                details: `${err.code}: ${err.message}, access '${filePath}'`,
+                details: `File not found at ${filePath}`,
                 path: filePath
             });
         }
@@ -257,17 +383,14 @@ router.get('/video/:videoName', async (req, res) => {
         console.log('Full video path:', videoPath);
         
         // Check if file exists
-        try {
-            await fs.access(videoPath);
-            console.log('Video file exists');
-        } catch (err) {
+        if (!fs.existsSync(videoPath)) {
             console.error('Video file not found:', videoPath);
-            console.error('Error details:', err);
+            console.error('Error details:', 'File not found');
             return res.status(404).json({ error: 'Video not found' });
         }
         
         // Get video stats
-        const stat = await fs.stat(videoPath);
+        const stat = fs.statSync(videoPath);
         const fileSize = stat.size;
         const range = req.headers.range;
         console.log('File size:', fileSize);
@@ -282,8 +405,7 @@ router.get('/video/:videoName', async (req, res) => {
             
             console.log('Streaming chunk:', { start, end, chunksize });
             
-            const file = await fs.open(videoPath, 'r');
-            const stream = file.createReadStream({ start, end });
+            const file = fs.createReadStream(videoPath, { start, end });
 
             const head = {
                 'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -297,18 +419,16 @@ router.get('/video/:videoName', async (req, res) => {
             res.writeHead(206, head);
             
             // Handle stream errors
-            stream.on('error', (error) => {
+            file.on('error', (error) => {
                 console.error('Stream error:', error);
-                file.close();
                 res.end();
             });
 
-            stream.on('end', () => {
+            file.on('end', () => {
                 console.log('Stream ended successfully');
-                file.close();
             });
 
-            stream.pipe(res);
+            file.pipe(res);
         } else {
             // Handle non-range requests
             console.log('Sending full file (no range request)');
@@ -320,7 +440,7 @@ router.get('/video/:videoName', async (req, res) => {
             };
             res.writeHead(200, head);
             
-            const stream = await fs.createReadStream(videoPath);
+            const stream = fs.createReadStream(videoPath);
             
             // Handle stream errors
             stream.on('error', (error) => {
@@ -428,7 +548,7 @@ end tell`;
     try {
         console.log('Writing AppleScript to:', scriptPath);
         console.log('Script content:', scriptContent);
-        await fs.writeFile(scriptPath, scriptContent, 'utf8');
+        fs.writeFileSync(scriptPath, scriptContent, 'utf8');
         
         console.log('Running AppleScript...');
         const { stdout, stderr } = await new Promise((resolve, reject) => {
@@ -449,7 +569,7 @@ end tell`;
         });
 
         try {
-            await fs.unlink(scriptPath);
+            fs.unlinkSync(scriptPath);
             console.log('Cleaned up script file');
         } catch (e) {
             console.error('Failed to clean up script file:', e);

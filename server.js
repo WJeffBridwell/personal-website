@@ -27,6 +27,24 @@ const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+import fs from 'fs';
+
+// Create logs directory if it doesn't exist
+const logDirectory = path.join(__dirname, 'logs');
+if (!fs.existsSync(logDirectory)) {
+    fs.mkdirSync(logDirectory);
+}
+
+// Create a write stream for logging
+const logStream = fs.createWriteStream(path.join(logDirectory, 'console.log'), { flags: 'a' });
+
+// Override console.log to write to the log file
+console.log = function(...args) {
+    const message = args.join(' ') + '\n'; // Join arguments and add a newline
+    logStream.write(message); // Write to the log file
+    process.stdout.write(message); // Also output to the terminal
+};
+
 const app = express();
 const port = process.env.PORT || 3001;  // Default to 3001 to avoid Windsurf conflicts
 
@@ -112,7 +130,9 @@ app.use('/gallery', galleryRouter);
  */
 app.get('/api/images', async (req, res) => {
     try {
-        const imagesDir = path.join(__dirname, 'public', 'images');
+        // Change the images directory to point to /Volumes/VideosNew/Models
+        const imagesDir = '/Volumes/VideosNew/Models';
+        
         const files = await fsPromises.readdir(imagesDir);
         
         // Filter for image files and create image objects
