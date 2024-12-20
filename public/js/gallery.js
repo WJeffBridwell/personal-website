@@ -39,34 +39,55 @@ export class Gallery {
   }
 
   /**
-   * Loads images from the server API.
+   * Loads images from the server API with pagination support.
    * 
    * @async
-   * @returns {Promise<Array>} Array of image objects
+   * @param {string} [cursor=''] - Cursor for pagination
+   * @param {Array} [accumulator=[]] - Accumulated images
+   * @returns {Promise<Array>} Array of all image objects
    * @throws {Error} If image fetching fails
    */
-  async loadImages() {
+  async loadImages(cursor = '', accumulator = []) {
     try {
-      const response = await fetch('/api/images');
+      const limit = 5000; // Match server-side MAX_LIMIT
+      const url = `/gallery/images?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`;
+      const response = await fetch(url);
+      
       if (!response.ok) {
-        const errorMessage = document.createElement('div');
-        errorMessage.className = 'error-message';
-        errorMessage.textContent = 'Failed to fetch images';
-        errorMessage.style.display = 'block';
-        this.imageGrid.appendChild(errorMessage);
         throw new Error('Failed to fetch images');
       }
 
-      this.images = await response.json();
+      const data = await response.json();
+      const allImages = [...accumulator, ...data.files];
+
+      // Show loading progress
+      const progress = document.querySelector('.loading-progress');
+      if (progress) {
+        const percent = Math.round((allImages.length / data.totalFiles) * 100);
+        progress.textContent = `Loading images: ${percent}% (${allImages.length}/${data.totalFiles})`;
+      }
+
+      // If there are more images, fetch the next page
+      if (data.hasMore && data.nextCursor) {
+        return this.loadImages(data.nextCursor, allImages);
+      }
+
+      // All images loaded
+      if (progress) {
+        progress.textContent = `Loaded ${allImages.length} images`;
+        setTimeout(() => progress.remove(), 2000);
+      }
+
+      this.images = allImages;
       this.renderImages();
-      return this.images;
+      return allImages;
     } catch (error) {
       const errorMessage = document.createElement('div');
       errorMessage.className = 'error-message';
       errorMessage.textContent = error.message || 'Network error';
       errorMessage.style.display = 'block';
       this.imageGrid.appendChild(errorMessage);
-      return [];
+      throw error;
     }
   }
 

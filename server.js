@@ -22,12 +22,15 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import compression from 'compression';
+import timeout from 'connect-timeout';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import fs from 'fs';
 
 const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-import fs from 'fs';
 
 // Create logs directory if it doesn't exist
 const logDirectory = path.join(__dirname, 'logs');
@@ -47,6 +50,23 @@ console.log = function(...args) {
 
 const app = express();
 const port = process.env.PORT || 3001;  // Default to 3001 to avoid Windsurf conflicts
+
+// Create HTTP server
+const server = createServer(app);
+
+// Initialize Socket.IO
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    }
+});
+
+// Enable compression
+app.use(compression());
+
+// Set timeout to 5 minutes
+app.use(timeout('300s'));
 
 // Middleware Configuration
 // Log all incoming HTTP requests with timestamp
@@ -260,6 +280,14 @@ end tell`;
     });
 });
 
+/**
+ * GET /health
+ * Health check endpoint for monitoring server status
+ */
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok' });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
@@ -267,7 +295,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
     console.log('Public directory:', publicPath);
     // List files in public directory

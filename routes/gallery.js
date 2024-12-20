@@ -13,7 +13,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { exec } from 'child_process';
-import fs from 'fs'; // For synchronous operations
+import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 
@@ -115,151 +115,160 @@ router.get('/', async (req, res) => {
     console.log('======================\n');
 });
 
-/**
- * Retrieve a list of images from the specified directory
- * @route GET /gallery/images
- * @returns {Object[]} Array of image objects containing name and URL
- * @property {string} name - The original filename of the image
- * @property {string} url - The URL path to access the image
- * @throws {500} If there's an error reading the directory
- */
-router.get('/images', async (req, res) => {
-    const startTime = process.hrtime();
-    const getElapsedTime = () => {
-        const elapsed = process.hrtime(startTime);
-        return (elapsed[0] * 1000 + elapsed[1] / 1000000).toFixed(2);
-    };
+// Cache for directory contents with metadata
+const contentCache = {
+    files: new Map(),
+    lastUpdate: 0,
+    updating: false
+};
 
-    const logPerf = (operation, count = null) => {
-        const memUsage = process.memoryUsage();
-        console.log(`[PERF] ${operation} - ${getElapsedTime()}ms`);
-        console.log(`[MEM] Heap: ${(memUsage.heapUsed / 1024 / 1024).toFixed(2)}MB / ${(memUsage.heapTotal / 1024 / 1024).toFixed(2)}MB`);
-        if (count !== null) {
-            console.log(`[COUNT] Items processed: ${count}`);
-        }
-    };
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_LIMIT = 1000;
+const MAX_LIMIT = 5000;
+const CHUNK_SIZE = 500;
 
-    console.log('GET /gallery/images endpoint hit');
-    logPerf('Start');
-
+// Function to update cache with basic file info
+async function updateCache(directoryPath) {
+    if (contentCache.updating) return;
+    
     try {
-        // Parse query parameters
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 50;
-        const includeBase64 = req.query.includeBase64 === 'true';
-        const maxBase64Size = 1024 * 1024; // 1MB limit for base64 encoding
-
-        const directoryPath = '/Volumes/VideosNew/Models';
-        console.log('Checking directory:', directoryPath);
+        contentCache.updating = true;
+        console.log('Updating directory cache...');
         
+        const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
+        const mediaFiles = files
+            .filter(file => !file.isDirectory() && /\.(jpg|jpeg|png|webp|gif|mp4|webm|mov)$/i.test(file.name))
+            .map(file => file.name);
+            
+        // Clear existing cache
+        contentCache.files.clear();
+        
+        // Add basic file info to cache
+        for (const fileName of mediaFiles) {
+            const filePath = path.join(directoryPath, fileName);
+            try {
+                const stats = await fs.promises.stat(filePath);
+                contentCache.files.set(fileName, {
+                    name: fileName,
+                    path: filePath,
+                    size: stats.size,
+                    modified: stats.mtime,
+                    type: path.extname(fileName).toLowerCase(),
+                    tags: null // Tags will be loaded on demand
+                });
+            } catch (error) {
+                console.error(`Error caching file ${fileName}:`, error);
+            }
+        }
+        
+        contentCache.lastUpdate = Date.now();
+        console.log(`Cache updated with ${contentCache.files.size} files`);
+    } catch (error) {
+        console.error('Cache update failed:', error);
+        throw error;
+    } finally {
+        contentCache.updating = false;
+    }
+}
+
+// Function to get file tags (only when needed)
+async function getFileTags(filePath) {
+    try {
+        const { stdout } = await promisify(exec)(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -- -`);
+        if (stdout) {
+            const parsedTags = JSON.parse(stdout);
+            return parsedTags.map(tag => tag.replace(/\d*$/, '').trim());
+        }
+    } catch (error) {
+        // Ignore tag errors
+    }
+    return [];
+}
+
+// Gallery images endpoint with streaming response
+router.get('/images', async (req, res) => {
+    console.log('GET /gallery/images endpoint hit');
+    const startTime = process.hrtime();
+    
+    try {
+        const cursor = req.query.cursor || '';
+        const limit = Math.min(parseInt(req.query.limit) || DEFAULT_LIMIT, MAX_LIMIT);
+        const loadTags = req.query.loadTags === 'true';
+        const directoryPath = '/Volumes/VideosNew/Models';
+        
+        // Check directory access
         try {
             await fs.promises.access(directoryPath);
         } catch (error) {
             console.error('Directory access error:', error);
-            return res.status(500).json({ 
-                error: 'Failed to access directory',
-                details: error.message
-            });
+            return res.status(500).json({ error: 'Failed to access directory' });
         }
-
-        console.log(`Reading directory: ${directoryPath}`);
-        const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
-        logPerf('Directory read', files.length);
         
-        const content = files.filter(file => {
-            const isMedia = !file.isDirectory() && /\.(jpg|jpeg|png|webp|gif|mp4|webm|mov)$/i.test(file.name);
-            return isMedia;
-        });
-        logPerf('Files filtered', content.length);
-
-        // Calculate pagination
-        const startIndex = (page - 1) * limit;
-        const endIndex = page * limit;
-        const paginatedContent = content.slice(startIndex, endIndex);
-        logPerf('Pagination calculated', paginatedContent.length);
-
-        console.log(`Processing page ${page} (${startIndex}-${endIndex}) of ${content.length} files`);
-        
-        // Process files in chunks to avoid memory issues
-        const chunkSize = 10;
-        const chunks = [];
-        for (let i = 0; i < paginatedContent.length; i += chunkSize) {
-            const chunk = paginatedContent.slice(i, i + chunkSize);
-            chunks.push(chunk);
+        // Update cache if needed
+        if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
+            await updateCache(directoryPath);
         }
-
-        let processedFiles = [];
-        for (const [chunkIndex, chunk] of chunks.entries()) {
-            const chunkResults = await Promise.all(chunk.map(async (file) => {
-                const filePath = path.join(directoryPath, file.name);
+        
+        // Convert Map to array for pagination
+        const allFiles = Array.from(contentCache.files.values());
+        
+        // Find starting position
+        let startIndex = 0;
+        if (cursor) {
+            startIndex = allFiles.findIndex(file => file.name === cursor) + 1;
+            if (startIndex === -1) startIndex = 0;
+        }
+        
+        // Get page of files
+        const endIndex = Math.min(startIndex + limit, allFiles.length);
+        const pageFiles = allFiles.slice(startIndex, endIndex);
+        
+        // Start streaming response
+        res.setHeader('Content-Type', 'application/json');
+        res.write('{\n');
+        res.write('"files": [\n');
+        
+        // Process and stream files in chunks
+        for (let i = 0; i < pageFiles.length; i += CHUNK_SIZE) {
+            const chunk = pageFiles.slice(i, Math.min(i + CHUNK_SIZE, pageFiles.length));
+            
+            // Process chunk
+            for (let j = 0; j < chunk.length; j++) {
+                const file = chunk[j];
                 
-                try {
-                    const stats = await fs.promises.stat(filePath);
-                    
-                    // Get Finder tags
-                    let tags = [];
-                    try {
-                        const { stdout } = await promisify(exec)(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -- -`);
-                        if (stdout) {
-                            const parsedTags = JSON.parse(stdout);
-                            tags = parsedTags.map(tag => tag.replace(/\d*$/, '').trim());
-                        }
-                    } catch (tagError) {
-                        // Ignore tag errors
-                    }
-
-                    // Only include base64 if requested and file is under size limit
-                    let base64 = null;
-                    if (includeBase64 && stats.size <= maxBase64Size) {
-                        const imageBuffer = await fs.promises.readFile(filePath);
-                        base64 = `data:image/${path.extname(file.name).substring(1)};base64,${imageBuffer.toString('base64')}`;
-                    }
-
-                    return {
-                        name: file.name,
-                        path: filePath,
-                        size: stats.size,
-                        modified: stats.mtime,
-                        type: path.extname(file.name).toLowerCase(),
-                        tags: tags,
-                        base64: base64
-                    };
-                } catch (error) {
-                    console.error(`Error processing file ${file.name}:`, error);
-                    return null;
+                // Load tags if requested and not cached
+                if (loadTags && file.tags === null) {
+                    file.tags = await getFileTags(file.path);
+                    contentCache.files.get(file.name).tags = file.tags;
                 }
-            }));
-
-            processedFiles = [...processedFiles, ...chunkResults];
-            logPerf(`Chunk ${chunkIndex + 1}/${chunks.length} processed`, processedFiles.length);
+                
+                // Stream file data
+                res.write(JSON.stringify(file));
+                if (i + j < pageFiles.length - 1) res.write(',\n');
+            }
         }
-
-        const validContent = processedFiles.filter(item => item !== null);
-        logPerf('Invalid items filtered', validContent.length);
         
-        // Prepare pagination metadata
-        const totalFiles = content.length;
-        const totalPages = Math.ceil(totalFiles / limit);
-
-        const response = {
-            page,
-            totalPages,
-            totalFiles,
-            filesPerPage: limit,
-            processingTimeMs: parseFloat(getElapsedTime()),
-            files: validContent
-        };
-
-        logPerf('End of processing');
-        res.json(response);
+        // Complete the response
+        res.write('\n],\n');
+        res.write(`"totalFiles": ${allFiles.length},\n`);
+        res.write(`"nextCursor": ${endIndex < allFiles.length ? `"${pageFiles[pageFiles.length - 1].name}"` : 'null'},\n`);
+        res.write(`"hasMore": ${endIndex < allFiles.length},\n`);
+        res.write(`"limit": ${limit},\n`);
+        
+        const elapsed = process.hrtime(startTime);
+        const processingTime = (elapsed[0] * 1000 + elapsed[1] / 1000000).toFixed(2);
+        res.write(`"processingTimeMs": ${processingTime}\n`);
+        res.write('}');
+        res.end();
         
     } catch (error) {
         console.error('Error in /images endpoint:', error);
-        logPerf('Error occurred');
-        res.status(500).json({ 
-            error: 'Failed to process directory',
-            details: error.message
-        });
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                error: 'Failed to process directory',
+                details: error.message
+            });
+        }
     }
 });
 

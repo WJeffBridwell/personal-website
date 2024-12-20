@@ -98,20 +98,21 @@ resource "null_resource" "start_dev_server" {
       
       # Start the server in the background
       cd /Users/jeffbridwell/CascadeProjects/personal-website && \
-      (NODE_ENV=development PORT=3001 npm run dev > /dev/null 2>&1 & echo $! > /tmp/personal-website-dev.pid)
+      mkdir -p logs && \
+      (NODE_ENV=development PORT=3001 npm run dev >> logs/console.log 2>&1 & echo $! > /tmp/personal-website-dev.pid)
       
-      # Wait for the server to start
-      sleep 5
+      # Wait for initial startup
+      sleep 3
       
-      # Verify the process is running and get its PID
-      SERVER_PID=$(pgrep -f "nodemon server.js" || echo "")
-      if [ -z "$SERVER_PID" ]; then
-        echo "Error: Server failed to start"
+      # Check if the process is still running and verify no crash in logs
+      if ! pgrep -f "nodemon server.js" > /dev/null || grep -q "app crashed" logs/console.log; then
+        echo "Error: Server failed to start or crashed during startup"
+        cat logs/console.log
         exit 1
       fi
       
-      # Store the actual nodemon PID
-      echo $SERVER_PID > /tmp/personal-website-dev.pid
+      # Get the actual nodemon PID
+      SERVER_PID=$(pgrep -f "nodemon server.js" || echo "")
       
       # Verify only one instance is running
       NODE_COUNT=$(pgrep -f "nodemon server.js" | wc -l | tr -d '[:space:]')
@@ -122,7 +123,22 @@ resource "null_resource" "start_dev_server" {
         exit 1
       fi
       
+      # Store the PID and report success
+      echo $SERVER_PID > /tmp/personal-website-dev.pid
       echo "Development server started successfully with PID: $SERVER_PID"
+      
+      # Try to connect to the server
+      for i in {1..10}; do
+        if curl -s http://localhost:3001/health > /dev/null; then
+          echo "Server is responding to requests"
+          exit 0
+        fi
+        sleep 1
+      done
+      
+      echo "Error: Server is not responding to requests"
+      cat logs/console.log
+      exit 1
     EOT
   }
 
