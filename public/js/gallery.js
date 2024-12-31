@@ -42,45 +42,56 @@ export class Gallery {
    * Loads images from the server API with pagination support.
    * 
    * @async
-   * @param {string} [cursor=''] - Cursor for pagination
-   * @param {Array} [accumulator=[]] - Accumulated images
    * @returns {Promise<Array>} Array of all image objects
    * @throws {Error} If image fetching fails
    */
-  async loadImages(cursor = '', accumulator = []) {
+  async loadImages() {
     try {
-      const limit = 5000; // Match server-side MAX_LIMIT
-      const url = `/gallery/images?limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`;
-      const response = await fetch(url);
-      
+      const progress = document.querySelector('.loading-progress');
+      if (progress) {
+        progress.textContent = 'Loading images...';
+      }
+
+      const response = await fetch('/gallery/images');
       if (!response.ok) {
         throw new Error('Failed to fetch images');
       }
 
-      const data = await response.json();
-      const allImages = [...accumulator, ...data.files];
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let images = [];
 
-      // Show loading progress
-      const progress = document.querySelector('.loading-progress');
-      if (progress) {
-        const percent = Math.round((allImages.length / data.totalFiles) * 100);
-        progress.textContent = `Loading images: ${percent}% (${allImages.length}/${data.totalFiles})`;
+      // Read the stream
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Update progress
+        if (progress) {
+          progress.textContent = `Loading images... (${buffer.length} bytes)`;
+        }
       }
 
-      // If there are more images, fetch the next page
-      if (data.hasMore && data.nextCursor) {
-        return this.loadImages(data.nextCursor, allImages);
-      }
+      // Parse the complete JSON
+      try {
+        const data = JSON.parse(buffer);
+        images = data.images;
+        
+        if (progress) {
+          progress.textContent = `Loaded ${images.length} images`;
+          setTimeout(() => progress.remove(), 2000);
+        }
 
-      // All images loaded
-      if (progress) {
-        progress.textContent = `Loaded ${allImages.length} images`;
-        setTimeout(() => progress.remove(), 2000);
+        this.images = images;
+        this.renderImages();
+        return images;
+      } catch (error) {
+        console.error('Error parsing JSON:', error);
+        throw error;
       }
-
-      this.images = allImages;
-      this.renderImages();
-      return allImages;
     } catch (error) {
       const errorMessage = document.createElement('div');
       errorMessage.className = 'error-message';
@@ -100,29 +111,60 @@ export class Gallery {
   renderImages() {
     if (!this.imageGrid) return;
 
+    // Clear the grid
     this.imageGrid.innerHTML = '';
+    
+    // Sort images by name
+    this.images.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    // Create fragment to avoid reflows
+    const fragment = document.createDocumentFragment();
+
+    // Create and append image containers
     this.images.forEach((img) => {
       const container = document.createElement('div');
       container.className = 'image-container';
-      container.dataset.date = img.date || '';
+      container.dataset.date = img.modified || '';
 
-      // Handle malformed data
       const imgUrl = img.url || '';
       const imgName = img.name || 'undefined';
+      const thumbnailUrl = img.thumbnailUrl || imgUrl;
 
       container.innerHTML = `
-                <img src="${imgUrl}" alt="${imgName}" loading="lazy" />
-                <div class="search-icon">
-                    <i class="fas fa-search"></i>
-                </div>
-                <div class="image-name">${imgName}</div>
-            `;
+        <img src="${thumbnailUrl}" alt="${imgName}" loading="lazy" data-full-url="${imgUrl}" />
+        <div class="search-icon">
+            <i class="fas fa-search"></i>
+        </div>
+        <div class="image-name">${imgName}</div>
+      `;
 
-      // Add click handler to container
-      container.addEventListener('click', () => this.openModal(img));
+      // Add click handler for search icon
+      const searchIcon = container.querySelector('.search-icon');
+      if (searchIcon) {
+        searchIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          fetch(`/gallery/finder-search?term=${encodeURIComponent(imgName)}`);
+        });
+      }
 
-      this.imageGrid.appendChild(container);
+      // Add click handler for image modal
+      container.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-icon')) {
+          const img = container.querySelector('img');
+          if (img) {
+            this.openModal({
+              url: img.dataset.fullUrl,
+              name: imgName
+            });
+          }
+        }
+      });
+
+      fragment.appendChild(container);
     });
+
+    // Add all images at once
+    this.imageGrid.appendChild(fragment);
   }
 
   /**
@@ -342,7 +384,7 @@ export class Gallery {
    */
   openModal(img) {
     if (this.modal && this.modalImg) {
-      this.modalImg.src = img.src;
+      this.modalImg.src = img.url;
       this.modal.style.display = 'block';
     }
   }

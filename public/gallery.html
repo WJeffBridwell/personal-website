@@ -113,6 +113,16 @@
         </div>
     </template>
 
-    <script type="module" src="js/gallery.js"></script>
+    <script type="module">
+        import Gallery from './js/gallery.js';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const galleryElement = document.querySelector('.gallery');
+            if (galleryElement) {
+                const gallery = new Gallery(galleryElement);
+                gallery.loadImages();
+            }
+        });
+    </script>
 </body>
 </html>

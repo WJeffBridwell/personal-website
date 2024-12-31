@@ -78,8 +78,14 @@ export class ContentGallery {
     }
 
     async loadContent() {
+        // If content is already loaded and we're not forcing a refresh, just render
+        if (this.content.length > 0) {
+            this.renderContent();
+            return;
+        }
+
         try {
-            const response = await fetch(`${this.apiEndpoint}?image_name=${this.imageName}`);
+            const response = await fetch(`${this.apiEndpoint}?image_name=${encodeURIComponent(this.imageName)}`);
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }
@@ -176,7 +182,7 @@ export class ContentGallery {
                           (item.content_type && item.content_type.toLowerCase() === 'video');
             
             if (isVideo) {
-                console.log('Creating video player for:', item.content_name, 'URL:', item.content_url);
+                console.log('Creating video player for:', item.content_name);
                 
                 element.innerHTML = `
                     <div class="m-video-player">
@@ -186,8 +192,7 @@ export class ContentGallery {
                                 <i class="fas fa-play"></i>
                             </div>
                         </div>
-                        <video class="a-video-element" preload="metadata" playsinline style="display: none;">
-                            <source src="${item.content_url}" type="video/mp4">
+                        <video class="a-video-element" preload="none" playsinline style="display: none;">
                             Your browser does not support the video tag.
                         </video>
                         <div class="m-video-controls" style="display: none;">
@@ -227,46 +232,53 @@ export class ContentGallery {
                 const fullscreenButton = videoPlayer.querySelector('.a-fullscreen-button');
                 const progressBar = videoPlayer.querySelector('.a-progress-bar');
 
+                // Function to load and play video
+                const loadAndPlayVideo = async () => {
+                    try {
+                        // Check if video is already loaded
+                        if (!video.querySelector('source')) {
+                            const source = document.createElement('source');
+                            // Send the content URL directly to avoid searching
+                            source.src = `http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
+                            source.type = 'video/mp4';
+                            video.appendChild(source);
+                            
+                            await video.load();
+                        }
+                        
+                        thumbnail.style.display = 'none';
+                        video.style.display = 'block';
+                        controls.style.display = 'flex';
+                        await video.play();
+                        playButton.innerHTML = '<i class="fas fa-pause"></i>';
+                        
+                    } catch (error) {
+                        console.error('Error playing video:', error);
+                        const errorMessage = document.createElement('div');
+                        errorMessage.className = 'a-video-error';
+                        errorMessage.textContent = 'Error playing video';
+                        videoPlayer.appendChild(errorMessage);
+                        
+                        thumbnail.style.display = 'flex';
+                        video.style.display = 'none';
+                        controls.style.display = 'none';
+                        
+                        const source = video.querySelector('source');
+                        if (source) {
+                            source.remove();
+                        }
+                    }
+                };
+
                 // Click thumbnail to start playing
                 thumbnail.addEventListener('click', () => {
-                    thumbnail.style.display = 'none';
-                    video.style.display = 'block';
-                    controls.style.display = 'flex';
-                    const playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        playPromise.then(() => {
-                            playButton.innerHTML = '<i class="fas fa-pause"></i>';
-                        }).catch(error => {
-                            console.error('Error playing video:', error);
-                            // Show error message
-                            const errorMessage = document.createElement('div');
-                            errorMessage.className = 'a-video-error';
-                            errorMessage.textContent = 'Error playing video';
-                            videoPlayer.appendChild(errorMessage);
-                        });
-                    }
-                });
-
-                // Error handling
-                video.addEventListener('error', (e) => {
-                    console.error('Video error:', e.target.error);
-                    const errorMessage = document.createElement('div');
-                    errorMessage.className = 'a-video-error';
-                    errorMessage.textContent = 'Error loading video';
-                    videoPlayer.appendChild(errorMessage);
+                    loadAndPlayVideo();
                 });
 
                 // Play/Pause
                 playButton.addEventListener('click', () => {
                     if (video.paused) {
-                        const playPromise = video.play();
-                        if (playPromise !== undefined) {
-                            playPromise.then(() => {
-                                playButton.innerHTML = '<i class="fas fa-pause"></i>';
-                            }).catch(error => {
-                                console.error('Error playing video:', error);
-                            });
-                        }
+                        loadAndPlayVideo();
                     } else {
                         video.pause();
                         playButton.innerHTML = '<i class="fas fa-play"></i>';
@@ -290,15 +302,22 @@ export class ContentGallery {
                 fullscreenButton.addEventListener('click', () => {
                     if (video.requestFullscreen) {
                         video.requestFullscreen();
-                    } else if (video.webkitRequestFullscreen) {
-                        video.webkitRequestFullscreen();
                     }
                 });
 
-                // Update progress bar
+                // Progress bar
                 video.addEventListener('timeupdate', () => {
                     const progress = (video.currentTime / video.duration) * 100;
-                    progressBar.style.width = progress + '%';
+                    progressBar.style.width = `${progress}%`;
+                });
+
+                // Error handling
+                video.addEventListener('error', (e) => {
+                    console.error('Video error:', e.target.error);
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'a-video-error';
+                    errorMessage.textContent = 'Error loading video';
+                    videoPlayer.appendChild(errorMessage);
                 });
 
             } else {

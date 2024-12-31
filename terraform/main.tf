@@ -33,129 +33,122 @@ resource "null_resource" "install_dependencies" {
   }
 }
 
-# Remove any existing launch agents/daemons and stop processes
-resource "null_resource" "cleanup_launch_agents" {
-  provisioner "local-exec" {
-    command = <<-EOT
-      # Kill any existing npm/node processes for this project
-      pkill -f "npm run dev" || true
-      pkill -f "nodemon server.js" || true
-      pkill -f "/usr/local/bin/node server.js" || true
-      
-      # Remove any Node.js related launch agents
-      launchctl remove com.jeffbridwell.personal-website || true
-      # Remove npm from login items (requires manual confirmation)
-      echo "Please manually verify that Node.js and npm are removed from Login Items in System Settings > General > Login Items"
-    EOT
-  }
-
-  # Also run cleanup on destroy
-  provisioner "local-exec" {
-    when    = destroy
-    command = <<-EOT
-      echo "Cleaning up processes..."
-      pkill -f "npm run dev" || true
-      pkill -f "nodemon server.js" || true
-      pkill -f "/usr/local/bin/node server.js" || true
-      launchctl remove com.jeffbridwell.personal-website || true
-    EOT
-  }
-}
-
 # Create development environment configuration
 resource "local_file" "dev_env_config" {
   filename = "/Users/jeffbridwell/CascadeProjects/personal-website/.env.development"
   content  = <<-EOT
     NODE_ENV=development
     PORT=3001
-    # Add any other environment-specific variables here
   EOT
 }
 
-# Start development server
-resource "null_resource" "start_dev_server" {
+# Start servers
+resource "null_resource" "start_servers" {
   depends_on = [
     null_resource.install_dependencies,
-    null_resource.cleanup_launch_agents,
     local_file.dev_env_config
   ]
 
+  # Start both servers
   provisioner "local-exec" {
     command = <<-EOT
-      # Kill any existing processes first
+      cd /Users/jeffbridwell/CascadeProjects/personal-website
+      
+      # Create logs directory if it doesn't exist
+      mkdir -p logs
+      
+      # Kill existing processes
       pkill -f "npm run dev" || true
-      pkill -f "nodemon server.js" || true
-      pkill -f "/usr/local/bin/node server.js" || true
+      pkill -f "node video-server.js" || true
       
-      # Wait to ensure processes are fully terminated
-      sleep 3
+      # Start main server
+      npm run dev > logs/main-server.log 2>&1 &
+      main_pid=$!
       
-      # Double check no processes are running
-      if pgrep -f "nodemon server.js" > /dev/null || pgrep -f "npm run dev" > /dev/null; then
-        echo "Error: Unable to clean up existing processes"
-        exit 1
-      fi
+      # Start video server
+      node video-server.js > logs/video-server.log 2>&1 &
+      video_pid=$!
       
-      # Start the server in the background
-      cd /Users/jeffbridwell/CascadeProjects/personal-website && \
-      mkdir -p logs && \
-      (NODE_ENV=development PORT=3001 npm run dev >> logs/console.log 2>&1 & echo $! > /tmp/personal-website-dev.pid)
+      # Save PIDs to file for cleanup
+      echo "$main_pid" > logs/main-server.pid
+      echo "$video_pid" > logs/video-server.pid
       
-      # Wait for initial startup
-      sleep 3
+      # Wait for servers to be ready
+      echo "Waiting for servers to start..."
+      max_attempts=30
+      attempt=1
       
-      # Check if the process is still running and verify no crash in logs
-      if ! pgrep -f "nodemon server.js" > /dev/null || grep -q "app crashed" logs/console.log; then
-        echo "Error: Server failed to start or crashed during startup"
-        cat logs/console.log
-        exit 1
-      fi
-      
-      # Get the actual nodemon PID
-      SERVER_PID=$(pgrep -f "nodemon server.js" || echo "")
-      
-      # Verify only one instance is running
-      NODE_COUNT=$(pgrep -f "nodemon server.js" | wc -l | tr -d '[:space:]')
-      if [ "$NODE_COUNT" -gt 1 ]; then
-        echo "Error: Multiple server instances detected ($NODE_COUNT instances)"
-        pkill -f "nodemon server.js"
-        rm -f /tmp/personal-website-dev.pid
-        exit 1
-      fi
-      
-      # Store the PID and report success
-      echo $SERVER_PID > /tmp/personal-website-dev.pid
-      echo "Development server started successfully with PID: $SERVER_PID"
-      
-      # Try to connect to the server
-      for i in {1..10}; do
+      while [ $attempt -le $max_attempts ]; do
+        main_running=false
+        video_running=false
+        
+        # Check main server
         if curl -s http://localhost:3001/health > /dev/null; then
-          echo "Server is responding to requests"
+          main_running=true
+          echo "Main server is running"
+        fi
+        
+        # Check video server
+        if curl -s http://localhost:8082/health > /dev/null; then
+          video_running=true
+          echo "Video server is running"
+        fi
+        
+        # Check if both servers are running
+        if [ "$main_running" = true ] && [ "$video_running" = true ]; then
+          echo "Both servers are running successfully"
           exit 0
         fi
+        
+        # Check if processes are still alive
+        if ! ps -p $main_pid > /dev/null; then
+          echo "Error: Main server process died"
+          cat logs/main-server.log
+          exit 1
+        fi
+        
+        if ! ps -p $video_pid > /dev/null; then
+          echo "Error: Video server process died"
+          cat logs/video-server.log
+          exit 1
+        fi
+        
+        echo "Attempt $attempt/$max_attempts: Waiting for servers..."
         sleep 1
+        attempt=$((attempt + 1))
       done
       
-      echo "Error: Server is not responding to requests"
-      cat logs/console.log
+      echo "Error: Servers failed to start within timeout"
+      echo "Main server log:"
+      cat logs/main-server.log
+      echo "Video server log:"
+      cat logs/video-server.log
       exit 1
     EOT
   }
 
-  # Ensure server is killed on destroy
+  # Cleanup on destroy
   provisioner "local-exec" {
     when    = destroy
     command = <<-EOT
-      echo "Stopping development server..."
-      if [ -f /tmp/personal-website-dev.pid ]; then
-        PID=$(cat /tmp/personal-website-dev.pid)
-        kill $PID 2>/dev/null || true
-        rm -f /tmp/personal-website-dev.pid
+      cd /Users/jeffbridwell/CascadeProjects/personal-website
+      
+      # Kill servers using saved PIDs if they exist
+      if [ -f logs/main-server.pid ]; then
+        pid=$(cat logs/main-server.pid)
+        kill $pid 2>/dev/null || true
+        rm logs/main-server.pid
       fi
+      
+      if [ -f logs/video-server.pid ]; then
+        pid=$(cat logs/video-server.pid)
+        kill $pid 2>/dev/null || true
+        rm logs/video-server.pid
+      fi
+      
+      # Fallback to pkill if PIDs don't exist or processes are still running
       pkill -f "npm run dev" || true
-      pkill -f "nodemon server.js" || true
-      pkill -f "/usr/local/bin/node server.js" || true
-      sleep 2
+      pkill -f "node video-server.js" || true
     EOT
   }
 }

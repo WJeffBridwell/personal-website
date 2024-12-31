@@ -21,6 +21,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = express.Router();
+const DEFAULT_LIMIT = 1000;  // Show 1000 images by default
+const MAX_LIMIT = 5000;      // Allow up to 5000 images per request
+const CHUNK_SIZE = 100;      // Process in chunks of 100 for better memory usage
+const CACHE_TTL = 60000;     // 1 minute cache TTL
+
+// Initialize content cache
+const contentCache = {
+    files: new Map(),
+    lastUpdate: 0,
+    updating: false
+};
 
 console.log('Initializing gallery router');
 
@@ -115,18 +126,6 @@ router.get('/', async (req, res) => {
     console.log('======================\n');
 });
 
-// Cache for directory contents with metadata
-const contentCache = {
-    files: new Map(),
-    lastUpdate: 0,
-    updating: false
-};
-
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const DEFAULT_LIMIT = 1000;
-const MAX_LIMIT = 5000;
-const CHUNK_SIZE = 500;
-
 // Function to update cache with basic file info
 async function updateCache(directoryPath) {
     if (contentCache.updating) return;
@@ -136,14 +135,19 @@ async function updateCache(directoryPath) {
         console.log('Updating directory cache...');
         
         const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
+        console.log(`Found ${files.length} total entries in directory`);
+        
         const mediaFiles = files
             .filter(file => !file.isDirectory() && /\.(jpg|jpeg|png|webp|gif|mp4|webm|mov)$/i.test(file.name))
             .map(file => file.name);
             
+        console.log(`Found ${mediaFiles.length} media files`);
+        
         // Clear existing cache
         contentCache.files.clear();
         
         // Add basic file info to cache
+        let processedCount = 0;
         for (const fileName of mediaFiles) {
             const filePath = path.join(directoryPath, fileName);
             try {
@@ -156,6 +160,10 @@ async function updateCache(directoryPath) {
                     type: path.extname(fileName).toLowerCase(),
                     tags: null // Tags will be loaded on demand
                 });
+                processedCount++;
+                if (processedCount % 1000 === 0) {
+                    console.log(`Processed ${processedCount} of ${mediaFiles.length} files...`);
+                }
             } catch (error) {
                 console.error(`Error caching file ${fileName}:`, error);
             }
@@ -163,6 +171,16 @@ async function updateCache(directoryPath) {
         
         contentCache.lastUpdate = Date.now();
         console.log(`Cache updated with ${contentCache.files.size} files`);
+        
+        // Log some stats about the cached files
+        const extensions = new Set(Array.from(contentCache.files.values()).map(f => f.type));
+        console.log('File types in cache:', Array.from(extensions));
+        
+        // Log first few and last few files to verify sorting
+        const allFiles = Array.from(contentCache.files.keys()).sort();
+        console.log('First 5 files:', allFiles.slice(0, 5));
+        console.log('Last 5 files:', allFiles.slice(-5));
+        
     } catch (error) {
         console.error('Cache update failed:', error);
         throw error;
@@ -191,8 +209,6 @@ router.get('/images', async (req, res) => {
     const startTime = process.hrtime();
     
     try {
-        const cursor = req.query.cursor || '';
-        const limit = Math.min(parseInt(req.query.limit) || DEFAULT_LIMIT, MAX_LIMIT);
         const loadTags = req.query.loadTags === 'true';
         const directoryPath = '/Volumes/VideosNew/Models';
         
@@ -206,31 +222,28 @@ router.get('/images', async (req, res) => {
         
         // Update cache if needed
         if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
+            console.log('Cache expired, updating...');
+            console.log('Last update:', new Date(contentCache.lastUpdate).toISOString());
+            console.log('Current time:', new Date().toISOString());
+            console.log('TTL:', CACHE_TTL);
             await updateCache(directoryPath);
+        } else {
+            console.log('Using cached content from:', new Date(contentCache.lastUpdate).toISOString());
         }
         
-        // Convert Map to array for pagination
-        const allFiles = Array.from(contentCache.files.values());
+        // Convert Map to array and sort by name
+        const allFiles = Array.from(contentCache.files.values())
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
         
-        // Find starting position
-        let startIndex = 0;
-        if (cursor) {
-            startIndex = allFiles.findIndex(file => file.name === cursor) + 1;
-            if (startIndex === -1) startIndex = 0;
-        }
-        
-        // Get page of files
-        const endIndex = Math.min(startIndex + limit, allFiles.length);
-        const pageFiles = allFiles.slice(startIndex, endIndex);
+        console.log(`Total files: ${allFiles.length}`);
         
         // Start streaming response
         res.setHeader('Content-Type', 'application/json');
-        res.write('{\n');
-        res.write('"files": [\n');
+        res.write('{"images": [\n');
         
-        // Process and stream files in chunks
-        for (let i = 0; i < pageFiles.length; i += CHUNK_SIZE) {
-            const chunk = pageFiles.slice(i, Math.min(i + CHUNK_SIZE, pageFiles.length));
+        // Process and stream files in chunks to avoid memory issues
+        for (let i = 0; i < allFiles.length; i += CHUNK_SIZE) {
+            const chunk = allFiles.slice(i, Math.min(i + CHUNK_SIZE, allFiles.length));
             
             // Process chunk
             for (let j = 0; j < chunk.length; j++) {
@@ -242,32 +255,37 @@ router.get('/images', async (req, res) => {
                     contentCache.files.get(file.name).tags = file.tags;
                 }
                 
+                // Format file data for client
+                const fileData = {
+                    name: file.name,
+                    url: `/gallery/images/${encodeURIComponent(file.name)}`,
+                    thumbnailUrl: `/gallery/images/${encodeURIComponent(file.name)}?thumbnail=true`,
+                    size: file.size,
+                    modified: file.modified,
+                    type: file.type,
+                    tags: file.tags || []
+                };
+                
                 // Stream file data
-                res.write(JSON.stringify(file));
-                if (i + j < pageFiles.length - 1) res.write(',\n');
+                res.write(JSON.stringify(fileData));
+                if (i + j < allFiles.length - 1) res.write(',\n');
             }
         }
         
         // Complete the response
-        res.write('\n],\n');
-        res.write(`"totalFiles": ${allFiles.length},\n`);
-        res.write(`"nextCursor": ${endIndex < allFiles.length ? `"${pageFiles[pageFiles.length - 1].name}"` : 'null'},\n`);
-        res.write(`"hasMore": ${endIndex < allFiles.length},\n`);
-        res.write(`"limit": ${limit},\n`);
-        
-        const elapsed = process.hrtime(startTime);
-        const processingTime = (elapsed[0] * 1000 + elapsed[1] / 1000000).toFixed(2);
-        res.write(`"processingTimeMs": ${processingTime}\n`);
+        res.write('\n],');
+        res.write(`"total": ${allFiles.length}`);
         res.write('}');
         res.end();
         
+        const endTime = process.hrtime(startTime);
+        console.log(`Request completed in ${endTime[0]}s ${endTime[1] / 1000000}ms`);
+        console.log('======================\n');
+        
     } catch (error) {
-        console.error('Error in /images endpoint:', error);
+        console.error('Error processing request:', error);
         if (!res.headersSent) {
-            res.status(500).json({ 
-                error: 'Failed to process directory',
-                details: error.message
-            });
+            res.status(500).json({ error: 'Internal server error' });
         }
     }
 });
@@ -466,6 +484,34 @@ router.get('/video/:videoName', async (req, res) => {
     } catch (error) {
         console.error('Error serving video:', error);
         res.status(500).json({ error: 'Error serving video file', details: error.message });
+    }
+});
+
+// Video content endpoint - streams video content
+router.get('/video-content/:filename', async (req, res) => {
+    try {
+        const filename = decodeURIComponent(req.params.filename);
+        console.log('Video request for:', filename);
+
+        // Forward request to content API
+        const apiUrl = `http://localhost:8081/video-stream/${encodeURIComponent(filename)}`;
+        console.log('Forwarding to:', apiUrl);
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) {
+            throw new Error(`Content API returned ${response.status}`);
+        }
+
+        // Forward headers
+        res.set('Content-Type', response.headers.get('Content-Type'));
+        res.set('Content-Length', response.headers.get('Content-Length'));
+        res.set('Accept-Ranges', 'bytes');
+
+        // Stream the response
+        response.body.pipe(res);
+    } catch (error) {
+        console.error('Error streaming video:', error);
+        res.status(500).json({ error: 'Failed to stream video' });
     }
 });
 

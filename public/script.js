@@ -40,8 +40,12 @@ function initializeGallery() {
         modal: null,
         modalImg: null,
         modalCaption: null,
-        closeBtn: null
+        closeBtn: null,
+        nextCursor: null
     };
+    
+    // Load initial images
+    loadInitialImages();
 }
 
 // Call initialize function
@@ -203,15 +207,17 @@ function closeModal() {
  * Displays images in the gallery grid
  * @param {Array} images - Array of image objects to display
  */
-async function displayImages(images) {
+async function displayImages(images, append = false) {
     const grid = document.getElementById('image-grid');
     if (!grid) {
         console.error('Image grid element not found');
         return;
     }
     
-    // Clear existing images
-    grid.innerHTML = '';
+    // Clear existing images if not appending
+    if (!append) {
+        grid.innerHTML = '';
+    }
     
     try {
         for (const image of images) {
@@ -303,16 +309,18 @@ function createImageContainer(image) {
 
 /**
  * Fetches images from the server
- * @returns {Promise<Array>} Array of image objects
+ * @param {string} cursor - Cursor for pagination
+ * @param {number} limit - Number of images to fetch
+ * @returns {Promise<Object>} Object containing images and next cursor
  */
-async function fetchImages() {
+async function fetchImages(cursor = '', limit = 1000) {
     try {
-        const response = await fetch('/gallery/images');
+        const response = await fetch(`/gallery/images?cursor=${encodeURIComponent(cursor)}&limit=${limit}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
-        return data.images;
+        return data;
     } catch (error) {
         console.error('Error fetching images:', error);
         throw error;
@@ -336,7 +344,42 @@ async function searchImageInFinder(imageName) {
     }
 }
 
-// Initialize sort buttons
+// Load initial images and set up infinite scroll
+async function loadInitialImages() {
+    try {
+        window._galleryState.isLoading = true;
+        const data = await fetchImages();
+        await displayImages(data.images);
+        window._galleryState.nextCursor = data.nextCursor;
+        window._galleryState.isLoading = false;
+        
+        // Set up infinite scroll
+        const observer = new IntersectionObserver(async (entries) => {
+            const lastEntry = entries[0];
+            if (lastEntry.isIntersecting && window._galleryState.nextCursor && !window._galleryState.isLoading) {
+                window._galleryState.isLoading = true;
+                const data = await fetchImages(window._galleryState.nextCursor);
+                await displayImages(data.images, true);
+                window._galleryState.nextCursor = data.nextCursor;
+                window._galleryState.isLoading = false;
+            }
+        }, { threshold: 0.5 });
+        
+        // Observe the last image container
+        const containers = document.getElementsByClassName('image-container');
+        if (containers.length > 0) {
+            observer.observe(containers[containers.length - 1]);
+        }
+    } catch (error) {
+        console.error('Error loading initial images:', error);
+        window._galleryState.isLoading = false;
+    }
+}
+
+/**
+ * Initializes the sort buttons component with all necessary elements and event listeners
+ * Handles cleanup of existing buttons and sets up error boundaries
+ */
 function initializeSortButtons() {
     const sortButtons = document.querySelectorAll('.sort-btn');
     if (!sortButtons.length) return;
@@ -506,8 +549,8 @@ if (typeof module !== 'undefined' && module.exports) {
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', async () => {
         try {
-            const images = await fetchImages();
-            await displayImages(images);
+            // const images = await fetchImages();
+            // await displayImages(images);
         } catch (error) {
             console.error('Failed to initialize gallery:', error);
             const grid = document.getElementById('image-grid');

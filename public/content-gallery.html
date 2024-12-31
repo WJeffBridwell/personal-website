@@ -190,7 +190,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
-            const imageName = urlParams.get('image_name') || '';
+            const imageName = urlParams.get('image-name') || '';
             
             const contentPlayer = new ContentPlayer('contentModal');
             const gallery = new ContentGallery('image-grid', 'http://localhost:8081/image-content', imageName);

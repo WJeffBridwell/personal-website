@@ -297,11 +297,4 @@ app.use((err, req, res, next) => {
 // Start server
 server.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
-    console.log('Public directory:', publicPath);
-    // List files in public directory
-    fsPromises.readdir(publicPath).then(files => {
-        console.log('Files in public directory:', files);
-    }).catch(err => {
-        console.error('Error reading public directory:', err);
-    });
 });
