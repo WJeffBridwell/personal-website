@@ -50,3 +50,10 @@ dups/
 # Development files
 .env.development
 response.json
+public/content-gallery-html.old
+public/content-gallery.before
+public/content-gallery.css.old
+public/js/content-gallery-js.old
+junk/
+logs/
+*.old
