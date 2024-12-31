@@ -341,7 +341,7 @@ export async function loadImages() {
   }
 
   try {
-    const response = await fetch('/api/images');
+    const response = await fetch('/gallery/images');
     if (!response.ok) {
       throw new Error('Failed to load images');
     }

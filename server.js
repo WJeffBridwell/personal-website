@@ -138,42 +138,6 @@ import galleryRouter from './routes/gallery.js';
 app.use('/gallery', galleryRouter);
 
 /**
- * GET /api/images
- * Returns a list of all images in the gallery
- * 
- * Response format:
- * {
- *   images: [{
- *     name: string,
- *     url: string,
- *     thumbnailUrl: string
- *   }]
- * }
- */
-app.get('/api/images', async (req, res) => {
-    try {
-        // Change the images directory to point to /Volumes/VideosNew/Models
-        const imagesDir = '/Volumes/VideosNew/Models';
-        
-        const files = await fsPromises.readdir(imagesDir);
-        
-        // Filter for image files and create image objects
-        const images = files
-            .filter(file => /\.(jpg|jpeg|png|gif)$/i.test(file))
-            .map(file => ({
-                name: file.replace(/\.[^/.]+$/, ''),  // Remove file extension
-                url: `/images/${file}`,
-                thumbnailUrl: `/images/thumbnails/${file}`
-            }));
-        
-        res.json({ images });
-    } catch (error) {
-        console.error('Error fetching images:', error);
-        res.status(500).json({ error: 'Failed to fetch images' });
-    }
-});
-
-/**
  * GET /api/search
  * Searches for images by name
  * 

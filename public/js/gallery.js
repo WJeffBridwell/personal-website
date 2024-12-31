@@ -541,7 +541,7 @@ export function sortImages(sortBy = 'name', order = 'asc') {
  * @returns {Promise<void>}
  */
 export function loadImages() {
-  return fetch('/api/images')
+  return fetch('/gallery/images')
     .then((response) => {
       if (!response.ok) {
         throw new Error('Failed to fetch images');

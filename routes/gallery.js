@@ -16,6 +16,7 @@ import { exec } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
+import compression from 'compression';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -23,12 +24,13 @@ const __dirname = dirname(__filename);
 const router = express.Router();
 const DEFAULT_LIMIT = 1000;  // Show 1000 images by default
 const MAX_LIMIT = 5000;      // Allow up to 5000 images per request
-const CHUNK_SIZE = 100;      // Process in chunks of 100 for better memory usage
-const CACHE_TTL = 60000;     // 1 minute cache TTL
+const CHUNK_SIZE = 1000;   // Process in chunks of 1000 for better memory usage
+const CACHE_TTL = 300000;  // 5 minutes cache TTL
 
-// Initialize content cache
+// Initialize content cache with LRU cache for thumbnails
 const contentCache = {
     files: new Map(),
+    thumbnails: new Map(),
     lastUpdate: 0,
     updating: false
 };
@@ -126,169 +128,158 @@ router.get('/', async (req, res) => {
     console.log('======================\n');
 });
 
-// Function to update cache with basic file info
+// Update cache with chunked processing
 async function updateCache(directoryPath) {
-    if (contentCache.updating) return;
-    
+    if (contentCache.updating) {
+        console.log('Cache update already in progress');
+        return;
+    }
+
     try {
         contentCache.updating = true;
-        console.log('Updating directory cache...');
-        
+        console.log('Starting cache update...');
+
         const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
-        console.log(`Found ${files.length} total entries in directory`);
-        
-        const mediaFiles = files
-            .filter(file => !file.isDirectory() && /\.(jpg|jpeg|png|webp|gif|mp4|webm|mov)$/i.test(file.name))
-            .map(file => file.name);
-            
-        console.log(`Found ${mediaFiles.length} media files`);
-        
-        // Clear existing cache
-        contentCache.files.clear();
-        
-        // Add basic file info to cache
-        let processedCount = 0;
-        for (const fileName of mediaFiles) {
-            const filePath = path.join(directoryPath, fileName);
-            try {
-                const stats = await fs.promises.stat(filePath);
-                contentCache.files.set(fileName, {
-                    name: fileName,
-                    path: filePath,
-                    size: stats.size,
-                    modified: stats.mtime,
-                    type: path.extname(fileName).toLowerCase(),
-                    tags: null // Tags will be loaded on demand
-                });
-                processedCount++;
-                if (processedCount % 1000 === 0) {
-                    console.log(`Processed ${processedCount} of ${mediaFiles.length} files...`);
+        const imageFiles = files.filter(file => 
+            file.isFile() && /\.(jpg|jpeg|png|gif)$/i.test(file.name)
+        );
+
+        // Process files in chunks
+        for (let i = 0; i < imageFiles.length; i += CHUNK_SIZE) {
+            const chunk = imageFiles.slice(i, i + CHUNK_SIZE);
+            await Promise.all(chunk.map(async (file) => {
+                try {
+                    const filePath = path.join(directoryPath, file.name);
+                    const stats = await fs.promises.stat(filePath);
+                    
+                    contentCache.files.set(file.name, {
+                        name: file.name,
+                        path: filePath,
+                        size: stats.size,
+                        modified: stats.mtime,
+                        type: path.extname(file.name).slice(1)
+                    });
+                } catch (error) {
+                    console.error(`Error processing file ${file.name}:`, error);
                 }
-            } catch (error) {
-                console.error(`Error caching file ${fileName}:`, error);
-            }
+            }));
+            
+            // Allow other operations between chunks
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
-        
+
         contentCache.lastUpdate = Date.now();
         console.log(`Cache updated with ${contentCache.files.size} files`);
         
-        // Log some stats about the cached files
-        const extensions = new Set(Array.from(contentCache.files.values()).map(f => f.type));
-        console.log('File types in cache:', Array.from(extensions));
-        
-        // Log first few and last few files to verify sorting
-        const allFiles = Array.from(contentCache.files.keys()).sort();
-        console.log('First 5 files:', allFiles.slice(0, 5));
-        console.log('Last 5 files:', allFiles.slice(-5));
-        
     } catch (error) {
-        console.error('Cache update failed:', error);
+        console.error('Error updating cache:', error);
         throw error;
     } finally {
         contentCache.updating = false;
     }
 }
 
-// Function to get file tags (only when needed)
-async function getFileTags(filePath) {
+// Get all available first letters
+router.get('/letters', async (req, res) => {
     try {
-        const { stdout } = await promisify(exec)(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -- -`);
-        if (stdout) {
-            const parsedTags = JSON.parse(stdout);
-            return parsedTags.map(tag => tag.replace(/\d*$/, '').trim());
-        }
-    } catch (error) {
-        // Ignore tag errors
-    }
-    return [];
-}
-
-// Gallery images endpoint with streaming response
-router.get('/images', async (req, res) => {
-    console.log('GET /gallery/images endpoint hit');
-    const startTime = process.hrtime();
-    
-    try {
-        const loadTags = req.query.loadTags === 'true';
         const directoryPath = '/Volumes/VideosNew/Models';
-        
-        // Check directory access
-        try {
-            await fs.promises.access(directoryPath);
-        } catch (error) {
-            console.error('Directory access error:', error);
-            return res.status(500).json({ error: 'Failed to access directory' });
-        }
         
         // Update cache if needed
         if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
-            console.log('Cache expired, updating...');
-            console.log('Last update:', new Date(contentCache.lastUpdate).toISOString());
-            console.log('Current time:', new Date().toISOString());
-            console.log('TTL:', CACHE_TTL);
             await updateCache(directoryPath);
-        } else {
-            console.log('Using cached content from:', new Date(contentCache.lastUpdate).toISOString());
         }
         
-        // Convert Map to array and sort by name
-        const allFiles = Array.from(contentCache.files.values())
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-        
-        console.log(`Total files: ${allFiles.length}`);
-        
-        // Start streaming response
-        res.setHeader('Content-Type', 'application/json');
-        res.write('{"images": [\n');
-        
-        // Process and stream files in chunks to avoid memory issues
-        for (let i = 0; i < allFiles.length; i += CHUNK_SIZE) {
-            const chunk = allFiles.slice(i, Math.min(i + CHUNK_SIZE, allFiles.length));
-            
-            // Process chunk
-            for (let j = 0; j < chunk.length; j++) {
-                const file = chunk[j];
-                
-                // Load tags if requested and not cached
-                if (loadTags && file.tags === null) {
-                    file.tags = await getFileTags(file.path);
-                    contentCache.files.get(file.name).tags = file.tags;
+        // Get all unique first letters
+        const letters = new Set();
+        for (const [filename] of contentCache.files) {
+            if (filename) {
+                const firstLetter = filename.charAt(0).toUpperCase();
+                if (/[A-Z]/.test(firstLetter)) {
+                    letters.add(firstLetter);
                 }
-                
-                // Format file data for client
-                const fileData = {
-                    name: file.name,
-                    url: `/gallery/images/${encodeURIComponent(file.name)}`,
-                    thumbnailUrl: `/gallery/images/${encodeURIComponent(file.name)}?thumbnail=true`,
-                    size: file.size,
-                    modified: file.modified,
-                    type: file.type,
-                    tags: file.tags || []
-                };
-                
-                // Stream file data
-                res.write(JSON.stringify(fileData));
-                if (i + j < allFiles.length - 1) res.write(',\n');
             }
         }
         
-        // Complete the response
-        res.write('\n],');
-        res.write(`"total": ${allFiles.length}`);
-        res.write('}');
-        res.end();
+        // Convert to sorted array
+        const sortedLetters = Array.from(letters).sort();
         
-        const endTime = process.hrtime(startTime);
-        console.log(`Request completed in ${endTime[0]}s ${endTime[1] / 1000000}ms`);
-        console.log('======================\n');
+        res.json({
+            letters: sortedLetters,
+            total: contentCache.files.size
+        });
+        
+    } catch (error) {
+        console.error('Error getting letters:', error);
+        res.status(500).json({ error: 'Failed to get letters' });
+    }
+});
+
+// Gallery images endpoint with optimized loading
+router.get('/images', async (req, res) => {
+    console.log('\n=== Gallery Images Request ===');
+    const startTime = process.hrtime();
+    
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const letter = req.query.letter;
+        const directoryPath = '/Volumes/VideosNew/Models';
+        
+        // Update cache if needed
+        if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
+            await updateCache(directoryPath);
+        }
+        
+        // Convert Map to array and filter by letter if specified
+        let allFiles = Array.from(contentCache.files.values());
+        if (letter) {
+            allFiles = allFiles.filter(file => 
+                file.name.charAt(0).toUpperCase() === letter.toUpperCase()
+            );
+        }
+        
+        // Sort files
+        allFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        
+        // Calculate pagination
+        const startIndex = (page - 1) * limit;
+        const endIndex = startIndex + limit;
+        const totalFiles = allFiles.length;
+        
+        // Get paginated files
+        const paginatedFiles = allFiles.slice(startIndex, endIndex);
+        
+        // Prepare response data
+        const images = paginatedFiles.map(file => ({
+            name: file.name,
+            url: `/gallery/images/${encodeURIComponent(file.name)}`,
+            thumbnailUrl: `/gallery/images/${encodeURIComponent(file.name)}?thumbnail=true`,
+            size: file.size,
+            modified: file.modified,
+            type: file.type
+        }));
+
+        res.json({
+            images,
+            pagination: {
+                total: totalFiles,
+                totalAll: contentCache.files.size,
+                page,
+                limit,
+                totalPages: Math.ceil(totalFiles / limit),
+                hasMore: endIndex < totalFiles,
+                currentLetter: letter || null
+            }
+        });
         
     } catch (error) {
         console.error('Error processing request:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Internal server error' });
-        }
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+// Enable compression for all responses
+router.use(compression());
 
 // Serve individual media files
 router.get('/images/:imageName', async (req, res) => {

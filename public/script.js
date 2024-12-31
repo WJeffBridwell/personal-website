@@ -22,34 +22,69 @@ console.log('Script file loaded and starting execution');
 
 // Initialize gallery functionality
 function initializeGallery() {
+    console.log('\n=== Initializing Gallery ===');
     // Only run once
-    if (window._galleryInitialized) return;
+    if (window._galleryInitialized) {
+        console.log('Gallery already initialized, skipping');
+        return;
+    }
+
+    // Check if gallery section exists on the page
+    const gallerySection = document.getElementById('gallery');
+    const imageGrid = document.getElementById('image-grid');
+    
+    console.log('Gallery elements check:', {
+        gallerySection: !!gallerySection,
+        imageGrid: !!imageGrid
+    });
+
+    if (!gallerySection || !imageGrid) {
+        console.log('Gallery elements not found, skipping initialization');
+        return;
+    }
+
     window._galleryInitialized = true;
 
-    // Verify we're on the gallery page
-    const isGalleryPage = document.title.includes('Gallery') || window.location.pathname.includes('gallery');
-    console.log('Is gallery page:', isGalleryPage);
-    console.log('Page title:', document.title);
-    console.log('Page URL:', window.location.href);
-    console.log('Page pathname:', window.location.pathname);
-
-    // Global state variables
+    // Initialize gallery state
     window._galleryState = {
-        currentImages: [],
+        currentPage: 1,
+        totalPages: 0,
         isLoading: false,
-        modal: null,
-        modalImg: null,
-        modalCaption: null,
-        closeBtn: null,
-        nextCursor: null
+        images: [],
+        hasMore: true,
+        initialized: false,
+        observer: null,
+        batchSize: 40,
+        loadedImages: new Set(),
+        backgroundLoading: true,
+        backgroundTimer: null,
+        maxConcurrentLoads: 2,
+        activeLoads: 0,
+        lastVisiblePage: 1
     };
+
+    console.log('Gallery state initialized:', window._galleryState);
     
     // Load initial images
     loadInitialImages();
+    console.log('=== Gallery Initialization Complete ===\n');
 }
 
-// Call initialize function
-initializeGallery();
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeGallery);
+} else {
+    initializeGallery();
+}
+
+// Also try on window load in case DOMContentLoaded was missed
+window.addEventListener('load', () => {
+    console.log('\n=== Window Loaded ===');
+    if (!window._galleryInitialized) {
+        console.log('Gallery not initialized yet, initializing now');
+        initializeGallery();
+    }
+});
 
 /**
  * Initializes the modal component with all necessary elements and event listeners
@@ -204,93 +239,69 @@ function closeModal() {
 }
 
 /**
- * Displays images in the gallery grid
- * @param {Array} images - Array of image objects to display
- */
-async function displayImages(images, append = false) {
-    const grid = document.getElementById('image-grid');
-    if (!grid) {
-        console.error('Image grid element not found');
-        return;
-    }
-    
-    // Clear existing images if not appending
-    if (!append) {
-        grid.innerHTML = '';
-    }
-    
-    try {
-        for (const image of images) {
-            const container = createImageContainer(image);
-            grid.appendChild(container);
-        }
-        
-        // Initialize all filters and sort buttons
-        initializeLetterFilter();
-        initializeSearchFilter();
-        initializeSortButtons();
-        
-    } catch (error) {
-        console.error('Error displaying images:', error);
-    }
-}
-
-/**
- * Creates an image container with all necessary elements and event listeners
+ * Creates an image container with thumbnail and caption
  * @param {Object} image - Image object containing url, name, and thumbnail
  * @returns {HTMLElement} The configured image container
  */
 function createImageContainer(image) {
-    console.log('Creating image container for:', image.name);
+    console.log('Creating container for image:', image.name);
     
     const container = document.createElement('div');
     container.className = 'image-container';
     
+    // Create image element
     const img = document.createElement('img');
-    img.src = image.thumbnailUrl || image.url;
+    img.src = image.thumbnailUrl;
     img.alt = image.name;
     img.loading = 'lazy';
     
-    // Create folder icon (right corner)
-    const folderIcon = document.createElement('div');
-    folderIcon.className = 'folder-icon';
-    const folderI = document.createElement('i');
-    folderI.className = 'fas fa-folder';
-    folderIcon.appendChild(folderI);
-    
-    // Create image icon (left corner)
-    const imageIcon = document.createElement('div');
-    imageIcon.className = 'image-icon';
-    const imageI = document.createElement('i');
-    imageI.className = 'fas fa-image';
-    imageIcon.appendChild(imageI);
-    
-    const nameLabel = document.createElement('div');
-    nameLabel.className = 'image-name';
-    nameLabel.textContent = image.name;
-    console.log('Created name label:', nameLabel.outerHTML);
-    
-    // Set up click handlers
-    container.addEventListener('click', (e) => {
-        if (!e.target.closest('.folder-icon') && !e.target.closest('.image-icon')) {
-            e.preventDefault();
-            e.stopPropagation();
-            openModal(image.url, image.name);
-        }
+    // Add load event listener
+    img.addEventListener('load', () => {
+        container.classList.add('loaded');
     });
     
+    // Add error event listener
+    img.addEventListener('error', () => {
+        console.error('Failed to load image:', image.thumbnailUrl);
+        container.classList.add('error');
+        img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"><path fill="%23ccc" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
+    });
+
+    // Create folder icon (upper right)
+    const folderIcon = document.createElement('div');
+    folderIcon.className = 'folder-icon';
+    folderIcon.innerHTML = '<i class="fas fa-folder"></i>';
     folderIcon.addEventListener('click', (e) => {
-        e.preventDefault();
         e.stopPropagation();
         searchImageInFinder(image.name);
     });
 
+    // Create image icon (upper left)
+    const imageIcon = document.createElement('div');
+    imageIcon.className = 'image-icon';
+    imageIcon.innerHTML = '<i class="fas fa-image"></i>';
     imageIcon.addEventListener('click', (e) => {
-        e.preventDefault();
         e.stopPropagation();
         window.location.href = `./content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
     });
+
+    // Create name label
+    const nameLabel = document.createElement('div');
+    nameLabel.className = 'image-name';
+    nameLabel.textContent = image.name;
     
+    // Add click handler for modal
+    container.addEventListener('click', () => {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        const modalCaption = document.getElementById('modalCaption');
+        
+        modalImg.src = image.url;
+        modalCaption.textContent = image.name;
+        modal.style.display = 'block';
+    });
+    
+    // Append elements
     container.appendChild(img);
     container.appendChild(folderIcon);
     container.appendChild(imageIcon);
@@ -300,23 +311,75 @@ function createImageContainer(image) {
 }
 
 /**
+ * Displays images in the grid
+ * @param {Array} images - Array of image objects to display
+ */
+async function displayImages(images, append = false) {
+    console.log(`Displaying ${images.length} images (append: ${append})`);
+    const grid = document.getElementById('image-grid');
+    
+    if (!grid) {
+        console.error('Image grid element not found');
+        return;
+    }
+    
+    if (!append) {
+        console.log('Clearing grid');
+        grid.innerHTML = '';
+        window._galleryState.loadedImages.clear();
+    }
+
+    // Create document fragment for better performance
+    const fragment = document.createDocumentFragment();
+    
+    // Create image containers in batches
+    const batchSize = 20;
+    for (let i = 0; i < images.length; i += batchSize) {
+        const batch = images.slice(i, i + batchSize);
+        
+        batch.forEach(image => {
+            if (!window._galleryState.loadedImages.has(image.name)) {
+                const container = createImageContainer(image);
+                fragment.appendChild(container);
+                window._galleryState.loadedImages.add(image.name);
+            }
+        });
+        
+        // Append batch and wait a frame to allow browser to render
+        grid.appendChild(fragment);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+    }
+    
+    // Make sure the load more trigger stays at the bottom
+    const loadMoreTrigger = document.querySelector('.load-more-trigger');
+    if (loadMoreTrigger) {
+        grid.appendChild(loadMoreTrigger);
+    }
+    
+    console.log('Images added to grid');
+}
+
+/**
  * Fetches images from the server
  * @param {string} cursor - Cursor for pagination
  * @param {number} limit - Number of images to fetch
  * @returns {Promise<Object>} Object containing images and next cursor
  */
-async function fetchImages(cursor = '', limit = 1000) {
-    try {
-        const response = await fetch(`/gallery/images?cursor=${encodeURIComponent(cursor)}&limit=${limit}`);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        return data;
-    } catch (error) {
-        console.error('Error fetching images:', error);
-        throw error;
+async function fetchImages(page = 1, limit = 100, letter = null) {
+    const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString()
+    });
+    
+    if (letter) {
+        params.append('letter', letter);
     }
+    
+    const response = await fetch(`/gallery/images?${params}`);
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
 }
 
 /**
@@ -336,36 +399,109 @@ async function searchImageInFinder(imageName) {
     }
 }
 
-// Load initial images and set up infinite scroll
-async function loadInitialImages() {
-    try {
-        window._galleryState.isLoading = true;
-        const data = await fetchImages();
-        await displayImages(data.images);
-        window._galleryState.nextCursor = data.nextCursor;
-        window._galleryState.isLoading = false;
-        
-        // Set up infinite scroll
-        const observer = new IntersectionObserver(async (entries) => {
-            const lastEntry = entries[0];
-            if (lastEntry.isIntersecting && window._galleryState.nextCursor && !window._galleryState.isLoading) {
-                window._galleryState.isLoading = true;
-                const data = await fetchImages(window._galleryState.nextCursor);
-                await displayImages(data.images, true);
-                window._galleryState.nextCursor = data.nextCursor;
-                window._galleryState.isLoading = false;
-            }
-        }, { threshold: 0.5 });
-        
-        // Observe the last image container
-        const containers = document.getElementsByClassName('image-container');
-        if (containers.length > 0) {
-            observer.observe(containers[containers.length - 1]);
-        }
-    } catch (error) {
-        console.error('Error loading initial images:', error);
-        window._galleryState.isLoading = false;
+// Show loading skeleton
+function showLoadingSkeleton(count = 8) {
+    const grid = document.getElementById('image-grid');
+    for (let i = 0; i < count; i++) {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'image-container skeleton';
+        skeleton.innerHTML = '<div class="skeleton-img"></div><div class="skeleton-text"></div>';
+        grid.appendChild(skeleton);
     }
+}
+
+// Remove loading skeletons
+function removeLoadingSkeletons() {
+    const skeletons = document.querySelectorAll('.skeleton');
+    skeletons.forEach(skeleton => skeleton.remove());
+}
+
+// Set up infinite scroll with intersection observer
+function setupInfiniteScroll() {
+    console.log('Setting up infinite scroll');
+    
+    // Remove existing trigger if any
+    const existingTrigger = document.querySelector('.load-more-trigger');
+    if (existingTrigger) {
+        existingTrigger.remove();
+    }
+
+    // Disconnect existing observer
+    if (window._galleryState.observer) {
+        window._galleryState.observer.disconnect();
+    }
+
+    // Create and style loading trigger
+    const loadMoreTrigger = document.createElement('div');
+    loadMoreTrigger.className = 'load-more-trigger';
+    loadMoreTrigger.style.height = '20px';
+    loadMoreTrigger.style.width = '100%';
+    loadMoreTrigger.style.display = 'flex';
+    loadMoreTrigger.style.justifyContent = 'center';
+    loadMoreTrigger.style.alignItems = 'center';
+    loadMoreTrigger.style.padding = '20px';
+    
+    // Create loading indicator
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'loading-indicator';
+    loadingIndicator.style.display = 'none';
+    loadingIndicator.innerHTML = `
+        <div class="spinner"></div>
+        <span>Loading more images...</span>
+    `;
+    loadMoreTrigger.appendChild(loadingIndicator);
+
+    // Add trigger to the grid
+    const grid = document.getElementById('image-grid');
+    grid.appendChild(loadMoreTrigger);
+
+    const loadMoreImages = async (entries) => {
+        const trigger = entries[0];
+        
+        if (trigger.isIntersecting && !window._galleryState.isLoading && window._galleryState.hasMore) {
+            console.log('Trigger intersecting, loading more images...');
+            loadingIndicator.style.display = 'flex';
+            
+            try {
+                window._galleryState.isLoading = true;
+                window._galleryState.currentPage++;
+                
+                console.log('Fetching page:', window._galleryState.currentPage);
+                const response = await fetchImages(window._galleryState.currentPage, 40); // Load more per page
+                
+                if (response && response.images) {
+                    console.log('Received images:', response.images.length);
+                    window._galleryState.hasMore = response.pagination.hasMore;
+                    await displayImages(response.images, true);
+                    
+                    // Update total count display
+                    const totalCountElement = document.querySelector('.total-count');
+                    if (totalCountElement) {
+                        const loadedCount = window._galleryState.loadedImages.size;
+                        totalCountElement.textContent = `${loadedCount} / ${response.pagination.total} images`;
+                    }
+                    
+                    console.log('Has more:', window._galleryState.hasMore);
+                }
+            } catch (error) {
+                console.error('Error loading more images:', error);
+            } finally {
+                window._galleryState.isLoading = false;
+                loadingIndicator.style.display = 'none';
+            }
+        }
+    };
+
+    // Create new observer with larger rootMargin
+    window._galleryState.observer = new IntersectionObserver(loadMoreImages, {
+        root: null,
+        rootMargin: '500px', // Start loading earlier
+        threshold: 0
+    });
+
+    // Start observing
+    window._galleryState.observer.observe(loadMoreTrigger);
+    console.log('Infinite scroll setup complete');
 }
 
 /**
@@ -414,143 +550,219 @@ function initializeSortButtons() {
  * Initializes the letter filter component with all necessary elements and event listeners
  * Handles cleanup of existing filters and sets up error boundaries
  */
-function initializeLetterFilter() {
+async function initializeLetterFilter() {
+    console.log('Initializing letter filter');
     const letterButtons = document.querySelector('.letter-buttons');
-    const usedLetters = new Set();
+    if (!letterButtons) return;
     
-    // Get all image containers and collect first letters
-    const imageContainers = document.querySelectorAll('.image-container');
-    imageContainers.forEach(container => {
-        const imageName = container.querySelector('img').alt;
-        if (imageName) {
-            const firstLetter = imageName.charAt(0).toUpperCase();
-            if (/[A-Z]/.test(firstLetter)) {
-                usedLetters.add(firstLetter);
-            }
-        }
-    });
-    
-    // Create and add letter buttons
-    const sortedLetters = Array.from(usedLetters).sort();
-    sortedLetters.forEach(letter => {
-        const button = document.createElement('button');
-        button.className = 'letter-btn';
-        button.textContent = letter;
-        button.dataset.letter = letter;
-        letterButtons.appendChild(button);
-    });
-    
-    // Add click event listeners
-    letterButtons.addEventListener('click', (e) => {
-        if (e.target.classList.contains('letter-btn')) {
-            // Update active state
-            document.querySelectorAll('.letter-btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            e.target.classList.add('active');
-            
-            // Filter images
-            const selectedLetter = e.target.dataset.letter;
-            filterImagesByLetter(selectedLetter);
-        }
-    });
-}
-
-// Filter images by letter
-function filterImagesByLetter(letter) {
-    const searchInput = document.getElementById('search-input');
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    
-    const imageContainers = document.querySelectorAll('.image-container');
-    const activeSort = document.querySelector('.sort-btn.active')?.dataset.sort;
-    
-    imageContainers.forEach(container => {
-        // Skip if container is managed by Collections
-        if (container.hasAttribute('data-in-collection')) return;
+    try {
+        // Fetch all available letters
+        const response = await fetch('/gallery/letters');
+        const data = await response.json();
         
-        const imageName = container.querySelector('img').alt;
-        const firstLetter = imageName.charAt(0).toUpperCase();
-        const matchesSearch = !searchTerm || imageName.toLowerCase().includes(searchTerm);
-        
-        if (letter === 'all') {
-            container.classList.toggle('hidden', !matchesSearch);
-        } else {
-            const matchesLetter = firstLetter === letter;
-            container.classList.toggle('hidden', !(matchesLetter && matchesSearch));
+        if (!data.letters || !Array.isArray(data.letters)) {
+            console.error('Invalid letters data:', data);
+            return;
         }
-    });
-    
-    // Maintain sort order if active
-    if (activeSort) {
-        const sortButtons = document.querySelectorAll('.sort-btn');
-        sortButtons.forEach(btn => {
-            if (btn.dataset.sort === activeSort) {
-                btn.click();
-            }
+        
+        // Clear existing buttons
+        letterButtons.innerHTML = '';
+        
+        // Create "All" button
+        const allButton = document.createElement('button');
+        allButton.className = 'letter-btn active';
+        allButton.textContent = 'All';
+        allButton.addEventListener('click', () => filterByLetter(null));
+        letterButtons.appendChild(allButton);
+        
+        // Create letter buttons
+        data.letters.forEach(letter => {
+            const button = document.createElement('button');
+            button.className = 'letter-btn';
+            button.textContent = letter;
+            button.addEventListener('click', () => filterByLetter(letter));
+            letterButtons.appendChild(button);
         });
+        
+        // Update total count
+        const totalCountElement = document.querySelector('.total-count');
+        if (totalCountElement) {
+            totalCountElement.textContent = `0 / ${data.total} images`;
+        }
+        
+    } catch (error) {
+        console.error('Error initializing letter filter:', error);
     }
 }
 
-// Filter functions
-if (typeof window._filterFunctions === 'undefined') {
-    window._filterFunctions = {
-        filterImagesByLetter,
-        initializeLetterFilter,
-        filterImagesBySearch: function(searchTerm) {
-            const imageContainers = document.querySelectorAll('.image-container');
-            const searchLower = searchTerm.toLowerCase().trim();
+// Filter images by letter
+async function filterByLetter(letter) {
+    console.log('Filtering by letter:', letter);
+    
+    // Update active button
+    const buttons = document.querySelectorAll('.letter-btn');
+    buttons.forEach(btn => {
+        btn.classList.toggle('active', 
+            letter === null ? btn.textContent === 'All' : btn.textContent === letter
+        );
+    });
+    
+    // Reset gallery state
+    window._galleryState.currentPage = 1;
+    window._galleryState.hasMore = true;
+    window._galleryState.loadedImages.clear();
+    
+    try {
+        // Fetch filtered images
+        const response = await fetchImages(1, window._galleryState.batchSize, letter);
+        
+        if (response && response.images) {
+            await displayImages(response.images);
             
-            imageContainers.forEach(container => {
-                const nameLabel = container.querySelector('.image-name');
-                if (!nameLabel) return;
-                
-                const imageName = nameLabel.textContent;
-                // Show images where the name contains the search term anywhere
-                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
-                container.classList.toggle('hidden', !isVisible);
-            });
-        },
-        initializeSearchFilter,
-        fetchImages,
-        displayImages,
-        createImageContainer,
-        initializeModal,
-        openModal,
-        closeModal
-    };
+            // Update total count
+            const totalCountElement = document.querySelector('.total-count');
+            if (totalCountElement) {
+                totalCountElement.textContent = `${response.images.length} / ${response.pagination.total} images`;
+            }
+            
+            // Reset infinite scroll
+            setupInfiniteScroll();
+            
+            // Restart background loading with new filter
+            startBackgroundLoading();
+        }
+    } catch (error) {
+        console.error('Error filtering images:', error);
+    }
 }
 
-// Export functions for testing
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        initializeGallery,
-        initializeModal,
-        openModal,
-        closeModal,
-        displayImages,
-        createImageContainer,
-        fetchImages,
-        searchImageInFinder,
-        initializeSortButtons,
-        initializeLetterFilter,
-        filterImagesByLetter,
-        initializeSearchFilter,
-        setupModalEventListeners
-    };
-} else if (typeof window !== 'undefined') {
-    // Initialize when DOM is ready
-    document.addEventListener('DOMContentLoaded', async () => {
-        try {
-            // const images = await fetchImages();
-            // await displayImages(images);
-        } catch (error) {
-            console.error('Failed to initialize gallery:', error);
-            const grid = document.getElementById('image-grid');
-            if (grid) {
-                grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
+// Background loading function
+async function loadInBackground() {
+    if (!window._galleryState.backgroundLoading || 
+        !window._galleryState.hasMore || 
+        window._galleryState.isLoading ||
+        window._galleryState.activeLoads >= window._galleryState.maxConcurrentLoads) {
+        return;
+    }
+
+    try {
+        window._galleryState.activeLoads++;
+        const nextPage = window._galleryState.currentPage + 1;
+        console.log('Background loading page:', nextPage);
+        
+        const response = await fetchImages(nextPage, window._galleryState.batchSize);
+        
+        if (response && response.images && response.images.length > 0) {
+            window._galleryState.currentPage = nextPage;
+            window._galleryState.hasMore = response.pagination.hasMore;
+            
+            // Pre-load images in memory
+            const imagePromises = response.images.map(image => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                    img.src = image.thumbnailUrl;
+                });
+            });
+            
+            // Wait for images to load in memory
+            await Promise.all(imagePromises);
+            
+            // Add to DOM if we're still in background loading mode
+            if (window._galleryState.backgroundLoading) {
+                await displayImages(response.images, true);
+                
+                // Update total count
+                const totalCountElement = document.querySelector('.total-count');
+                if (totalCountElement) {
+                    totalCountElement.textContent = `${window._galleryState.loadedImages.size} / ${response.pagination.total} images`;
+                }
+            }
+            
+            // Schedule next background load
+            if (window._galleryState.hasMore) {
+                setTimeout(loadInBackground, 500); // Throttle to avoid overwhelming browser
             }
         }
-    });
+    } catch (error) {
+        console.error('Background loading error:', error);
+    } finally {
+        window._galleryState.activeLoads--;
+    }
+}
+
+// Start background loading
+function startBackgroundLoading() {
+    if (window._galleryState.backgroundTimer) {
+        clearTimeout(window._galleryState.backgroundTimer);
+    }
+    
+    window._galleryState.backgroundLoading = true;
+    window._galleryState.backgroundTimer = setTimeout(loadInBackground, 1000);
+}
+
+// Stop background loading
+function stopBackgroundLoading() {
+    window._galleryState.backgroundLoading = false;
+    if (window._galleryState.backgroundTimer) {
+        clearTimeout(window._galleryState.backgroundTimer);
+        window._galleryState.backgroundTimer = null;
+    }
+}
+
+// Load initial images
+async function loadInitialImages() {
+    console.log('\n=== Loading Initial Images ===');
+    
+    if (window._galleryState.isLoading) {
+        console.log('Already loading images, skipping');
+        return;
+    }
+    
+    try {
+        window._galleryState.isLoading = true;
+        showLoadingSkeleton();
+        
+        // Add total count display
+        const header = document.querySelector('.gallery-header');
+        const totalCount = document.createElement('div');
+        totalCount.className = 'total-count';
+        totalCount.textContent = 'Loading...';
+        header.appendChild(totalCount);
+        
+        // Fetch first page of images
+        const response = await fetchImages(1, window._galleryState.batchSize);
+        
+        if (response && response.images) {
+            window._galleryState.images = response.images;
+            window._galleryState.totalPages = response.pagination.totalPages;
+            window._galleryState.hasMore = response.pagination.hasMore;
+            
+            // Update total count
+            totalCount.textContent = `${response.images.length} / ${response.pagination.total} images`;
+            
+            // Display images
+            await displayImages(response.images);
+            
+            // Initialize filters after images are loaded
+            await initializeLetterFilter();
+            initializeSortButtons();
+            
+            // Set up infinite scroll
+            setupInfiniteScroll();
+            
+            // Start background loading
+            startBackgroundLoading();
+            
+            window._galleryState.initialized = true;
+        }
+    } catch (error) {
+        console.error('Error loading initial images:', error);
+    } finally {
+        window._galleryState.isLoading = false;
+        removeLoadingSkeletons();
+    }
 }
 
 /**
@@ -623,7 +835,64 @@ function initializeSearchFilter() {
     }
 }
 
-// Also try on window load
-window.addEventListener('load', () => {
-    console.log('\n=== Window Loaded ===');
-});
+// Filter functions
+if (typeof window._filterFunctions === 'undefined') {
+    window._filterFunctions = {
+        filterImagesByLetter,
+        initializeLetterFilter,
+        filterImagesBySearch: function(searchTerm) {
+            const imageContainers = document.querySelectorAll('.image-container');
+            const searchLower = searchTerm.toLowerCase().trim();
+            
+            imageContainers.forEach(container => {
+                const nameLabel = container.querySelector('.image-name');
+                if (!nameLabel) return;
+                
+                const imageName = nameLabel.textContent;
+                // Show images where the name contains the search term anywhere
+                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
+                container.classList.toggle('hidden', !isVisible);
+            });
+        },
+        initializeSearchFilter,
+        fetchImages,
+        displayImages,
+        createImageContainer,
+        initializeModal,
+        openModal,
+        closeModal
+    };
+}
+
+// Export functions for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        initializeGallery,
+        initializeModal,
+        openModal,
+        closeModal,
+        displayImages,
+        createImageContainer,
+        fetchImages,
+        searchImageInFinder,
+        initializeSortButtons,
+        initializeLetterFilter,
+        filterImagesByLetter,
+        initializeSearchFilter,
+        setupModalEventListeners
+    };
+} else if (typeof window !== 'undefined') {
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            // const images = await fetchImages();
+            // await displayImages(images);
+        } catch (error) {
+            console.error('Failed to initialize gallery:', error);
+            const grid = document.getElementById('image-grid');
+            if (grid) {
+                grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
+            }
+        }
+    });
+}

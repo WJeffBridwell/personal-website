@@ -123,45 +123,23 @@
             </section>
 
             <section id="gallery" class="gallery">
-                <div class="header-band">
-                    <h2>Collections</h2>
-                </div>
-                <div class="collections-container">
-                    <div class="controls">
-                        <div class="search-row">
-                            <div class="search-filter">
-                                <span class="filter-label">Search images:</span>
-                                <div class="search-input-container">
-                                    <input type="text" id="search-input" placeholder="Type to search..." />
-                                </div>
-                            </div>
-                            <div class="sort-buttons">
-                                <button class="sort-btn" data-sort="asc">
-                                    <i class="fas fa-sort-alpha-down"></i>
-                                    Sort A-Z
-                                </button>
-                                <button class="sort-btn" data-sort="desc">
-                                    <i class="fas fa-sort-alpha-down-alt"></i>
-                                    Sort Z-A
-                                </button>
-                            </div>
-                        </div>
-                        <div class="az-filter" id="az-filter">
-                            <span class="filter-label">Filter by letter:</span>
-                            <div class="letter-buttons">
-                                <button class="letter-btn active" data-letter="all">All</button>
-                                <!-- Letters will be added dynamically -->
-                            </div>
-                        </div>
+                <div class="gallery-header">
+                    <div class="search-container">
+                        <input type="text" id="imageSearch" placeholder="Search images...">
                     </div>
-                    <div class="image-grid" id="image-grid"></div>
+                    <div class="sort-container">
+                        <button id="sortAZ" class="sort-btn">Sort A-Z</button>
+                        <button id="sortZA" class="sort-btn">Sort Z-A</button>
+                    </div>
                 </div>
-                
-                <!-- Image Modal -->
-                <div id="imageModal" class="modal">
-                    <span class="modal-close">&times;</span>
-                    <img id="modalImage" class="modal-content">
-                    <div id="modalCaption"></div>
+                <div class="letter-filter">
+                    <button class="letter-btn active" data-letter="all">All</button>
+                    <div class="letter-buttons"></div>
+                </div>
+                <div id="image-grid"></div>
+                <div class="loading-indicator" style="display: none">
+                    <div class="spinner"></div>
+                    <span>Loading more images...</span>
                 </div>
             </section>
 
