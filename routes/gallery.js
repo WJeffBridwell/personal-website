@@ -214,6 +214,39 @@ router.get('/letters', async (req, res) => {
     }
 });
 
+// Get all available tags
+router.get('/tags', async (req, res) => {
+    try {
+        const directoryPath = '/Volumes/VideosNew/Models';
+        
+        // Update cache if needed
+        if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
+            await updateCache(directoryPath);
+        }
+        
+        // Get all unique tags from cached images
+        const tags = new Set();
+        for (const [filename, metadata] of contentCache.files.entries()) {
+            const fileTags = generateTags(filename);
+            fileTags.forEach(tag => tags.add(tag));
+            console.log('Tags for', filename, ':', fileTags);
+        }
+        
+        // Convert to sorted array
+        const sortedTags = Array.from(tags).sort();
+        console.log('Total unique tags:', sortedTags.length, sortedTags);
+        
+        res.json({
+            tags: sortedTags,
+            total: sortedTags.length
+        });
+        
+    } catch (error) {
+        console.error('Error getting tags:', error);
+        res.status(500).json({ error: 'Failed to get tags', details: error.message });
+    }
+});
+
 // Gallery images endpoint with optimized loading
 router.get('/images', async (req, res) => {
     console.log('\n=== Gallery Images Request ===');
@@ -256,7 +289,8 @@ router.get('/images', async (req, res) => {
             thumbnailUrl: `/gallery/images/${encodeURIComponent(file.name)}?thumbnail=true`,
             size: file.size,
             modified: file.modified,
-            type: file.type
+            type: file.type,
+            tags: generateTags(file.name)
         }));
 
         res.json({
@@ -277,6 +311,39 @@ router.get('/images', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
+
+// Helper function to generate tags from filename
+function generateTags(filename) {
+    const tags = new Set();
+    
+    // Extract potential tags from filename
+    const parts = filename.toLowerCase().split(/[-_\s]/);
+    
+    // Add tags based on file characteristics
+    if (/\.(jpg|jpeg)$/i.test(filename)) tags.add('jpeg');
+    if (/\.png$/i.test(filename)) tags.add('png');
+    if (/\.gif$/i.test(filename)) tags.add('gif');
+    
+    // Add tags based on common patterns
+    if (/\d{4}/.test(filename)) tags.add('dated');
+    if (/^IMG_/.test(filename)) tags.add('camera');
+    if (/^DSC/.test(filename)) tags.add('digital');
+    if (/screenshot/i.test(filename)) tags.add('screenshot');
+    if (/edited|processed/i.test(filename)) tags.add('edited');
+    
+    // Add tags based on filename parts
+    parts.forEach(part => {
+        if (part.length > 2) {  // Only add parts longer than 2 characters
+            if (/^[0-9]+$/.test(part)) {  // If it's a number
+                if (part.length === 4) tags.add('year');
+            } else if (/^[a-z]+$/.test(part)) {  // If it's a word
+                tags.add(part);
+            }
+        }
+    });
+    
+    return Array.from(tags);
+}
 
 // Enable compression for all responses
 router.use(compression());

@@ -7,6 +7,145 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="modal.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <style>
+        /* Image Gallery Styles */
+        .image-container {
+            position: relative;
+            margin: 10px;
+            background: #fff;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 200px;
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            flex: 1;
+        }
+
+        .folder-icon,
+        .image-icon {
+            position: absolute;
+            top: 10px;
+            width: 30px;
+            height: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .folder-icon {
+            right: 10px;
+        }
+
+        .image-icon {
+            left: 10px;
+        }
+
+        .image-info {
+            display: flex;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            min-height: 36px;
+            z-index: 1;
+        }
+
+        .image-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .tag-dots {
+            position: absolute;
+            bottom: 44px;
+            right: 8px;
+            display: flex;
+            gap: 4px;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .tag-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            cursor: help;
+            transition: transform 0.2s;
+        }
+
+        .tag-dot:hover {
+            transform: scale(1.5);
+        }
+
+        #image-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 20px;
+            justify-content: center;
+        }
+
+        .search-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        #search-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        #tag-filter {
+            min-width: 200px;
+        }
+
+        .select2-container {
+            z-index: 1000;
+        }
+
+        .select2-selection__choice {
+            display: flex !important;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px !important;
+        }
+
+        .select2-selection__choice:before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
 <body>
     <nav>
@@ -125,7 +264,10 @@
             <section id="gallery" class="gallery">
                 <div class="gallery-header">
                     <div class="search-container">
-                        <input type="text" id="imageSearch" placeholder="Search images...">
+                        <input type="text" id="search-input" placeholder="Search images...">
+                        <select id="tag-filter" multiple="multiple">
+                            <!-- Tags will be populated dynamically -->
+                        </select>
                     </div>
                     <div class="sort-container">
                         <button id="sortAZ" class="sort-btn">Sort A-Z</button>
@@ -161,6 +303,61 @@
         </footer>
     </div>
 
+    <script>
+        // Function to generate consistent color for a tag
+        function getTagColor(tag) {
+            let hash = 0;
+            for (let i = 0; i < tag.length; i++) {
+                hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = hash % 360;
+            return `hsl(${hue}, 70%, 50%)`;
+        }
+
+        // Function to create image tile with tag dots
+        function createImageTile(image) {
+            const tile = document.createElement('div');
+            tile.className = 'image-container';
+            
+            // Create image element
+            const img = document.createElement('img');
+            img.src = image.thumbnailUrl;
+            img.alt = image.name;
+            img.loading = 'lazy';
+            tile.appendChild(img);
+            
+            // Create info bar
+            const info = document.createElement('div');
+            info.className = 'image-info';
+            
+            // Add image name
+            const name = document.createElement('div');
+            name.className = 'image-name';
+            name.textContent = image.name;
+            info.appendChild(name);
+            
+            // Add tag dots if present
+            if (image.tags && image.tags.length > 0) {
+                const dots = document.createElement('div');
+                dots.className = 'tag-dots';
+                
+                image.tags.forEach(tag => {
+                    const dot = document.createElement('div');
+                    dot.className = 'tag-dot';
+                    dot.title = tag;
+                    dot.style.backgroundColor = getTagColor(tag);
+                    dots.appendChild(dot);
+                });
+                
+                info.appendChild(dots);
+            }
+            
+            tile.appendChild(info);
+            return tile;
+        }
+    </script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

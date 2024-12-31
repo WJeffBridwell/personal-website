@@ -244,16 +244,17 @@ function closeModal() {
  * @returns {HTMLElement} The configured image container
  */
 function createImageContainer(image) {
-    console.log('Creating container for image:', image.name);
+    console.log('Creating container for image:', image);
     
     const container = document.createElement('div');
     container.className = 'image-container';
     
     // Create image element
     const img = document.createElement('img');
-    img.src = image.thumbnailUrl;
+    img.src = `/gallery/images/${encodeURIComponent(image.name)}?thumbnail=true`;
     img.alt = image.name;
     img.loading = 'lazy';
+    container.appendChild(img);
     
     // Add load event listener
     img.addEventListener('load', () => {
@@ -262,12 +263,12 @@ function createImageContainer(image) {
     
     // Add error event listener
     img.addEventListener('error', () => {
-        console.error('Failed to load image:', image.thumbnailUrl);
+        console.error('Failed to load image:', image.name);
         container.classList.add('error');
         img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"><path fill="%23ccc" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
     });
 
-    // Create folder icon (upper right)
+    // Create folder icon
     const folderIcon = document.createElement('div');
     folderIcon.className = 'folder-icon';
     folderIcon.innerHTML = '<i class="fas fa-folder"></i>';
@@ -275,88 +276,117 @@ function createImageContainer(image) {
         e.stopPropagation();
         searchImageInFinder(image.name);
     });
+    container.appendChild(folderIcon);
 
-    // Create image icon (upper left)
+    // Create image icon
     const imageIcon = document.createElement('div');
     imageIcon.className = 'image-icon';
     imageIcon.innerHTML = '<i class="fas fa-image"></i>';
     imageIcon.addEventListener('click', (e) => {
         e.stopPropagation();
-        window.location.href = `./content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
+        window.location.href = `/content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
     });
-
-    // Create name label
-    const nameLabel = document.createElement('div');
-    nameLabel.className = 'image-name';
-    nameLabel.textContent = image.name;
-    
-    // Add click handler for modal
-    container.addEventListener('click', () => {
-        const modal = document.getElementById('imageModal');
-        const modalImg = document.getElementById('modalImage');
-        const modalCaption = document.getElementById('modalCaption');
-        
-        modalImg.src = image.url;
-        modalCaption.textContent = image.name;
-        modal.style.display = 'block';
-    });
-    
-    // Append elements
-    container.appendChild(img);
-    container.appendChild(folderIcon);
     container.appendChild(imageIcon);
-    container.appendChild(nameLabel);
+
+    // Create info bar
+    const info = document.createElement('div');
+    info.className = 'image-info';
     
+    // Add image name
+    const name = document.createElement('div');
+    name.className = 'image-name';
+    name.textContent = image.name;
+    info.appendChild(name);
+    
+    // Add tag dots if present
+    if (image.tags && image.tags.length > 0) {
+        const dots = document.createElement('div');
+        dots.className = 'tag-dots';
+        
+        image.tags.forEach(tag => {
+            const dot = document.createElement('div');
+            dot.className = 'tag-dot';
+            dot.title = tag;
+            dot.style.backgroundColor = getTagColor(tag);
+            dots.appendChild(dot);
+        });
+        
+        container.appendChild(dots);
+    }
+    
+    container.appendChild(info);
     return container;
+}
+
+// Helper function to generate tag colors
+function getTagColor(tag) {
+    // Define specific colors for common tags
+    const tagColors = {
+        'jpeg': '#4CAF50',      // Green
+        'png': '#2196F3',       // Blue
+        'gif': '#9C27B0',       // Purple
+        'dated': '#FF9800',     // Orange
+        'camera': '#E91E63',    // Pink
+        'digital': '#00BCD4',   // Cyan
+        'screenshot': '#795548', // Brown
+        'edited': '#607D8B',    // Blue Grey
+        'year': '#FF9800'       // Orange
+    };
+
+    // If we have a predefined color, use it
+    if (tagColors[tag]) {
+        return tagColors[tag];
+    }
+
+    // Otherwise generate a consistent color based on the tag name
+    let hash = 0;
+    for (let i = 0; i < tag.length; i++) {
+        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Generate HSL color with good saturation and lightness
+    const hue = hash % 360;
+    return `hsl(${hue}, 65%, 50%)`;
+}
+
+// Helper function to open image in new tab
+function openImageInNewTab(url) {
+    window.open(url, '_blank');
 }
 
 /**
  * Displays images in the grid
  * @param {Array} images - Array of image objects to display
  */
-async function displayImages(images, append = false) {
-    console.log(`Displaying ${images.length} images (append: ${append})`);
+async function displayImages(images, skipExisting = false) {
     const grid = document.getElementById('image-grid');
-    
     if (!grid) {
         console.error('Image grid element not found');
         return;
     }
-    
-    if (!append) {
-        console.log('Clearing grid');
+
+    if (!skipExisting) {
         grid.innerHTML = '';
         window._galleryState.loadedImages.clear();
     }
 
-    // Create document fragment for better performance
     const fragment = document.createDocumentFragment();
     
-    // Create image containers in batches
-    const batchSize = 20;
-    for (let i = 0; i < images.length; i += batchSize) {
-        const batch = images.slice(i, i + batchSize);
+    for (const image of images) {
+        if (skipExisting && window._galleryState.loadedImages.has(image.name)) continue;
+        window._galleryState.loadedImages.add(image.name);
         
-        batch.forEach(image => {
-            if (!window._galleryState.loadedImages.has(image.name)) {
-                const container = createImageContainer(image);
-                fragment.appendChild(container);
-                window._galleryState.loadedImages.add(image.name);
-            }
-        });
-        
-        // Append batch and wait a frame to allow browser to render
-        grid.appendChild(fragment);
-        await new Promise(resolve => requestAnimationFrame(resolve));
+        const container = createImageContainer(image);
+        fragment.appendChild(container);
     }
+    
+    grid.appendChild(fragment);
     
     // Make sure the load more trigger stays at the bottom
     const loadMoreTrigger = document.querySelector('.load-more-trigger');
     if (loadMoreTrigger) {
         grid.appendChild(loadMoreTrigger);
     }
-    
-    console.log('Images added to grid');
 }
 
 /**
@@ -662,7 +692,7 @@ async function loadInBackground() {
                     const img = new Image();
                     img.onload = () => resolve();
                     img.onerror = () => resolve();
-                    img.src = image.thumbnailUrl;
+                    img.src = `/gallery/images/${encodeURIComponent(image.name)}?thumbnail=true`;
                 });
             });
             
@@ -748,6 +778,7 @@ async function loadInitialImages() {
             // Initialize filters after images are loaded
             await initializeLetterFilter();
             initializeSortButtons();
+            await initializeTagFilter();
             
             // Set up infinite scroll
             setupInfiniteScroll();
@@ -763,6 +794,119 @@ async function loadInitialImages() {
         window._galleryState.isLoading = false;
         removeLoadingSkeletons();
     }
+}
+
+async function initializeTagFilter() {
+    try {
+        console.log('Initializing tag filter...');
+        // Wait for jQuery and Select2 to be loaded
+        if (typeof $ === 'undefined' || typeof $.fn.select2 === 'undefined') {
+            console.error('jQuery or Select2 not loaded');
+            return;
+        }
+
+        // Fetch available tags
+        const response = await fetch('/gallery/tags');
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.details || 'Failed to fetch tags');
+        }
+        
+        const data = await response.json();
+        console.log('Received tags:', data);
+        
+        const tagFilter = $('#tag-filter');
+        if (tagFilter.length === 0) {
+            console.error('#tag-filter element not found');
+            return;
+        }
+        
+        // Clear existing options
+        tagFilter.empty();
+        
+        // Add options
+        data.tags.forEach(tag => {
+            const option = new Option(tag, tag);
+            const color = getTagColor(tag);
+            $(option).attr('data-color', color);
+            tagFilter.append(option);
+        });
+        
+        console.log('Initializing Select2...');
+        // Initialize Select2
+        tagFilter.select2({
+            placeholder: 'Filter by tags...',
+            allowClear: true,
+            templateSelection: formatTagSelection,
+            templateResult: formatTagOption,
+            width: '200px'
+        });
+        
+        // Handle tag selection
+        tagFilter.on('change', function() {
+            const selectedTags = $(this).val() || [];
+            console.log('Selected tags:', selectedTags);
+            filterImagesByTags(selectedTags);
+        });
+        
+        console.log('Tag filter initialized successfully');
+    } catch (error) {
+        console.error('Error initializing tag filter:', error);
+    }
+}
+
+// Format tag options in dropdown
+function formatTagOption(tag) {
+    if (!tag.id) return tag.text;
+    
+    const color = $(tag.element).data('color');
+    return $(`<span style="display: flex; align-items: center; gap: 8px;">
+        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${color}; border: 1px solid rgba(0,0,0,0.1);"></span>
+        <span>${tag.text}</span>
+    </span>`);
+}
+
+// Format selected tags
+function formatTagSelection(tag) {
+    if (!tag.id) return tag.text;
+    
+    const color = $(tag.element).data('color');
+    return $(`<span style="display: flex; align-items: center; gap: 4px;">
+        <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${color}; border: 1px solid rgba(0,0,0,0.1);"></span>
+        <span>${tag.text}</span>
+    </span>`);
+}
+
+// Filter images by selected tags
+function filterImagesByTags(selectedTags) {
+    const containers = document.querySelectorAll('.image-container');
+    
+    containers.forEach(container => {
+        const dots = container.querySelector('.tag-dots');
+        const tags = dots ? Array.from(dots.children).map(dot => dot.title) : [];
+        
+        if (selectedTags.length === 0 || selectedTags.every(tag => tags.includes(tag))) {
+            container.style.display = '';
+        } else {
+            container.style.display = 'none';
+        }
+    });
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            // const images = await fetchImages();
+            // await displayImages(images);
+        } catch (error) {
+            console.error('Failed to initialize gallery:', error);
+            const grid = document.getElementById('image-grid');
+            if (grid) {
+                grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
+            }
+        }
+    });
 }
 
 /**
@@ -895,4 +1039,15 @@ if (typeof module !== 'undefined' && module.exports) {
             }
         }
     });
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeGallery();
+        initializeTagFilter();
+    });
+} else {
+    initializeGallery();
+    initializeTagFilter();
 }
