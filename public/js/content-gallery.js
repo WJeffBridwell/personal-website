@@ -18,6 +18,7 @@ export class ContentGallery {
         this.contentPlayer = null;
         this.searchQuery = '';
         this.sortBy = 'name-asc';
+        this.selectedTag = '';
 
         this.galleryInstance = new Gallery(this.galleryGrid);
         this.initializeControls();
@@ -33,10 +34,17 @@ export class ContentGallery {
             });
         }
 
-        // Sort buttons
-        const sortNameBtn = document.getElementById('sort-name');
-        const sortDateBtn = document.getElementById('sort-date');
+        // Tag filter
+        const tagFilter = document.getElementById('tag-filter');
+        if (tagFilter) {
+            tagFilter.addEventListener('change', (e) => {
+                this.selectedTag = e.target.value;
+                this.renderContent();
+            });
+        }
 
+        // Sort button
+        const sortNameBtn = document.getElementById('sort-name');
         if (sortNameBtn) {
             sortNameBtn.addEventListener('click', () => {
                 this.sortBy = this.sortBy === 'name-asc' ? 'name-desc' : 'name-asc';
@@ -44,41 +52,38 @@ export class ContentGallery {
                 this.renderContent();
             });
         }
-
-        if (sortDateBtn) {
-            sortDateBtn.addEventListener('click', () => {
-                this.sortBy = this.sortBy === 'date-asc' ? 'date-desc' : 'date-asc';
-                this.updateSortButtons();
-                this.renderContent();
-            });
-        }
     }
 
-    updateSortButtons() {
-        const sortNameBtn = document.getElementById('sort-name');
-        const sortDateBtn = document.getElementById('sort-date');
+    updateTagFilter() {
+        const tagFilter = document.getElementById('tag-filter');
+        if (!tagFilter) return;
 
-        // Remove active class from all buttons
-        [sortNameBtn, sortDateBtn].forEach(btn => {
-            if (btn) btn.classList.remove('active');
+        // Get unique tags from all content
+        const allTags = new Set();
+        this.content.forEach(item => {
+            if (item.content_tags && Array.isArray(item.content_tags)) {
+                item.content_tags.forEach(tag => allTags.add(tag));
+            }
         });
 
-        // Add icon to indicate sort direction
-        if (this.sortBy.startsWith('name')) {
-            if (sortNameBtn) {
-                sortNameBtn.classList.add('active');
-                sortNameBtn.innerHTML = `Sort by Name ${this.sortBy === 'name-asc' ? '↑' : '↓'}`;
-            }
-        } else if (this.sortBy.startsWith('date')) {
-            if (sortDateBtn) {
-                sortDateBtn.classList.add('active');
-                sortDateBtn.innerHTML = `Sort by Date ${this.sortBy === 'date-asc' ? '↑' : '↓'}`;
-            }
+        // Sort tags alphabetically
+        const sortedTags = Array.from(allTags).sort();
+
+        // Clear existing options except "All Tags"
+        while (tagFilter.options.length > 1) {
+            tagFilter.remove(1);
         }
+
+        // Add tag options
+        sortedTags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            tagFilter.appendChild(option);
+        });
     }
 
     async loadContent() {
-        // If content is already loaded and we're not forcing a refresh, just render
         if (this.content.length > 0) {
             this.renderContent();
             return;
@@ -90,18 +95,20 @@ export class ContentGallery {
                 throw new Error('Network response was not ok');
             }
             const data = await response.json();
-            // Handle both array and object response formats
             this.content = Array.isArray(data) ? data : (data.content || []);
+            
+            // Update tag filter after loading content
+            this.updateTagFilter();
             
             console.log('Content loaded:', this.content.map(item => ({
                 name: item.content_name,
                 type: item.content_type,
-                url: item.content_url
+                url: item.content_url,
+                tags: item.content_tags
             })));
             this.renderContent();
         } catch (error) {
             console.error('Error loading content:', error);
-            // Show error message to user
             this.galleryGrid.innerHTML = `
                 <div class="error-message">
                     <p>Error loading content: ${error.message}</p>
@@ -110,8 +117,12 @@ export class ContentGallery {
         }
     }
 
-    initializeWithContentPlayer(contentPlayer) {
-        this.contentPlayer = contentPlayer;
+    updateSortButtons() {
+        const sortNameBtn = document.getElementById('sort-name');
+        if (sortNameBtn) {
+            sortNameBtn.classList.add('active');
+            sortNameBtn.innerHTML = `Sort by Name ${this.sortBy === 'name-asc' ? '↑' : '↓'}`;
+        }
     }
 
     formatFileSize(bytes) {
@@ -135,16 +146,19 @@ export class ContentGallery {
             );
         }
 
+        // Apply tag filter
+        if (this.selectedTag) {
+            filtered = filtered.filter(item => 
+                item.content_tags && item.content_tags.includes(this.selectedTag)
+            );
+        }
+
         // Apply sorting
         filtered.sort((a, b) => {
             if (this.sortBy === 'name-asc') {
                 return a.content_name.localeCompare(b.content_name);
             } else if (this.sortBy === 'name-desc') {
                 return b.content_name.localeCompare(a.content_name);
-            } else if (this.sortBy === 'date-asc') {
-                return new Date(a.content_created) - new Date(b.content_created);
-            } else if (this.sortBy === 'date-desc') {
-                return new Date(b.content_created) - new Date(a.content_created);
             }
             return 0;
         });
@@ -218,6 +232,11 @@ export class ContentGallery {
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
                         <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
+                        <div class="a-content-tags">
+                            ${item.content_tags ? item.content_tags.map(tag => 
+                                `<span class="a-tag">${tag}</span>`
+                            ).join('') : ''}
+                        </div>
                     </div>`;
 
                 this.galleryGrid.appendChild(element);
@@ -327,9 +346,18 @@ export class ContentGallery {
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
                         <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
+                        <div class="a-content-tags">
+                            ${item.content_tags ? item.content_tags.map(tag => 
+                                `<span class="a-tag">${tag}</span>`
+                            ).join('') : ''}
+                        </div>
                     </div>`;
                 this.galleryGrid.appendChild(element);
             }
         });
+    }
+
+    initializeWithContentPlayer(contentPlayer) {
+        this.contentPlayer = contentPlayer;
     }
 }

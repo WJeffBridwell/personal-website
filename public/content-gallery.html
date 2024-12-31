@@ -117,6 +117,46 @@
             max-width: 1400px;
             margin: 0 auto;
         }
+
+        .a-select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            font-size: 14px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .a-select:hover {
+            border-color: #999;
+        }
+
+        .a-select:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0,102,204,0.2);
+        }
+
+        .a-content-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .a-tag {
+            background-color: #f0f0f0;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .a-tag:hover {
+            background-color: #e0e0e0;
+        }
     </style>
 </head>
 <body>
@@ -145,8 +185,10 @@
                         <input type="text" id="search-input" class="a-search-input" placeholder="Search content...">
                     </div>
                     <div class="m-filter-group">
+                        <select id="tag-filter" class="a-select">
+                            <option value="">All Tags</option>
+                        </select>
                         <button id="sort-name" class="a-button a-button--secondary">Sort by Name</button>
-                        <button id="sort-date" class="a-button a-button--secondary">Sort by Date</button>
                     </div>
                 </div>
                 <div id="image-grid" class="o-gallery__grid">
