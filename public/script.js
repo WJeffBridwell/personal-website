@@ -288,7 +288,7 @@ function createImageContainer(image) {
     imageIcon.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        window.open(`http://localhost:3001/content-gallery?image-name=${encodeURIComponent(image.name)}`, '_blank');
+        window.location.href = `./content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
     });
     
     container.appendChild(img);

@@ -21,6 +21,11 @@ export class ContentGallery {
         this.sortBy = 'name-asc';
         this.selectedTag = '';
         this.modal = initializeModal();
+        
+        // Always use the same host as the main site, but with port 8082
+        const videoServerHost = window.location.hostname;
+        this.videoServerUrl = `http://${videoServerHost}:8082`;
+        console.log('Video server URL:', this.videoServerUrl);
 
         this.galleryInstance = new Gallery(this.galleryGrid);
         this.initializeControls();
@@ -225,8 +230,7 @@ export class ContentGallery {
                     </div>`;
             } else if (item.content_type === 'image' || this.isImageFile(item.content_name)) {
                 console.log('Rendering image item:', item);
-                // Use the video server (port 8082) to serve image files
-                const imageUrl = `http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
+                const imageUrl = `${this.videoServerUrl}/videos/direct?path=${encodeURIComponent(item.content_url)}`;
                 console.log('Using video server for image:', imageUrl);
                 
                 element.innerHTML = `
@@ -259,7 +263,7 @@ export class ContentGallery {
                 element.innerHTML = `
                     <div class="m-video-player">
                         <video class="a-video-element" controls preload="metadata" playsinline>
-                            <source src="http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" type="video/mp4">
+                            <source src="${this.videoServerUrl}/videos/direct?path=${encodeURIComponent(item.content_url)}" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
                     </div>

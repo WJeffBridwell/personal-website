@@ -290,6 +290,62 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
 });
 
+// Add proxy route for image-content
+app.get('/proxy/image-content', async (req, res) => {
+    try {
+        const response = await fetch(`http://localhost:8081/image-content?${new URLSearchParams(req.query)}`);
+        if (!response.ok) {
+            throw new Error('Content API response was not ok');
+        }
+        const data = await response.json();
+        
+        // Modify content URLs to use our proxy
+        if (data.content_url) {
+            const url = new URL(data.content_url);
+            if (url.port === '8082') {
+                data.content_url = `/proxy/video${url.pathname}${url.search}`;
+            }
+        }
+        
+        res.json(data);
+    } catch (error) {
+        console.error('Proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch from content API' });
+    }
+});
+
+// Add proxy route for video content
+app.get('/proxy/video/direct', async (req, res) => {
+    try {
+        const videoUrl = `http://localhost:8082/videos/direct${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`;
+        
+        // Forward the request with range headers if present
+        const headers = {};
+        if (req.headers.range) {
+            headers.range = req.headers.range;
+        }
+        
+        const response = await fetch(videoUrl, { headers });
+        if (!response.ok && response.status !== 206) {  // 206 is Partial Content
+            throw new Error('Video API response was not ok');
+        }
+        
+        // Forward all response headers
+        response.headers.forEach((value, key) => {
+            res.set(key, value);
+        });
+        
+        // Set the same status code
+        res.status(response.status);
+        
+        // Pipe the video stream
+        response.body.pipe(res);
+    } catch (error) {
+        console.error('Video proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch video content' });
+    }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
@@ -297,6 +353,6 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-server.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+server.listen(port, '0.0.0.0', () => {
+    console.log(`Server running at http://0.0.0.0:${port}`);
 });

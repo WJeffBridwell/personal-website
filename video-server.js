@@ -7,7 +7,11 @@ import fetch from 'node-fetch';
 const app = express();
 const port = 8082;
 
-app.use(cors());
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'HEAD'],
+    allowedHeaders: ['Range', 'Accept', 'Content-Type']
+}));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
