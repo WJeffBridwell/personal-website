@@ -97,6 +97,9 @@ export class ContentGallery {
             const data = await response.json();
             this.content = Array.isArray(data) ? data : (data.content || []);
             
+            // Log content data
+            console.log('Loaded content:', this.content);
+            
             // Update tag filter after loading content
             this.updateTagFilter();
             
@@ -173,7 +176,14 @@ export class ContentGallery {
 
     isImageFile(filename) {
         const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-        return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+        const lowerFilename = filename.toLowerCase();
+        // Check both the full extension and parts of compound extensions (e.g., .jpeg.webp)
+        const isImage = imageExtensions.some(ext => 
+            lowerFilename.endsWith(ext.toLowerCase()) || 
+            lowerFilename.includes(ext.toLowerCase() + '.')
+        );
+        console.log('Checking if file is image:', filename, isImage);
+        return isImage;
     }
 
     renderContent() {
@@ -184,6 +194,8 @@ export class ContentGallery {
         this.galleryGrid.innerHTML = '';
         const filteredContent = this.getFilteredContent();
         
+        console.log('Filtered content:', filteredContent);
+
         if (filteredContent.length === 0) {
             const noContent = document.createElement('div');
             noContent.className = 'o-gallery__no-content';
@@ -209,15 +221,16 @@ export class ContentGallery {
                             ).join('') : ''}
                         </div>
                     </div>`;
-            } else if (this.isVideoFile(item.content_name)) {
-                console.log('Creating video player for:', item.content_name);
+            } else if (item.content_type === 'image' || this.isImageFile(item.content_name)) {
+                console.log('Rendering image item:', item);
+                // Use the content_url directly if it's already a URL, otherwise construct it
+                const imageUrl = item.content_url.startsWith('http') 
+                    ? item.content_url 
+                    : `http://localhost:8081/images/direct?path=${encodeURIComponent(item.content_url)}`;
                 
                 element.innerHTML = `
-                    <div class="m-video-player">
-                        <video class="a-video-element" controls preload="none" playsinline poster="/images/video-thumbnail.svg">
-                            <source src="http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" type="video/mp4">
-                            Your browser does not support the video tag.
-                        </video>
+                    <div class="m-image-preview">
+                        <img src="${imageUrl}" alt="${item.content_name}" loading="lazy">
                     </div>
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
@@ -228,10 +241,15 @@ export class ContentGallery {
                             ).join('') : ''}
                         </div>
                     </div>`;
-            } else if (this.isImageFile(item.content_name)) {
+            } else if (item.content_type === 'video' || this.isVideoFile(item.content_name)) {
+                console.log('Creating video player for:', item.content_name);
+                
                 element.innerHTML = `
-                    <div class="m-image-preview">
-                        <img src="${item.content_url}" alt="${item.content_name}" loading="lazy">
+                    <div class="m-video-player">
+                        <video class="a-video-element" controls preload="metadata" playsinline>
+                            <source src="http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
                     </div>
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
