@@ -23,14 +23,48 @@ resource "null_resource" "install_node" {
   }
 }
 
-# Install project dependencies
+# Install project dependencies and nodemon
 resource "null_resource" "install_dependencies" {
   depends_on = [null_resource.install_node]
   
   provisioner "local-exec" {
-    command = "npm install"
-    working_dir = "/Users/jeffbridwell/CascadeProjects/personal-website"
+    command = <<-EOT
+      cd /Users/jeffbridwell/CascadeProjects/personal-website
+      npm install
+      # Install nodemon locally instead of globally
+      npm install nodemon --save-dev
+    EOT
   }
+}
+
+# Update package.json scripts
+resource "null_resource" "update_package_json" {
+  depends_on = [null_resource.install_dependencies]
+  
+  provisioner "local-exec" {
+    command = <<-EOT
+      cd /Users/jeffbridwell/CascadeProjects/personal-website
+      # Add dev script if it doesn't exist
+      if ! grep -q '"dev":' package.json; then
+        sed -i '' 's/"scripts": {/"scripts": {\n    "dev": "nodemon server.js",/' package.json
+      fi
+    EOT
+  }
+}
+
+# Create nodemon configuration
+resource "local_file" "nodemon_config" {
+  filename = "/Users/jeffbridwell/CascadeProjects/personal-website/nodemon.json"
+  content  = <<-EOT
+{
+  "watch": ["*.js", "public/**/*"],
+  "ext": "js,json,html,css",
+  "ignore": ["node_modules/**/*"],
+  "env": {
+    "NODE_ENV": "development"
+  }
+}
+  EOT
 }
 
 # Create development environment configuration
@@ -45,8 +79,9 @@ resource "local_file" "dev_env_config" {
 # Start servers
 resource "null_resource" "start_servers" {
   depends_on = [
-    null_resource.install_dependencies,
-    local_file.dev_env_config
+    null_resource.update_package_json,
+    local_file.dev_env_config,
+    local_file.nodemon_config
   ]
 
   # Start both servers
@@ -59,7 +94,7 @@ resource "null_resource" "start_servers" {
       
       # Kill existing processes
       pkill -f "npm run dev" || true
-      pkill -f "node video-server.js" || true
+      pkill -f "node server.js" || true
       
       # Start main server
       npm run dev > logs/main-server.log 2>&1 &
@@ -148,6 +183,7 @@ resource "null_resource" "start_servers" {
       
       # Fallback to pkill if PIDs don't exist or processes are still running
       pkill -f "npm run dev" || true
+      pkill -f "node server.js" || true
       pkill -f "node video-server.js" || true
     EOT
   }

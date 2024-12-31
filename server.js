@@ -106,6 +106,8 @@ app.use(express.static(publicPath, {
     index: ['index.html', 'index.htm'],
     setHeaders: (res, path, stat) => {
         console.log('Serving static file:', path);
+        // Disable caching for development
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
         if (path.endsWith('.js')) {
             res.set('Content-Type', 'application/javascript');
         }

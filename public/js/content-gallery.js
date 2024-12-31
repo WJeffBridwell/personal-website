@@ -232,6 +232,9 @@ export class ContentGallery {
                 element.innerHTML = `
                     <div class="m-image-preview">
                         <img src="${imageUrl}" alt="${item.content_name}" loading="lazy" class="preview-image">
+                        <div class="image-search-icon">
+                            <i class="fas fa-folder"></i>
+                        </div>
                     </div>
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>

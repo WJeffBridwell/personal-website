@@ -132,24 +132,36 @@ export class Gallery {
 
       container.innerHTML = `
         <img src="${thumbnailUrl}" alt="${imgName}" loading="lazy" data-full-url="${imgUrl}" />
-        <div class="search-icon">
-            <i class="fas fa-search"></i>
+        <div class="image-icon">
+            <i class="fas fa-image"></i>
+        </div>
+        <div class="folder-icon">
+            <i class="fas fa-folder"></i>
         </div>
         <div class="image-name">${imgName}</div>
       `;
 
-      // Add click handler for search icon
-      const searchIcon = container.querySelector('.search-icon');
-      if (searchIcon) {
-        searchIcon.addEventListener('click', (e) => {
+      // Add click handler for folder icon
+      const folderIcon = container.querySelector('.folder-icon');
+      if (folderIcon) {
+        folderIcon.addEventListener('click', (e) => {
           e.stopPropagation();
           fetch(`/gallery/finder-search?term=${encodeURIComponent(imgName)}`);
         });
       }
 
+      // Add click handler for image icon
+      const imageIcon = container.querySelector('.image-icon');
+      if (imageIcon) {
+        imageIcon.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.open(`http://localhost:3001/content-gallery?image-name=${encodeURIComponent(imgName)}`, '_blank');
+        });
+      }
+
       // Add click handler for image modal
       container.addEventListener('click', (e) => {
-        if (!e.target.closest('.search-icon')) {
+        if (!e.target.closest('.folder-icon') && !e.target.closest('.image-icon')) {
           const img = container.querySelector('img');
           if (img) {
             this.openModal({
