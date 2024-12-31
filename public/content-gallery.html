@@ -57,65 +57,61 @@
             font-size: 1.2em;
         }
 
-        /* Content-specific styles */
-        .o-gallery__item {
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 20px;
-            margin: 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease-in-out;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .o-gallery__item:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-
-        .a-card__title {
-            font-weight: bold;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-            word-break: break-word;
-        }
-
-        .m-card__media {
-            margin: 0 0 15px 0;
-            flex-grow: 1;
+        /* Controls Layout */
+        .m-controls-group {
             display: flex;
             align-items: center;
-            justify-content: center;
-            background: #f5f5f5;
-            border-radius: 4px;
-            overflow: hidden;
-            min-height: 200px;
-        }
-
-        .m-card__media video,
-        .m-card__media img {
+            gap: 1rem;
+            padding: 1rem;
             width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .a-card__metadata {
-            font-size: 0.9em;
-            color: #666;
-            margin-top: 8px;
-            padding: 5px 0;
-            border-top: 1px solid #eee;
-        }
-
-        .o-gallery__grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 25px;
-            padding: 25px;
-            max-width: 1400px;
+            max-width: var(--max-width);
             margin: 0 auto;
+        }
+
+        .m-search-container {
+            position: relative;
+            flex: 1;
+            max-width: 300px;
+        }
+
+        .a-search-icon {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+
+        .a-search-input {
+            width: 100%;
+            padding: 8px 12px 8px 35px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .a-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--primary-color);
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .a-button:hover {
+            background-color: var(--secondary-color);
+        }
+
+        .a-button--secondary {
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .a-button--secondary:hover {
+            background-color: #e0e0e0;
         }
 
         .a-select {
@@ -124,38 +120,218 @@
             border-radius: 4px;
             background-color: white;
             font-size: 14px;
-            margin-right: 10px;
+            cursor: pointer;
+            min-width: 120px;
+        }
+
+        /* Content-specific styles */
+        .o-gallery__item {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .o-gallery__item:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .m-video-player {
+            width: 100%;
+            position: relative;
+            aspect-ratio: 16/9;
+            margin-bottom: 10px;
+            background: #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .a-video-element {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+        }
+
+        .m-video-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 10;
+        }
+
+        .a-video-progress {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            transition: height 0.1s;
+        }
+
+        .a-video-progress:hover {
+            height: 8px;
+        }
+
+        .a-progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 2px;
+            width: 0;
+            pointer-events: none;
+            transition: width 0.1s linear;
+        }
+
+        .a-video-progress:hover .a-progress-bar {
+            height: 100%;
+        }
+
+        .a-video-buttons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .a-play-button,
+        .a-mute-button,
+        .a-fullscreen-button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+
+        .a-play-button:hover,
+        .a-mute-button:hover,
+        .a-fullscreen-button:hover {
+            opacity: 0.8;
+        }
+
+        .a-volume-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .a-volume-slider {
+            width: 60px;
+            height: 4px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        .a-volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
             cursor: pointer;
         }
 
-        .a-select:hover {
-            border-color: #999;
+        .a-volume-slider::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
         }
 
-        .a-select:focus {
-            outline: none;
-            border-color: #0066cc;
-            box-shadow: 0 0 0 2px rgba(0,102,204,0.2);
+        video::-webkit-media-controls {
+            display: none !important;
         }
 
-        .a-content-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-            margin-top: 5px;
+        video::-webkit-media-controls-enclosure {
+            display: none !important;
         }
 
-        .a-tag {
-            background-color: #f0f0f0;
-            padding: 2px 8px;
-            border-radius: 12px;
+        .m-item-info {
+            padding: 10px 0;
+        }
+
+        .a-item-name {
+            font-weight: 500;
+            font-size: 0.9em;
+            color: #333;
+            margin-bottom: 5px;
+            display: block;
+            word-break: break-word;
+        }
+
+        .a-item-size {
             font-size: 0.8em;
             color: #666;
-            white-space: nowrap;
+            display: block;
         }
 
-        .a-tag:hover {
-            background-color: #e0e0e0;
+        .o-gallery__grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .m-folder-preview,
+        .m-file-preview,
+        .m-image-preview {
+            width: 100%;
+            aspect-ratio: 16/9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f5f5f5;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .m-folder-preview i {
+            color: #ffd700;
+            transition: transform 0.2s;
+        }
+
+        .m-file-preview i {
+            color: #666;
+            transition: transform 0.2s;
+        }
+
+        .o-gallery__item:hover .m-folder-preview i,
+        .o-gallery__item:hover .m-file-preview i {
+            transform: scale(1.1);
+        }
+
+        .m-image-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .m-item-info {
+            padding: 10px 0;
         }
     </style>
 </head>
@@ -187,15 +363,15 @@
                     <h2>Content Gallery</h2>
                 </div>
                 <div class="o-gallery__controls">
-                    <div class="m-search-container">
-                        <i class="fas fa-search a-search-icon"></i>
-                        <input type="text" id="search-input" class="a-search-input" placeholder="Search content...">
-                    </div>
-                    <div class="m-filter-group">
+                    <div class="m-controls-group">
+                        <div class="m-search-container">
+                            <i class="fas fa-search a-search-icon"></i>
+                            <input type="text" id="search-input" class="a-search-input" placeholder="Search content...">
+                        </div>
+                        <button id="sort-name" class="a-button a-button--secondary">Sort by Name</button>
                         <select id="tag-filter" class="a-select">
                             <option value="">All Tags</option>
                         </select>
-                        <button id="sort-name" class="a-button a-button--secondary">Sort by Name</button>
                     </div>
                 </div>
                 <div id="image-grid" class="o-gallery__grid">

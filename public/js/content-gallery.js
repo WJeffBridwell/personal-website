@@ -167,9 +167,13 @@ export class ContentGallery {
     }
 
     isVideoFile(filename) {
-        // Check if the filename ends with a video extension
         const videoExtensions = ['.mp4', '.MP4', '.m4v', '.webm', '.mov'];
         return videoExtensions.some(ext => filename.toLowerCase().endsWith(ext));
+    }
+
+    isImageFile(filename) {
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+        return imageExtensions.some(ext => filename.toLowerCase().endsWith(ext));
     }
 
     renderContent() {
@@ -192,42 +196,28 @@ export class ContentGallery {
             const element = document.createElement('div');
             element.className = 'o-gallery__item';
             
-            const isVideo = this.isVideoFile(item.content_name) || 
-                          (item.content_type && item.content_type.toLowerCase() === 'video');
-            
-            if (isVideo) {
+            if (item.content_type === 'directory') {
+                element.innerHTML = `
+                    <div class="m-folder-preview">
+                        <i class="fas fa-folder fa-4x"></i>
+                    </div>
+                    <div class="m-item-info">
+                        <span class="a-item-name">${item.content_name}</span>
+                        <div class="a-content-tags">
+                            ${item.content_tags ? item.content_tags.map(tag => 
+                                `<span class="a-tag">${tag}</span>`
+                            ).join('') : ''}
+                        </div>
+                    </div>`;
+            } else if (this.isVideoFile(item.content_name)) {
                 console.log('Creating video player for:', item.content_name);
                 
                 element.innerHTML = `
                     <div class="m-video-player">
-                        <div class="m-video-thumbnail">
-                            <img src="/images/video-thumbnail.svg" alt="Video thumbnail">
-                            <div class="m-play-overlay">
-                                <i class="fas fa-play"></i>
-                            </div>
-                        </div>
-                        <video class="a-video-element" preload="none" playsinline style="display: none;">
+                        <video class="a-video-element" controls preload="none" playsinline poster="/images/video-thumbnail.svg">
+                            <source src="http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" type="video/mp4">
                             Your browser does not support the video tag.
                         </video>
-                        <div class="m-video-controls" style="display: none;">
-                            <div class="a-video-progress">
-                                <div class="a-progress-bar"></div>
-                            </div>
-                            <div class="a-video-buttons">
-                                <button class="a-play-button">
-                                    <i class="fas fa-play"></i>
-                                </button>
-                                <div class="a-volume-control">
-                                    <button class="a-mute-button">
-                                        <i class="fas fa-volume-up"></i>
-                                    </button>
-                                    <input type="range" class="a-volume-slider" min="0" max="100" value="100">
-                                </div>
-                                <button class="a-fullscreen-button">
-                                    <i class="fas fa-expand"></i>
-                                </button>
-                            </div>
-                        </div>
                     </div>
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
@@ -238,111 +228,11 @@ export class ContentGallery {
                             ).join('') : ''}
                         </div>
                     </div>`;
-
-                this.galleryGrid.appendChild(element);
-
-                const videoPlayer = element.querySelector('.m-video-player');
-                const thumbnail = videoPlayer.querySelector('.m-video-thumbnail');
-                const video = videoPlayer.querySelector('video');
-                const controls = videoPlayer.querySelector('.m-video-controls');
-                const playButton = videoPlayer.querySelector('.a-play-button');
-                const muteButton = videoPlayer.querySelector('.a-mute-button');
-                const volumeSlider = videoPlayer.querySelector('.a-volume-slider');
-                const fullscreenButton = videoPlayer.querySelector('.a-fullscreen-button');
-                const progressBar = videoPlayer.querySelector('.a-progress-bar');
-
-                // Function to load and play video
-                const loadAndPlayVideo = async () => {
-                    try {
-                        // Check if video is already loaded
-                        if (!video.querySelector('source')) {
-                            const source = document.createElement('source');
-                            // Send the content URL directly to avoid searching
-                            source.src = `http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
-                            source.type = 'video/mp4';
-                            video.appendChild(source);
-                            
-                            await video.load();
-                        }
-                        
-                        thumbnail.style.display = 'none';
-                        video.style.display = 'block';
-                        controls.style.display = 'flex';
-                        await video.play();
-                        playButton.innerHTML = '<i class="fas fa-pause"></i>';
-                        
-                    } catch (error) {
-                        console.error('Error playing video:', error);
-                        const errorMessage = document.createElement('div');
-                        errorMessage.className = 'a-video-error';
-                        errorMessage.textContent = 'Error playing video';
-                        videoPlayer.appendChild(errorMessage);
-                        
-                        thumbnail.style.display = 'flex';
-                        video.style.display = 'none';
-                        controls.style.display = 'none';
-                        
-                        const source = video.querySelector('source');
-                        if (source) {
-                            source.remove();
-                        }
-                    }
-                };
-
-                // Click thumbnail to start playing
-                thumbnail.addEventListener('click', () => {
-                    loadAndPlayVideo();
-                });
-
-                // Play/Pause
-                playButton.addEventListener('click', () => {
-                    if (video.paused) {
-                        loadAndPlayVideo();
-                    } else {
-                        video.pause();
-                        playButton.innerHTML = '<i class="fas fa-play"></i>';
-                    }
-                });
-
-                // Mute/Unmute
-                muteButton.addEventListener('click', () => {
-                    video.muted = !video.muted;
-                    muteButton.innerHTML = video.muted ? 
-                        '<i class="fas fa-volume-mute"></i>' : 
-                        '<i class="fas fa-volume-up"></i>';
-                });
-
-                // Volume
-                volumeSlider.addEventListener('input', (e) => {
-                    video.volume = e.target.value / 100;
-                });
-
-                // Fullscreen
-                fullscreenButton.addEventListener('click', () => {
-                    if (video.requestFullscreen) {
-                        video.requestFullscreen();
-                    }
-                });
-
-                // Progress bar
-                video.addEventListener('timeupdate', () => {
-                    const progress = (video.currentTime / video.duration) * 100;
-                    progressBar.style.width = `${progress}%`;
-                });
-
-                // Error handling
-                video.addEventListener('error', (e) => {
-                    console.error('Video error:', e.target.error);
-                    const errorMessage = document.createElement('div');
-                    errorMessage.className = 'a-video-error';
-                    errorMessage.textContent = 'Error loading video';
-                    videoPlayer.appendChild(errorMessage);
-                });
-
-            } else {
-                // Handle image content
+            } else if (this.isImageFile(item.content_name)) {
                 element.innerHTML = `
-                    <img class="a-gallery-image" src="${item.content_url}" alt="${item.content_name}" loading="lazy">
+                    <div class="m-image-preview">
+                        <img src="${item.content_url}" alt="${item.content_name}" loading="lazy">
+                    </div>
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
                         <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
@@ -352,7 +242,35 @@ export class ContentGallery {
                             ).join('') : ''}
                         </div>
                     </div>`;
-                this.galleryGrid.appendChild(element);
+            } else {
+                // Default file icon for other types
+                element.innerHTML = `
+                    <div class="m-file-preview">
+                        <i class="fas fa-file fa-4x"></i>
+                    </div>
+                    <div class="m-item-info">
+                        <span class="a-item-name">${item.content_name}</span>
+                        <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
+                        <div class="a-content-tags">
+                            ${item.content_tags ? item.content_tags.map(tag => 
+                                `<span class="a-tag">${tag}</span>`
+                            ).join('') : ''}
+                        </div>
+                    </div>`;
+            }
+
+            this.galleryGrid.appendChild(element);
+
+            const video = element.querySelector('video');
+            if (video) {
+                // Error handling
+                video.addEventListener('error', (e) => {
+                    console.error('Video error:', e.target.error);
+                    const errorMessage = document.createElement('div');
+                    errorMessage.className = 'a-video-error';
+                    errorMessage.textContent = 'Error loading video';
+                    video.parentElement.appendChild(errorMessage);
+                });
             }
         });
     }
