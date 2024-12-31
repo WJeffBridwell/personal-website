@@ -3,6 +3,7 @@
  * Handles displaying and filtering content in a grid layout
  */
 import Gallery from './gallery.js';
+import { initializeModal } from './modal.js';
 
 export class ContentGallery {
     constructor(galleryId, apiEndpoint, imageName = '') {
@@ -19,6 +20,7 @@ export class ContentGallery {
         this.searchQuery = '';
         this.sortBy = 'name-asc';
         this.selectedTag = '';
+        this.modal = initializeModal();
 
         this.galleryInstance = new Gallery(this.galleryGrid);
         this.initializeControls();
@@ -223,14 +225,13 @@ export class ContentGallery {
                     </div>`;
             } else if (item.content_type === 'image' || this.isImageFile(item.content_name)) {
                 console.log('Rendering image item:', item);
-                // Use the content_url directly if it's already a URL, otherwise construct it
-                const imageUrl = item.content_url.startsWith('http') 
-                    ? item.content_url 
-                    : `http://localhost:8081/images/direct?path=${encodeURIComponent(item.content_url)}`;
+                // Use the video server (port 8082) to serve image files
+                const imageUrl = `http://localhost:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
+                console.log('Using video server for image:', imageUrl);
                 
                 element.innerHTML = `
                     <div class="m-image-preview">
-                        <img src="${imageUrl}" alt="${item.content_name}" loading="lazy">
+                        <img src="${imageUrl}" alt="${item.content_name}" loading="lazy" class="preview-image">
                     </div>
                     <div class="m-item-info">
                         <span class="a-item-name">${item.content_name}</span>
@@ -241,6 +242,14 @@ export class ContentGallery {
                             ).join('') : ''}
                         </div>
                     </div>`;
+
+                // Add click handler for the image preview
+                const previewImage = element.querySelector('.preview-image');
+                if (previewImage) {
+                    previewImage.addEventListener('click', () => {
+                        this.modal.openModal(imageUrl, item.content_name);
+                    });
+                }
             } else if (item.content_type === 'video' || this.isVideoFile(item.content_name)) {
                 console.log('Creating video player for:', item.content_name);
                 
