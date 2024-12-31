@@ -221,33 +221,8 @@ async function displayImages(images, append = false) {
     
     try {
         for (const image of images) {
-            const container = document.createElement('div');
-            container.className = 'image-container';
-            
-            const img = document.createElement('img');
-            img.src = image.url;
-            img.alt = image.name;
-            img.loading = 'lazy';
-            
-            const searchIcon = document.createElement('i');
-            searchIcon.className = 'fa-solid fa-magnifying-glass search-icon';
-            searchIcon.onclick = () => searchImageInFinder(image.name);
-            
-            const nameLabel = document.createElement('div');
-            nameLabel.className = 'image-name';
-            nameLabel.textContent = image.name;
-            
-            container.appendChild(img);
-            container.appendChild(searchIcon);
-            container.appendChild(nameLabel);
+            const container = createImageContainer(image);
             grid.appendChild(container);
-            
-            // Add click event for modal
-            container.addEventListener('click', (e) => {
-                if (e.target !== searchIcon) {
-                    openModal(image.url, image.name);
-                }
-            });
         }
         
         // Initialize all filters and sort buttons
@@ -276,8 +251,19 @@ function createImageContainer(image) {
     img.alt = image.name;
     img.loading = 'lazy';
     
-    const searchIcon = document.createElement('i');
-    searchIcon.className = 'fa-solid fa-magnifying-glass search-icon';
+    // Create folder icon (right corner)
+    const folderIcon = document.createElement('div');
+    folderIcon.className = 'folder-icon';
+    const folderI = document.createElement('i');
+    folderI.className = 'fas fa-folder';
+    folderIcon.appendChild(folderI);
+    
+    // Create image icon (left corner)
+    const imageIcon = document.createElement('div');
+    imageIcon.className = 'image-icon';
+    const imageI = document.createElement('i');
+    imageI.className = 'fas fa-image';
+    imageIcon.appendChild(imageI);
     
     const nameLabel = document.createElement('div');
     nameLabel.className = 'image-name';
@@ -286,24 +272,30 @@ function createImageContainer(image) {
     
     // Set up click handlers
     container.addEventListener('click', (e) => {
-        if (!e.target.classList.contains('search-icon')) {
+        if (!e.target.closest('.folder-icon') && !e.target.closest('.image-icon')) {
             e.preventDefault();
             e.stopPropagation();
             openModal(image.url, image.name);
         }
     });
     
-    searchIcon.addEventListener('click', (e) => {
+    folderIcon.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         searchImageInFinder(image.name);
     });
+
+    imageIcon.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(`http://localhost:3001/content-gallery?image-name=${encodeURIComponent(image.name)}`, '_blank');
+    });
     
     container.appendChild(img);
-    container.appendChild(searchIcon);
+    container.appendChild(folderIcon);
+    container.appendChild(imageIcon);
     container.appendChild(nameLabel);
     
-    console.log('Final container HTML:', container.outerHTML);
     return container;
 }
 
