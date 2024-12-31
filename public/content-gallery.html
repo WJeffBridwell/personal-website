@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Content Gallery | Jeff Bridwell</title>
-    <link rel="stylesheet" href="styles/main.css">
-    <link rel="stylesheet" href="styles/molecules/video-player.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="modal.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Modal styles */
@@ -160,24 +160,31 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <header class="header">
-            <nav class="nav">
-                <div class="nav__logo">JB</div>
-                <ul class="nav__list">
-                    <li class="nav__item"><a href="index.html" class="nav__link">Home</a></li>
-                    <li class="nav__item"><a href="index.html#about" class="nav__link">About</a></li>
-                    <li class="nav__item"><a href="index.html#projects" class="nav__link">Projects</a></li>
-                    <li class="nav__item"><a href="gallery.html" class="nav__link">My Collections</a></li>
-                    <li class="nav__item"><a href="index.html#contact" class="nav__link">Contact</a></li>
-                </ul>
-            </nav>
-        </header>
+    <nav>
+        <div class="nav-content">
+            <div class="logo-section">
+                <div class="logo">JB</div>
+                <div class="logo-text">
+                    <h1>Jeff Bridwell</h1>
+                    <p class="subtitle">Software Engineer | Tech Innovator</p>
+                </div>
+            </div>
+            <ul>
+                <li><a href="/">Home</a></li>
+                <li><a href="#about">About</a></li>
+                <li><a href="#projects">Projects</a></li>
+                <li><a href="#gallery">Collections</a></li>
+                <li><a href="content-gallery.html">Content</a></li>
+                <li><a href="#contact">Contact</a></li>
+            </ul>
+        </div>
+    </nav>
 
-        <main class="main">
+    <div class="container">
+        <main>
             <section class="o-gallery">
-                <div class="o-gallery__header">
-                    <h2 class="a-gallery__title">Content Gallery</h2>
+                <div class="header-band">
+                    <h2>Content Gallery</h2>
                 </div>
                 <div class="o-gallery__controls">
                     <div class="m-search-container">
@@ -197,8 +204,8 @@
             </section>
         </main>
 
-        <footer class="footer">
-            <p class="footer__text">&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
+        <footer>
+            <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
         </footer>
     </div>
 
