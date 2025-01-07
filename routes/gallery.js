@@ -24,8 +24,10 @@ const __dirname = dirname(__filename);
 const router = express.Router();
 const DEFAULT_LIMIT = 1000;  // Show 1000 images by default
 const MAX_LIMIT = 5000;      // Allow up to 5000 images per request
-const CHUNK_SIZE = 1000;   // Process in chunks of 1000 for better memory usage
+const CHUNK_SIZE = 5000;   // Process in larger chunks for better performance
 const CACHE_TTL = 300000;  // 5 minutes cache TTL
+const THUMBNAIL_WIDTH = 300;  // Width for thumbnails
+const PREVIEW_WIDTH = 800;   // Width for preview images
 
 // Initialize content cache with LRU cache for thumbnails
 const contentCache = {
@@ -35,41 +37,50 @@ const contentCache = {
     updating: false
 };
 
-console.log('Initializing gallery router');
+// Setup gallery debug logging
+const logDir = path.join(process.cwd(), 'logs');
+if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir);
+}
+
+// Create a separate stream for gallery logging
+const galleryLog = fs.createWriteStream(path.join(logDir, 'gallery-debug.log'), { flags: 'a' });
+
+function logGallery(component, event, duration = null, details = null) {
+    const timestamp = new Date().toISOString();
+    const memory = process.memoryUsage();
+    const memoryMB = Math.round(memory.heapUsed / 1024 / 1024);
+    const logMessage = `[${timestamp}] [Server] [${component}] [${event}] ${duration ? `[${duration}ms]` : ''} [${memoryMB}MB] ${details ? JSON.stringify(details) : ''}`;
+    galleryLog.write(logMessage + '\n');
+}
 
 // Debug middleware for gallery router
 router.use((req, res, next) => {
-    console.log('Gallery Router Debug:', {
-        originalUrl: req.originalUrl,
-        baseUrl: req.baseUrl,
-        path: req.path,
-        method: req.method
-    });
+    logGallery('Gallery Router', 'Request received', null, { originalUrl: req.originalUrl, baseUrl: req.baseUrl, path: req.path, method: req.method });
     next();
 });
 
 // Test route to verify router is mounted
 router.get('/test', (req, res) => {
-    console.log('Gallery test route hit');
+    logGallery('Test Route', 'Request received', null, { message: 'Gallery router is working' });
     res.json({ message: 'Gallery router is working' });
 });
 
 // Test endpoint to check directory access
 router.get('/test-directory', (req, res) => {
-    console.log('Testing directory access');
-    const directoryPath = '/Volumes/VideosNew/Models';
+    logGallery('Test Directory', 'Request received', null, { directoryPath: '/Volumes/VideosNew/Models' });
     
     try {
         // Check if directory exists
-        if (!fs.existsSync(directoryPath)) {
+        if (!fs.existsSync('/Volumes/VideosNew/Models')) {
             return res.status(404).json({
                 error: 'Directory not found',
-                path: directoryPath
+                path: '/Volumes/VideosNew/Models'
             });
         }
 
         // Try to read directory contents
-        const files = fs.readdirSync(directoryPath, { withFileTypes: true });
+        const files = fs.readdirSync('/Volumes/VideosNew/Models', { withFileTypes: true });
         
         return res.json({
             success: true,
@@ -80,10 +91,11 @@ router.get('/test-directory', (req, res) => {
             }))
         });
     } catch (error) {
+        logGallery('Test Directory', 'Error', null, { error: error.message, code: error.code, path: '/Volumes/VideosNew/Models' });
         return res.status(500).json({
             error: error.message,
             code: error.code,
-            path: directoryPath
+            path: '/Volumes/VideosNew/Models'
         });
     }
 });
@@ -94,50 +106,45 @@ router.get('/test-directory', (req, res) => {
  * @returns {HTML} The gallery.html page from public directory
  */
 router.get('/', async (req, res) => {
-    console.log('\n=== Gallery Route Hit ===');
-    const galleryPath = path.join(__dirname, '../public/gallery.html');
-    console.log('Full gallery path:', galleryPath);
+    logGallery('Gallery Route', 'Request received', null, { path: req.path });
     
     try {
         // Verify file exists
-        if (!fs.existsSync(galleryPath)) {
-            console.error('Gallery file does not exist at path');
+        if (!fs.existsSync(path.join(__dirname, '../public/gallery.html'))) {
+            logGallery('Gallery Route', 'Error', null, { error: 'Gallery file does not exist' });
             res.status(404).send('Gallery file not found');
             return;
         }
         
         // Read file contents for verification
-        const contents = fs.readFileSync(galleryPath, 'utf8');
-        console.log('Gallery file length:', contents.length);
-        console.log('Contains modal:', contents.includes('id="imageModal"'));
+        const contents = fs.readFileSync(path.join(__dirname, '../public/gallery.html'), 'utf8');
         
         // Send the file
         res.setHeader('Content-Type', 'text/html');
-        res.sendFile(galleryPath, (err) => {
+        res.sendFile(path.join(__dirname, '../public/gallery.html'), (err) => {
             if (err) {
-                console.error('Error sending gallery.html:', err);
+                logGallery('Gallery Route', 'Error', null, { error: 'Error sending gallery.html' });
                 res.status(500).send('Error loading gallery page');
             } else {
-                console.log('Successfully sent gallery.html');
+                logGallery('Gallery Route', 'Request complete', null, { message: 'Successfully sent gallery.html' });
             }
         });
     } catch (error) {
-        console.error('Error accessing gallery.html:', error);
+        logGallery('Gallery Route', 'Error', null, { error: error.message });
         res.status(500).send('Error loading gallery page');
     }
-    console.log('======================\n');
 });
 
 // Update cache with chunked processing
 async function updateCache(directoryPath) {
     if (contentCache.updating) {
-        console.log('Cache update already in progress');
+        logGallery('Cache Update', 'Already in progress', null, { message: 'Cache update already in progress' });
         return;
     }
 
     try {
         contentCache.updating = true;
-        console.log('Starting cache update...');
+        logGallery('Cache Update', 'Started', null, { message: 'Starting cache update...' });
 
         const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
         const imageFiles = files.filter(file => 
@@ -160,7 +167,7 @@ async function updateCache(directoryPath) {
                         type: path.extname(file.name).slice(1)
                     });
                 } catch (error) {
-                    console.error(`Error processing file ${file.name}:`, error);
+                    logGallery('Cache Update', 'Error', null, { error: error.message, file: file.name });
                 }
             }));
             
@@ -169,10 +176,10 @@ async function updateCache(directoryPath) {
         }
 
         contentCache.lastUpdate = Date.now();
-        console.log(`Cache updated with ${contentCache.files.size} files`);
+        logGallery('Cache Update', 'Complete', null, { message: `Cache updated with ${contentCache.files.size} files` });
         
     } catch (error) {
-        console.error('Error updating cache:', error);
+        logGallery('Cache Update', 'Error', null, { error: error.message });
         throw error;
     } finally {
         contentCache.updating = false;
@@ -209,7 +216,7 @@ router.get('/letters', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error getting letters:', error);
+        logGallery('Letters Route', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Failed to get letters' });
     }
 });
@@ -229,12 +236,10 @@ router.get('/tags', async (req, res) => {
         for (const [filename, metadata] of contentCache.files.entries()) {
             const fileTags = generateTags(filename);
             fileTags.forEach(tag => tags.add(tag));
-            console.log('Tags for', filename, ':', fileTags);
         }
         
         // Convert to sorted array
         const sortedTags = Array.from(tags).sort();
-        console.log('Total unique tags:', sortedTags.length, sortedTags);
         
         res.json({
             tags: sortedTags,
@@ -242,15 +247,14 @@ router.get('/tags', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error getting tags:', error);
+        logGallery('Tags Route', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Failed to get tags', details: error.message });
     }
 });
 
 // Gallery images endpoint with optimized loading
 router.get('/images', async (req, res) => {
-    console.log('\n=== Gallery Images Request ===');
-    const startTime = process.hrtime();
+    logGallery('Images Route', 'Request received', null, { query: req.query });
     
     try {
         const page = parseInt(req.query.page) || 1;
@@ -307,7 +311,7 @@ router.get('/images', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error processing request:', error);
+        logGallery('Images Route', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -345,21 +349,120 @@ function generateTags(filename) {
     return Array.from(tags);
 }
 
-// Enable compression for all responses
+// Batch image endpoint
+router.post('/batch-images', async (req, res) => {
+    console.log('[Server] [Batch Images] [Request received]', { 
+        imageCount: req.body.imageNames?.length || 0,
+        memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+    });
+    
+    try {
+        const { imageNames } = req.body;
+        if (!Array.isArray(imageNames)) {
+            console.error('[Server] [Batch Images] [Error] Invalid request - imageNames not an array');
+            return res.status(400).json({ error: 'imageNames must be an array' });
+        }
+
+        const batchSize = 1000;
+        const results = [];
+        
+        // Process in batches of 1000
+        for (let i = 0; i < imageNames.length; i += batchSize) {
+            const batch = imageNames.slice(i, i + batchSize);
+            console.log(`[Server] [Batch Images] [Processing] Batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(imageNames.length/batchSize)}`);
+            
+            const batchResults = await Promise.all(
+                batch.map(async (imageName) => {
+                    try {
+                        const imagePath = path.join('/Volumes/VideosNew/Models', imageName);
+                        const imageBuffer = await fs.promises.readFile(imagePath);
+                        return {
+                            name: imageName,
+                            data: imageBuffer.toString('base64'),
+                            error: null
+                        };
+                    } catch (err) {
+                        console.error(`[Server] [Batch Images] [Error] Failed to load image ${imageName}:`, err);
+                        return {
+                            name: imageName,
+                            data: null,
+                            error: err.message
+                        };
+                    }
+                })
+            );
+            results.push(...batchResults);
+            console.log(`[Server] [Batch Images] [Complete] Batch ${Math.floor(i/batchSize) + 1} processed`);
+        }
+
+        console.log('[Server] [Batch Images] [Complete] All batches processed', {
+            totalImages: results.length,
+            successCount: results.filter(r => r.data).length,
+            failureCount: results.filter(r => r.error).length,
+            memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+        });
+
+        res.json({ images: results });
+    } catch (error) {
+        console.error('[Server] [Batch Images] [Error] Batch processing failed:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Image optimization middleware
+const optimizeImage = async (req, res, next) => {
+    if (!req.path.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        return next();
+    }
+
+    const isThumb = req.query.size === 'thumb';
+    const isPreview = req.query.size === 'preview';
+    
+    if (!isThumb && !isPreview) {
+        return next();
+    }
+
+    const width = isThumb ? THUMBNAIL_WIDTH : PREVIEW_WIDTH;
+    const cacheKey = `${req.path}-${width}`;
+    const cacheMap = isThumb ? contentCache.thumbnails : contentCache.previews;
+
+    if (cacheMap.has(cacheKey)) {
+        res.type('image/webp');
+        res.send(cacheMap.get(cacheKey));
+        return;
+    }
+
+    try {
+        const imagePath = path.join(process.cwd(), 'public', req.path);
+        const image = await sharp(imagePath)
+            .resize(width, null, { withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
+
+        cacheMap.set(cacheKey, image);
+        res.type('image/webp');
+        res.send(image);
+    } catch (error) {
+        console.error('Image optimization error:', error);
+        next();
+    }
+};
+
+// Apply middleware
 router.use(compression());
+router.use(optimizeImage);
 
 // Serve individual media files
 router.get('/images/:imageName', async (req, res) => {
     const imageName = decodeURIComponent(req.params.imageName);
-    console.log('GET /gallery/images/:imageName endpoint hit for:', imageName);
+    logGallery('Image Serve', 'Request received', null, { imageName });
     
     try {
         const filePath = path.join('/Volumes/VideosNew/Models', imageName);
-        console.log('Attempting to serve file from:', filePath);
         
         try {
             if (!fs.existsSync(filePath)) {
-                console.error('File not found:', filePath);
+                logGallery('Image Serve', 'Error', null, { error: 'File not found', filePath });
                 res.status(404).json({ 
                     error: 'File not found',
                     details: `File not found at ${filePath}`,
@@ -367,7 +470,6 @@ router.get('/images/:imageName', async (req, res) => {
                 });
                 return;
             }
-            console.log('File exists, serving:', filePath);
             
             // Determine content type based on file extension
             const ext = path.extname(imageName).toLowerCase();
@@ -387,7 +489,7 @@ router.get('/images/:imageName', async (req, res) => {
                 
                 try {
                     if (!fs.existsSync(thumbnailPath)) {
-                        console.error('Thumbnail not found:', thumbnailPath);
+                        logGallery('Image Serve', 'Error', null, { error: 'Thumbnail not found', thumbnailPath });
                         // If thumbnail doesn't exist, send a default video thumbnail or generate one
                         const defaultThumbnailPath = path.join(__dirname, '../public/images/video-thumbnail.jpg');
                         res.sendFile(defaultThumbnailPath, {
@@ -400,7 +502,7 @@ router.get('/images/:imageName', async (req, res) => {
                     });
                     return;
                 } catch (err) {
-                    console.error('Error serving thumbnail:', err);
+                    logGallery('Image Serve', 'Error', null, { error: 'Failed to serve thumbnail', details: err.message });
                     res.status(500).json({ 
                         error: 'Failed to serve thumbnail',
                         details: err.message
@@ -439,7 +541,7 @@ router.get('/images/:imageName', async (req, res) => {
                 headers: { 'Content-Type': contentType }
             });
         } catch (err) {
-            console.error('File not found:', filePath, err);
+            logGallery('Image Serve', 'Error', null, { error: 'File not found', filePath });
             res.status(404).json({ 
                 error: 'File not found',
                 details: `File not found at ${filePath}`,
@@ -447,7 +549,7 @@ router.get('/images/:imageName', async (req, res) => {
             });
         }
     } catch (error) {
-        console.error('Error serving file:', error);
+        logGallery('Image Serve', 'Error', null, { error: error.message });
         res.status(500).json({ 
             error: 'Failed to serve file',
             details: error.message
@@ -458,19 +560,16 @@ router.get('/images/:imageName', async (req, res) => {
 // Serve video files
 router.get('/video/:videoName', async (req, res) => {
     const videoName = decodeURIComponent(req.params.videoName);
-    console.log('\n=== Video Request ===');
-    console.log('Video name:', videoName);
+    logGallery('Video Serve', 'Request received', null, { videoName });
     
     try {
         // Get the directory path from the query or use default
         const directoryPath = '/Volumes/VideosNew/Models';
         const videoPath = path.join(directoryPath, videoName);
-        console.log('Full video path:', videoPath);
         
         // Check if file exists
         if (!fs.existsSync(videoPath)) {
-            console.error('Video file not found:', videoPath);
-            console.error('Error details:', 'File not found');
+            logGallery('Video Serve', 'Error', null, { error: 'Video file not found', videoPath });
             return res.status(404).json({ error: 'Video not found' });
         }
         
@@ -478,17 +577,13 @@ router.get('/video/:videoName', async (req, res) => {
         const stat = fs.statSync(videoPath);
         const fileSize = stat.size;
         const range = req.headers.range;
-        console.log('File size:', fileSize);
-        console.log('Range header:', range);
-
+        
         if (range) {
             // Handle range requests for video streaming
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
             const chunksize = (end - start) + 1;
-            
-            console.log('Streaming chunk:', { start, end, chunksize });
             
             const file = fs.createReadStream(videoPath, { start, end });
 
@@ -505,18 +600,17 @@ router.get('/video/:videoName', async (req, res) => {
             
             // Handle stream errors
             file.on('error', (error) => {
-                console.error('Stream error:', error);
+                logGallery('Video Serve', 'Error', null, { error: error.message });
                 res.end();
             });
 
             file.on('end', () => {
-                console.log('Stream ended successfully');
+                logGallery('Video Serve', 'Request complete', null, { message: 'Stream ended successfully' });
             });
 
             file.pipe(res);
         } else {
             // Handle non-range requests
-            console.log('Sending full file (no range request)');
             const head = {
                 'Content-Length': fileSize,
                 'Content-Type': 'video/mp4',
@@ -529,18 +623,18 @@ router.get('/video/:videoName', async (req, res) => {
             
             // Handle stream errors
             stream.on('error', (error) => {
-                console.error('Stream error:', error);
+                logGallery('Video Serve', 'Error', null, { error: error.message });
                 res.end();
             });
 
             stream.on('end', () => {
-                console.log('Stream ended successfully');
+                logGallery('Video Serve', 'Request complete', null, { message: 'Stream ended successfully' });
             });
 
             stream.pipe(res);
         }
     } catch (error) {
-        console.error('Error serving video:', error);
+        logGallery('Video Serve', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Error serving video file', details: error.message });
     }
 });
@@ -549,11 +643,10 @@ router.get('/video/:videoName', async (req, res) => {
 router.get('/video-content/:filename', async (req, res) => {
     try {
         const filename = decodeURIComponent(req.params.filename);
-        console.log('Video request for:', filename);
-
+        logGallery('Video Content', 'Request received', null, { filename });
+        
         // Forward request to content API
         const apiUrl = `http://localhost:8081/video-stream/${encodeURIComponent(filename)}`;
-        console.log('Forwarding to:', apiUrl);
         
         const response = await fetch(apiUrl);
         if (!response.ok) {
@@ -568,9 +661,17 @@ router.get('/video-content/:filename', async (req, res) => {
         // Stream the response
         response.body.pipe(res);
     } catch (error) {
-        console.error('Error streaming video:', error);
+        logGallery('Video Content', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Failed to stream video' });
     }
+});
+
+// Client logging endpoint
+router.post('/log', (req, res) => {
+    const { timestamp, component, event, duration, memory, details } = req.body;
+    const logMessage = `[${timestamp}] [Client] [${component}] [${event}] ${duration ? `[${duration}ms]` : ''} [${memory}MB] ${details ? JSON.stringify(details) : ''}`;
+    galleryLog.write(logMessage + '\n');
+    res.sendStatus(200);
 });
 
 /**
@@ -579,7 +680,7 @@ router.get('/video-content/:filename', async (req, res) => {
  * @param {string} imageName - The name of the image to search for
  */
 router.post('/search', async (req, res) => {
-    console.log('Search route hit with:', req.body);
+    logGallery('Search Route', 'Request received', null, { body: req.body });
     const { imageName } = req.body;
     
     if (!imageName) {
@@ -602,14 +703,14 @@ router.post('/search', async (req, res) => {
         const { exec } = await import('child_process');
         exec(`osascript -e '${script}'`, (error, stdout, stderr) => {
             if (error) {
-                console.error('AppleScript error:', error);
+                logGallery('Search Route', 'Error', null, { error: error.message, details: error.message });
                 return res.status(500).json({ error: 'Failed to execute search', details: error.message });
             }
-            console.log('Search executed successfully');
+            logGallery('Search Route', 'Request complete', null, { message: 'Search executed successfully' });
             res.json({ success: true, message: 'Search executed successfully' });
         });
     } catch (error) {
-        console.error('Error executing search:', error);
+        logGallery('Search Route', 'Error', null, { error: error.message, details: error.message });
         res.status(500).json({ error: 'Failed to execute search', details: error.message });
     }
 });
@@ -618,14 +719,14 @@ router.post('/search', async (req, res) => {
 router.get('/finder-search', async (req, res) => {
     const searchTerm = req.query.term;
     if (!searchTerm) {
-        console.error('Search term is missing');
+        logGallery('Finder Search', 'Error', null, { error: 'Search term is missing' });
         return res.status(400).json({ error: 'Search term is required' });
     }
 
     // Extract just the filename prefix (remove extension)
     const searchPrefix = searchTerm.replace(/\.[^/.]+$/, "");
-    console.log('Executing Finder search for prefix:', searchPrefix);
-
+    logGallery('Finder Search', 'Request received', null, { searchPrefix });
+    
     const scriptContent = `
 tell application "Finder"
     activate
@@ -659,21 +760,14 @@ end tell`;
 
     const scriptPath = '/tmp/search_files.applescript';
     try {
-        console.log('Writing AppleScript to:', scriptPath);
-        console.log('Script content:', scriptContent);
+        logGallery('Finder Search', 'Script created', null, { scriptPath });
         fs.writeFileSync(scriptPath, scriptContent, 'utf8');
         
-        console.log('Running AppleScript...');
+        logGallery('Finder Search', 'Script executed', null, { scriptPath });
         const { stdout, stderr } = await new Promise((resolve, reject) => {
             exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
                 if (error) {
-                    console.error('AppleScript execution error:', {
-                        error: error.message,
-                        code: error.code,
-                        signal: error.signal,
-                        killed: error.killed,
-                        cmd: error.cmd
-                    });
+                    logGallery('Finder Search', 'Error', null, { error: error.message, code: error.code, signal: error.signal, killed: error.killed, cmd: error.cmd });
                     reject(error);
                 } else {
                     resolve({ stdout, stderr });
@@ -683,17 +777,17 @@ end tell`;
 
         try {
             fs.unlinkSync(scriptPath);
-            console.log('Cleaned up script file');
+            logGallery('Finder Search', 'Script cleaned up', null, { scriptPath });
         } catch (e) {
-            console.error('Failed to clean up script file:', e);
+            logGallery('Finder Search', 'Error', null, { error: e.message });
         }
 
         if (stderr) {
-            console.error('AppleScript stderr:', stderr);
+            logGallery('Finder Search', 'Error', null, { error: stderr });
         }
         
         if (stdout) {
-            console.log('AppleScript stdout:', stdout);
+            logGallery('Finder Search', 'Output', null, { stdout });
             if (stdout.startsWith('Error:')) {
                 throw new Error(stdout);
             }
@@ -705,8 +799,7 @@ end tell`;
             output: stdout
         });
     } catch (error) {
-        console.error('Error executing AppleScript:', error);
-        console.error('Error stack:', error.stack);
+        logGallery('Finder Search', 'Error', null, { error: error.message, stack: error.stack });
         res.status(500).json({
             error: 'Failed to execute Finder search',
             details: error.message,
@@ -715,7 +808,63 @@ end tell`;
     }
 });
 
-console.log('Gallery routes registered:', router.stack.map(r => r.route?.path));
+// Initial endpoint for gallery data
+router.get('/initial', async (req, res) => {
+    const startTime = performance.now();
+    logGallery('Initial', 'Request received', null, { query: req.query });
+    
+    const { page = 1, batchSize = 50 } = req.query;
+    
+    try {
+        const scanStart = performance.now();
+        const directoryPath = '/Volumes/VideosNew/Models';
+        const files = await fs.promises.readdir(directoryPath);
+        const scanDuration = performance.now() - scanStart;
+        logGallery('Initial', 'Directory scan complete', scanDuration, { fileCount: files.length });
+        
+        const imageFiles = files.filter(isImageFile);
+        logGallery('Initial', 'Image files filtered', null, { imageCount: imageFiles.length });
+        
+        const start = (page - 1) * batchSize;
+        const end = start + batchSize;
+        const batch = imageFiles.slice(start, end);
+        
+        const processStart = performance.now();
+        const processedFiles = await Promise.all(
+            batch.map(async (file) => {
+                const processed = await processFile(file, directoryPath);
+                if (!processed) {
+                    logGallery('Initial', 'File processing failed', null, { file });
+                    return null;
+                }
+                return {
+                    ...processed,
+                    thumbnailUrl: `/gallery/thumbnail/${encodeURIComponent(file)}`,
+                    fullUrl: `/gallery/image/${encodeURIComponent(file)}`
+                };
+            })
+        );
+        const processDuration = performance.now() - processStart;
+        logGallery('Initial', 'Batch processing complete', processDuration, { batchSize: batch.length });
+        
+        const validFiles = processedFiles.filter(f => f !== null);
+        
+        const response = {
+            files: validFiles,
+            total: imageFiles.length,
+            page: parseInt(page),
+            totalPages: Math.ceil(imageFiles.length / batchSize)
+        };
+        
+        const totalDuration = performance.now() - startTime;
+        logGallery('Initial', 'Request complete', totalDuration, { responseSize: JSON.stringify(response).length });
+        
+        res.json(response);
+    } catch (error) {
+        logGallery('Initial', 'Error', null, { error: error.message, stack: error.stack });
+        res.status(500).json({ error: 'Failed to load gallery' });
+    }
+});
 
 // Export the router
 export default router;

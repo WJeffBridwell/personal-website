@@ -11,13 +11,10 @@
  * @class
  */
 export class Gallery {
-  /**
-   * Creates a new Gallery instance.
-   * 
-   * @param {HTMLElement} galleryElement - Gallery element
-   * @throws {Error} If required DOM elements are not found
-   */
   constructor(galleryElement) {
+    this.startTime = performance.now();
+    this.logClient('Constructor', 'Started');
+    
     this.gallery = galleryElement;
     this.container = galleryElement.querySelector('.gallery-container');
     this.imageGrid = galleryElement.querySelector('#image-grid');
@@ -32,10 +29,40 @@ export class Gallery {
     this.images = [];
     this.controls = galleryElement.querySelector('.gallery-controls');
 
+    const initDuration = performance.now() - this.startTime;
+    this.logClient('Constructor', 'Complete', initDuration);
+    
+    // Initialize components
     this.initializeEventListeners();
     this.createLetterFilter();
     this.initializeStickyControls();
     this.initSearch();
+  }
+
+  async logClient(component, event, duration = null, details = null) {
+    const memory = window.performance?.memory ? 
+      Math.round(window.performance.memory.usedJSHeapSize / 1024 / 1024) : 'N/A';
+    const logMessage = `[${new Date().toISOString()}] [Client] [${component}] [${event}] ${duration ? `[${duration}ms]` : ''} [${memory}MB] ${details ? JSON.stringify(details) : ''}`;
+    
+    try {
+      await fetch('/gallery/log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          component,
+          event,
+          duration,
+          memory,
+          details
+        })
+      });
+    } catch (error) {
+      // Fallback to console only if logging endpoint fails
+      console.error('Failed to log to server:', error);
+    }
   }
 
   /**
@@ -46,6 +73,9 @@ export class Gallery {
    * @throws {Error} If image fetching fails
    */
   async loadImages() {
+    const startTime = performance.now();
+    this.logClient('Images', 'Loading started');
+    
     try {
       const progress = document.querySelector('.loading-progress');
       if (progress) {
@@ -53,6 +83,9 @@ export class Gallery {
       }
 
       const response = await fetch('/gallery/images');
+      const fetchDuration = performance.now() - startTime;
+      this.logClient('Images', 'Fetch complete', fetchDuration);
+      
       if (!response.ok) {
         throw new Error('Failed to fetch images');
       }
@@ -77,7 +110,11 @@ export class Gallery {
 
       // Parse the complete JSON
       try {
+        const parseStart = performance.now();
         const data = JSON.parse(buffer);
+        const parseDuration = performance.now() - parseStart;
+        this.logClient('Images', 'JSON parsed', parseDuration, { dataSize: JSON.stringify(data).length });
+        
         images = data.images;
         
         if (progress) {
@@ -87,12 +124,20 @@ export class Gallery {
 
         this.images = images;
         this.renderImages();
+        const renderDuration = performance.now() - startTime;
+        this.logClient('Images', 'Render complete', renderDuration, { itemCount: images.length });
+        
+        const totalDuration = performance.now() - startTime;
+        this.logClient('Images', 'Loading complete', totalDuration);
+        
         return images;
       } catch (error) {
+        this.logClient('Images', 'Error', null, { error: error.message });
         console.error('Error parsing JSON:', error);
         throw error;
       }
     } catch (error) {
+      this.logClient('Images', 'Error', null, { error: error.message });
       const errorMessage = document.createElement('div');
       errorMessage.className = 'error-message';
       errorMessage.textContent = error.message || 'Network error';
@@ -109,6 +154,11 @@ export class Gallery {
    * @returns {void}
    */
   renderImages() {
+    const startTime = performance.now();
+    this.logClient('Render', 'Started', null, { 
+      itemCount: this.images.length
+    });
+    
     if (!this.imageGrid) return;
 
     // Clear the grid
@@ -177,6 +227,11 @@ export class Gallery {
 
     // Add all images at once
     this.imageGrid.appendChild(fragment);
+    
+    const duration = performance.now() - startTime;
+    this.logClient('Render', 'Complete', duration, { 
+      renderedCount: this.images.length 
+    });
   }
 
   /**

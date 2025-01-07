@@ -24,10 +24,29 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 
+# Logs (except gallery-debug.log)
+logs/**/*
+!logs/
+!logs/gallery-debug.log
+
+# Gallery Images and Cache
+public/images/
+public/cache/**/*.webp
+public/cache/
+public/thumbnails/
+.cache/
+cache/
+cache/**/*.webp
+
+# Old files
+public/content-gallery.css.old
+public/js/content-gallery-js.old
+junk/
+*.old
+
 # Build/Distribution
 dist/
 build/
-*.log
 
 # Coverage reports
 coverage/
@@ -52,8 +71,3 @@ dups/
 response.json
 public/content-gallery-html.old
 public/content-gallery.before
-public/content-gallery.css.old
-public/js/content-gallery-js.old
-junk/
-logs/
-*.old
