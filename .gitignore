@@ -24,10 +24,20 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 
+# Log files
+*.log
+logs/
+debug.log
+gallery-debug.log
+
 # Logs (except gallery-debug.log)
 logs/**/*
 !logs/
 !logs/gallery-debug.log
+
+# Temporary files
+t.txt
+*.tmp
 
 # Gallery Images and Cache
 public/images/
