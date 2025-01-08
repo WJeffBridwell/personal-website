@@ -250,10 +250,7 @@ function createImageContainer(image) {
     container.className = 'image-container';
     
     // Create image element
-    const img = document.createElement('img');
-    img.src = `/gallery/images/${encodeURIComponent(image.name)}?thumbnail=true`;
-    img.alt = image.name;
-    img.loading = 'lazy';
+    const img = renderImage(image);
     container.appendChild(img);
     
     // Add load event listener
@@ -284,9 +281,20 @@ function createImageContainer(image) {
     imageIcon.innerHTML = '<i class="fas fa-image"></i>';
     imageIcon.addEventListener('click', (e) => {
         e.stopPropagation();
-        window.location.href = `/content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
+        openImageInNewTab(`/gallery/images/${encodeURIComponent(image.name)}`);
     });
     container.appendChild(imageIcon);
+
+    // Create caption
+    const caption = document.createElement('div');
+    caption.className = 'image-caption';
+    caption.textContent = image.name;
+    container.appendChild(caption);
+    
+    // Add click event to container
+    container.addEventListener('click', () => {
+        openModal(`/gallery/images/${encodeURIComponent(image.name)}`, image.name);
+    });
 
     // Create info bar
     const info = document.createElement('div');
@@ -352,6 +360,30 @@ function getTagColor(tag) {
 // Helper function to open image in new tab
 function openImageInNewTab(url) {
     window.open(url, '_blank');
+}
+
+// Update image loading
+async function loadImages(page = 1, batchSize = 80) {
+    try {
+        const response = await fetch(`/gallery/initial?page=${page}&batchSize=${batchSize}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch images');
+        }
+        const data = await response.json();
+        return data.files || [];
+    } catch (error) {
+        console.error('Error loading images:', error);
+        throw error;
+    }
+}
+
+// Update image rendering
+function renderImage(image) {
+    const img = document.createElement('img');
+    img.src = `/gallery/images/${encodeURIComponent(image.name)}?thumbnail=true`;
+    img.alt = image.name;
+    img.loading = 'lazy';
+    return img;
 }
 
 /**
@@ -497,18 +529,18 @@ function setupInfiniteScroll() {
                 window._galleryState.currentPage++;
                 
                 console.log('Fetching page:', window._galleryState.currentPage);
-                const response = await fetchImages(window._galleryState.currentPage, 40); // Load more per page
+                const response = await loadImages(window._galleryState.currentPage, 40); // Load more per page
                 
-                if (response && response.images) {
-                    console.log('Received images:', response.images.length);
-                    window._galleryState.hasMore = response.pagination.hasMore;
-                    await displayImages(response.images, true);
+                if (response && response.length > 0) {
+                    console.log('Received images:', response.length);
+                    window._galleryState.hasMore = response.length >= 40;
+                    await displayImages(response, true);
                     
                     // Update total count display
                     const totalCountElement = document.querySelector('.total-count');
                     if (totalCountElement) {
                         const loadedCount = window._galleryState.loadedImages.size;
-                        totalCountElement.textContent = `${loadedCount} / ${response.pagination.total} images`;
+                        totalCountElement.textContent = `${loadedCount} / ${window._galleryState.totalPages} images`;
                     }
                     
                     console.log('Has more:', window._galleryState.hasMore);
@@ -644,15 +676,15 @@ async function filterByLetter(letter) {
     
     try {
         // Fetch filtered images
-        const response = await fetchImages(1, window._galleryState.batchSize, letter);
+        const response = await loadImages(1, window._galleryState.batchSize);
         
-        if (response && response.images) {
-            await displayImages(response.images);
+        if (response && response.length > 0) {
+            await displayImages(response);
             
             // Update total count
             const totalCountElement = document.querySelector('.total-count');
             if (totalCountElement) {
-                totalCountElement.textContent = `${response.images.length} / ${response.pagination.total} images`;
+                totalCountElement.textContent = `${response.length} / ${window._galleryState.totalPages} images`;
             }
             
             // Reset infinite scroll
@@ -680,19 +712,19 @@ async function loadInBackground() {
         const nextPage = window._galleryState.currentPage + 1;
         console.log('Background loading page:', nextPage);
         
-        const response = await fetchImages(nextPage, window._galleryState.batchSize);
+        const response = await loadImages(nextPage, window._galleryState.batchSize);
         
-        if (response && response.images && response.images.length > 0) {
+        if (response && response.length > 0) {
             window._galleryState.currentPage = nextPage;
-            window._galleryState.hasMore = response.pagination.hasMore;
+            window._galleryState.hasMore = response.length >= 40;
             
             // Pre-load images in memory
-            const imagePromises = response.images.map(image => {
+            const imagePromises = response.map(image => {
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.onload = () => resolve();
                     img.onerror = () => resolve();
-                    img.src = `/gallery/images/${encodeURIComponent(image.name)}?thumbnail=true`;
+                    img.src = `/gallery/thumbnail/${encodeURIComponent(image.name)}`;
                 });
             });
             
@@ -701,12 +733,12 @@ async function loadInBackground() {
             
             // Add to DOM if we're still in background loading mode
             if (window._galleryState.backgroundLoading) {
-                await displayImages(response.images, true);
+                await displayImages(response, true);
                 
                 // Update total count
                 const totalCountElement = document.querySelector('.total-count');
                 if (totalCountElement) {
-                    totalCountElement.textContent = `${window._galleryState.loadedImages.size} / ${response.pagination.total} images`;
+                    totalCountElement.textContent = `${window._galleryState.loadedImages.size} / ${window._galleryState.totalPages} images`;
                 }
             }
             
@@ -762,18 +794,18 @@ async function loadInitialImages() {
         header.appendChild(totalCount);
         
         // Fetch first page of images
-        const response = await fetchImages(1, window._galleryState.batchSize);
+        const response = await loadImages(1, window._galleryState.batchSize);
         
-        if (response && response.images) {
-            window._galleryState.images = response.images;
-            window._galleryState.totalPages = response.pagination.totalPages;
-            window._galleryState.hasMore = response.pagination.hasMore;
+        if (response && response.length > 0) {
+            window._galleryState.images = response;
+            window._galleryState.totalPages = 100;
+            window._galleryState.hasMore = response.length >= 40;
             
             // Update total count
-            totalCount.textContent = `${response.images.length} / ${response.pagination.total} images`;
+            totalCount.textContent = `${response.length} / ${window._galleryState.totalPages} images`;
             
             // Display images
-            await displayImages(response.images);
+            await displayImages(response);
             
             // Initialize filters after images are loaded
             await initializeLetterFilter();
@@ -893,6 +925,45 @@ function filterImagesByTags(selectedTags) {
     });
 }
 
+// Filter functions
+if (typeof window._filterFunctions === 'undefined') {
+    window._filterFunctions = {
+        filterImagesByLetter: function(letter) {
+            const imageContainers = document.querySelectorAll('.image-container');
+            imageContainers.forEach(container => {
+                const nameLabel = container.querySelector('.image-name');
+                if (!nameLabel) return;
+                
+                const imageName = nameLabel.textContent;
+                const isVisible = !letter || imageName.toLowerCase().startsWith(letter.toLowerCase());
+                container.classList.toggle('hidden', !isVisible);
+            });
+        },
+        initializeLetterFilter,
+        filterImagesBySearch: function(searchTerm) {
+            const imageContainers = document.querySelectorAll('.image-container');
+            const searchLower = searchTerm.toLowerCase().trim();
+            
+            imageContainers.forEach(container => {
+                const nameLabel = container.querySelector('.image-name');
+                if (!nameLabel) return;
+                
+                const imageName = nameLabel.textContent;
+                // Show images where the name contains the search term anywhere
+                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
+                container.classList.toggle('hidden', !isVisible);
+            });
+        },
+        initializeSearchFilter,
+        fetchImages,
+        displayImages,
+        createImageContainer,
+        initializeModal,
+        openModal,
+        closeModal
+    };
+}
+
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', async () => {
@@ -977,35 +1048,6 @@ function initializeSearchFilter() {
     if (allButton) {
         allButton.addEventListener('click', clearSearch);
     }
-}
-
-// Filter functions
-if (typeof window._filterFunctions === 'undefined') {
-    window._filterFunctions = {
-        filterImagesByLetter,
-        initializeLetterFilter,
-        filterImagesBySearch: function(searchTerm) {
-            const imageContainers = document.querySelectorAll('.image-container');
-            const searchLower = searchTerm.toLowerCase().trim();
-            
-            imageContainers.forEach(container => {
-                const nameLabel = container.querySelector('.image-name');
-                if (!nameLabel) return;
-                
-                const imageName = nameLabel.textContent;
-                // Show images where the name contains the search term anywhere
-                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
-                container.classList.toggle('hidden', !isVisible);
-            });
-        },
-        initializeSearchFilter,
-        fetchImages,
-        displayImages,
-        createImageContainer,
-        initializeModal,
-        openModal,
-        closeModal
-    };
 }
 
 // Export functions for testing

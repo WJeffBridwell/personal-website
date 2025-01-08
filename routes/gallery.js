@@ -17,6 +17,8 @@ import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
 import compression from 'compression';
+import sharp from 'sharp';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -25,17 +27,36 @@ const router = express.Router();
 const DEFAULT_LIMIT = 1000;  // Show 1000 images by default
 const MAX_LIMIT = 5000;      // Allow up to 5000 images per request
 const CHUNK_SIZE = 5000;   // Process in larger chunks for better performance
-const CACHE_TTL = 300000;  // 5 minutes cache TTL
 const THUMBNAIL_WIDTH = 300;  // Width for thumbnails
 const PREVIEW_WIDTH = 800;   // Width for preview images
+const THUMBNAIL_SIZE = 200;
+const CACHE_DURATION = 86400; // 24 hours
+const WARMUP_BATCH_SIZE = 20;  // Process 20 images concurrently
+const IMAGE_DIRECTORY = '/Volumes/VideosNew/Models';  // Base directory for images
 
 // Initialize content cache with LRU cache for thumbnails
 const contentCache = {
     files: new Map(),
     thumbnails: new Map(),
+    previews: new Map(),
     lastUpdate: 0,
     updating: false
 };
+
+const ETAG_CACHE = new Map();
+
+// Function to generate ETag for a file
+async function generateETag(filePath, stat) {
+    if (ETAG_CACHE.has(filePath)) {
+        return ETAG_CACHE.get(filePath);
+    }
+    
+    const fileHash = crypto.createHash('md5');
+    fileHash.update(`${filePath}_${stat.size}_${stat.mtime.toISOString()}`);
+    const etag = `"${fileHash.digest('hex')}"`;
+    ETAG_CACHE.set(filePath, etag);
+    return etag;
+}
 
 // Setup gallery debug logging
 const logDir = path.join(process.cwd(), 'logs');
@@ -45,14 +66,64 @@ if (!fs.existsSync(logDir)) {
 
 // Create a separate stream for gallery logging
 const galleryLog = fs.createWriteStream(path.join(logDir, 'gallery-debug.log'), { flags: 'a' });
+const metricsLog = fs.createWriteStream(path.join(logDir, 'gallery-metrics.log'), { flags: 'a' });
 
+// Enhanced logging function with performance metrics
 function logGallery(component, event, duration = null, details = null) {
     const timestamp = new Date().toISOString();
     const memory = process.memoryUsage();
     const memoryMB = Math.round(memory.heapUsed / 1024 / 1024);
     const logMessage = `[${timestamp}] [Server] [${component}] [${event}] ${duration ? `[${duration}ms]` : ''} [${memoryMB}MB] ${details ? JSON.stringify(details) : ''}`;
     galleryLog.write(logMessage + '\n');
+    
+    // Log metrics separately for analysis
+    if (duration) {
+        const metrics = {
+            timestamp,
+            component,
+            event,
+            duration,
+            memoryMB,
+            details
+        };
+        metricsLog.write(JSON.stringify(metrics) + '\n');
+    }
 }
+
+// Performance monitoring middleware
+const performanceMiddleware = (req, res, next) => {
+    const start = process.hrtime();
+    const originalEnd = res.end;
+    const originalWrite = res.write;
+    let responseBody = '';
+
+    // Track response size
+    res.write = function(chunk) {
+        responseBody += chunk;
+        originalWrite.apply(res, arguments);
+    };
+
+    res.end = function(chunk) {
+        if (chunk) {
+            responseBody += chunk;
+        }
+        
+        const diff = process.hrtime(start);
+        const time = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+        
+        logGallery('Performance', 'Request Complete', parseFloat(time), {
+            method: req.method,
+            url: req.url,
+            statusCode: res.statusCode,
+            responseSize: responseBody.length,
+            contentType: res.getHeader('content-type')
+        });
+
+        originalEnd.apply(res, arguments);
+    };
+
+    next();
+};
 
 // Debug middleware for gallery router
 router.use((req, res, next) => {
@@ -148,7 +219,7 @@ async function updateCache(directoryPath) {
 
         const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
         const imageFiles = files.filter(file => 
-            file.isFile() && /\.(jpg|jpeg|png|gif)$/i.test(file.name)
+            file.isFile() && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name)
         );
 
         // Process files in chunks
@@ -178,6 +249,9 @@ async function updateCache(directoryPath) {
         contentCache.lastUpdate = Date.now();
         logGallery('Cache Update', 'Complete', null, { message: `Cache updated with ${contentCache.files.size} files` });
         
+        // Warm up the thumbnail cache after file index is complete
+        await warmupCache(Array.from(contentCache.files.values()));
+        
     } catch (error) {
         logGallery('Cache Update', 'Error', null, { error: error.message });
         throw error;
@@ -186,17 +260,105 @@ async function updateCache(directoryPath) {
     }
 }
 
+// Cache warmup function
+async function warmupCache(files) {
+    logGallery('Cache Warmup', 'Started', null, {
+        totalFiles: files.length,
+        batchSize: WARMUP_BATCH_SIZE
+    });
+
+    const startTime = process.hrtime();
+    let processed = 0;
+    const errors = [];
+
+    // Process in batches
+    for (let i = 0; i < files.length; i += WARMUP_BATCH_SIZE) {
+        const batch = files.slice(i, i + WARMUP_BATCH_SIZE);
+        await Promise.all(batch.map(async (file) => {
+            try {
+                const imagePath = path.join(process.cwd(), 'cache', file.name);
+                const imageBuffer = await fs.promises.readFile(imagePath);
+                
+                // Generate thumbnail
+                const thumbnail = await sharp(imageBuffer)
+                    .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+                        fit: 'cover',
+                        position: 'attention'
+                    })
+                    .webp({ quality: 80 })
+                    .toBuffer();
+
+                // Store in cache
+                storeThumbnail(file.name, 'thumb', thumbnail);
+                processed++;
+
+                // Log progress every 100 images
+                if (processed % 100 === 0) {
+                    const diff = process.hrtime(startTime);
+                    const duration = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+                    const memoryUsage = process.memoryUsage();
+                    logGallery('Cache Warmup', 'Progress', parseFloat(duration), {
+                        processed,
+                        total: files.length,
+                        percentComplete: ((processed / files.length) * 100).toFixed(1),
+                        heapUsed: Math.round(memoryUsage.heapUsed / 1024 / 1024) + 'MB',
+                        cacheSize: contentCache.thumbnails.size
+                    });
+                }
+            } catch (error) {
+                errors.push({ file: file.name, error: error.message });
+                logGallery('Cache Warmup', 'Error', null, {
+                    file: file.name,
+                    error: error.message
+                });
+            }
+        }));
+    }
+
+    const diff = process.hrtime(startTime);
+    const duration = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+    
+    logGallery('Cache Warmup', 'Complete', parseFloat(duration), {
+        processed,
+        errors: errors.length,
+        cacheSize: contentCache.thumbnails.size,
+        totalMemoryMB: (Array.from(contentCache.thumbnails.values())
+            .reduce((sum, entry) => sum + entry.size, 0) / (1024 * 1024)).toFixed(2)
+    });
+
+    if (errors.length > 0) {
+        logGallery('Cache Warmup', 'Errors', null, { errors });
+    }
+}
+
+// Ensure cache warmup runs on startup
+async function initializeCache() {
+    logGallery('Cache Initialize', 'Started', null, {
+        message: 'Starting cache initialization and warmup'
+    });
+    
+    try {
+        // Update file metadata cache with files from image directory
+        await updateCache(IMAGE_DIRECTORY);
+        
+        logGallery('Cache Initialize', 'Complete', null, {
+            files: contentCache.files.size,
+            thumbnails: contentCache.thumbnails.size
+        });
+    } catch (error) {
+        logGallery('Cache Initialize', 'Error', null, {
+            error: error.message
+        });
+    }
+}
+
+// Call on startup
+initializeCache();
+
 // Get all available first letters
 router.get('/letters', async (req, res) => {
     try {
-        const directoryPath = '/Volumes/VideosNew/Models';
-        
-        // Update cache if needed
-        if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
-            await updateCache(directoryPath);
-        }
-        
-        // Get all unique first letters
+        // Get all unique first letters from existing cache
         const letters = new Set();
         for (const [filename] of contentCache.files) {
             if (filename) {
@@ -224,14 +386,7 @@ router.get('/letters', async (req, res) => {
 // Get all available tags
 router.get('/tags', async (req, res) => {
     try {
-        const directoryPath = '/Volumes/VideosNew/Models';
-        
-        // Update cache if needed
-        if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
-            await updateCache(directoryPath);
-        }
-        
-        // Get all unique tags from cached images
+        // Get all unique tags from existing cache
         const tags = new Set();
         for (const [filename, metadata] of contentCache.files.entries()) {
             const fileTags = generateTags(filename);
@@ -252,67 +407,86 @@ router.get('/tags', async (req, res) => {
     }
 });
 
-// Gallery images endpoint with optimized loading
-router.get('/images', async (req, res) => {
-    logGallery('Images Route', 'Request received', null, { query: req.query });
+// Helper function to check if a file is an image
+function isImageFile(filename) {
+    return /\.(jpg|jpeg|png|gif|webp)$/i.test(filename);
+}
+
+// Initial endpoint for gallery data
+router.get('/initial', async (req, res) => {
+    const startTime = performance.now();
+    logGallery('Initial', 'Request received', null, { query: req.query });
+    
+    const page = parseInt(req.query.page) || 1;
+    const batchSize = parseInt(req.query.batchSize) || 80;
     
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const letter = req.query.letter;
-        const directoryPath = '/Volumes/VideosNew/Models';
+        const scanStart = performance.now();
+        const directoryPath = IMAGE_DIRECTORY;
+        const files = await fs.promises.readdir(directoryPath);
+        const scanDuration = performance.now() - scanStart;
+        logGallery('Initial', 'Directory scan complete', scanDuration, { fileCount: files.length });
         
-        // Update cache if needed
-        if (Date.now() - contentCache.lastUpdate > CACHE_TTL) {
-            await updateCache(directoryPath);
-        }
+        const imageFiles = files.filter(isImageFile);
+        logGallery('Initial', 'Image files filtered', null, { imageCount: imageFiles.length });
         
-        // Convert Map to array and filter by letter if specified
-        let allFiles = Array.from(contentCache.files.values());
-        if (letter) {
-            allFiles = allFiles.filter(file => 
-                file.name.charAt(0).toUpperCase() === letter.toUpperCase()
-            );
-        }
-        
-        // Sort files
-        allFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        // Sort files by name
+        imageFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
         
         // Calculate pagination
-        const startIndex = (page - 1) * limit;
-        const endIndex = startIndex + limit;
-        const totalFiles = allFiles.length;
+        const totalPages = Math.ceil(imageFiles.length / batchSize);
+        const start = (page - 1) * batchSize;
+        const end = Math.min(start + batchSize, imageFiles.length);
+        const batch = imageFiles.slice(start, end);
         
-        // Get paginated files
-        const paginatedFiles = allFiles.slice(startIndex, endIndex);
-        
-        // Prepare response data
-        const images = paginatedFiles.map(file => ({
-            name: file.name,
-            url: `/gallery/images/${encodeURIComponent(file.name)}`,
-            thumbnailUrl: `/gallery/images/${encodeURIComponent(file.name)}?thumbnail=true`,
-            size: file.size,
-            modified: file.modified,
-            type: file.type,
-            tags: generateTags(file.name)
-        }));
-
-        res.json({
-            images,
-            pagination: {
-                total: totalFiles,
-                totalAll: contentCache.files.size,
-                page,
-                limit,
-                totalPages: Math.ceil(totalFiles / limit),
-                hasMore: endIndex < totalFiles,
-                currentLetter: letter || null
-            }
+        logGallery('Initial', 'Pagination calculated', null, {
+            page,
+            batchSize,
+            totalPages,
+            start,
+            end,
+            batchLength: batch.length
         });
         
+        const processStart = performance.now();
+        const processedFiles = await Promise.all(
+            batch.map(async (file) => {
+                try {
+                    const filePath = path.join(directoryPath, file);
+                    const stats = await fs.promises.stat(filePath);
+                    return {
+                        name: file,
+                        modified: stats.mtime.toISOString(),
+                        size: stats.size
+                    };
+                } catch (err) {
+                    logGallery('Initial', 'File processing failed', null, { file, error: err.message });
+                    return null;
+                }
+            })
+        );
+        const processDuration = performance.now() - processStart;
+        logGallery('Initial', 'Batch processing complete', processDuration, { batchSize: batch.length });
+        
+        const validFiles = processedFiles.filter(f => f !== null);
+        
+        const response = {
+            files: validFiles,
+            total: imageFiles.length,
+            page: page,
+            batchSize: batchSize,
+            totalPages: totalPages,
+            start: start,
+            end: end
+        };
+        
+        const totalDuration = performance.now() - startTime;
+        logGallery('Initial', 'Request complete', totalDuration, response);
+        
+        res.json(response);
     } catch (error) {
-        logGallery('Images Route', 'Error', null, { error: error.message });
-        res.status(500).json({ error: 'Internal server error' });
+        logGallery('Initial', 'Error', null, { error: error.message, stack: error.stack });
+        res.status(500).json({ error: 'Failed to load images', details: error.message });
     }
 });
 
@@ -327,6 +501,7 @@ function generateTags(filename) {
     if (/\.(jpg|jpeg)$/i.test(filename)) tags.add('jpeg');
     if (/\.png$/i.test(filename)) tags.add('png');
     if (/\.gif$/i.test(filename)) tags.add('gif');
+    if (/\.(webp)$/i.test(filename)) tags.add('webp');
     
     // Add tags based on common patterns
     if (/\d{4}/.test(filename)) tags.add('dated');
@@ -349,211 +524,408 @@ function generateTags(filename) {
     return Array.from(tags);
 }
 
-// Batch image endpoint
-router.post('/batch-images', async (req, res) => {
-    console.log('[Server] [Batch Images] [Request received]', { 
-        imageCount: req.body.imageNames?.length || 0,
-        memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+// Cache helpers
+function checkThumbnailCache(imageName, size) {
+    const key = `${imageName}_${size}`;
+    logGallery('Cache Check', 'Debug', null, {
+        operation: 'check',
+        key,
+        cacheSize: contentCache.thumbnails.size
     });
     
-    try {
-        const { imageNames } = req.body;
-        if (!Array.isArray(imageNames)) {
-            console.error('[Server] [Batch Images] [Error] Invalid request - imageNames not an array');
-            return res.status(400).json({ error: 'imageNames must be an array' });
-        }
-
-        const batchSize = 1000;
-        const results = [];
-        
-        // Process in batches of 1000
-        for (let i = 0; i < imageNames.length; i += batchSize) {
-            const batch = imageNames.slice(i, i + batchSize);
-            console.log(`[Server] [Batch Images] [Processing] Batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(imageNames.length/batchSize)}`);
-            
-            const batchResults = await Promise.all(
-                batch.map(async (imageName) => {
-                    try {
-                        const imagePath = path.join('/Volumes/VideosNew/Models', imageName);
-                        const imageBuffer = await fs.promises.readFile(imagePath);
-                        return {
-                            name: imageName,
-                            data: imageBuffer.toString('base64'),
-                            error: null
-                        };
-                    } catch (err) {
-                        console.error(`[Server] [Batch Images] [Error] Failed to load image ${imageName}:`, err);
-                        return {
-                            name: imageName,
-                            data: null,
-                            error: err.message
-                        };
-                    }
-                })
-            );
-            results.push(...batchResults);
-            console.log(`[Server] [Batch Images] [Complete] Batch ${Math.floor(i/batchSize) + 1} processed`);
-        }
-
-        console.log('[Server] [Batch Images] [Complete] All batches processed', {
-            totalImages: results.length,
-            successCount: results.filter(r => r.data).length,
-            failureCount: results.filter(r => r.error).length,
-            memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`
+    const entry = contentCache.thumbnails.get(key);
+    
+    if (entry) {
+        entry.hits++;
+        entry.lastAccessed = Date.now();
+        logGallery('Cache Check', 'Hit', null, {
+            key,
+            hits: entry.hits,
+            size: entry.size
         });
-
-        res.json({ images: results });
-    } catch (error) {
-        console.error('[Server] [Batch Images] [Error] Batch processing failed:', error);
-        res.status(500).json({ error: error.message });
+        return entry.buffer;
     }
-});
+    logGallery('Cache Check', 'Miss', null, { key });
+    return null;
+}
+
+function storeThumbnail(imageName, size, buffer) {
+    const key = `${imageName}_${size}`;
+    logGallery('Cache Store', 'Debug', null, {
+        operation: 'store',
+        key,
+        bufferSize: buffer.length,
+        currentCacheSize: contentCache.thumbnails.size
+    });
+    
+    const entry = {
+        buffer,
+        size: buffer.length,
+        created: Date.now(),
+        lastAccessed: Date.now(),
+        etag: crypto.createHash('md5').update(buffer).digest('hex'),
+        hits: 1
+    };
+    
+    contentCache.thumbnails.set(key, entry);
+    logGallery('Cache Store', 'Complete', null, {
+        key,
+        newCacheSize: contentCache.thumbnails.size,
+        entrySize: entry.size,
+        totalMemoryMB: (Array.from(contentCache.thumbnails.values())
+            .reduce((sum, e) => sum + e.size, 0) / (1024 * 1024)).toFixed(2)
+    });
+}
+
+function getCacheStats() {
+    const stats = {
+        size: contentCache.thumbnails.size,
+        totalMemory: 0,
+        averageHits: 0,
+        hitsBySize: {
+            thumb: 0,
+            full: 0
+        }
+    };
+    
+    for (const [key, entry] of contentCache.thumbnails) {
+        stats.totalMemory += entry.size;
+        stats.averageHits += entry.hits;
+        stats.hitsBySize[key.endsWith('thumb') ? 'thumb' : 'full']++;
+    }
+    
+    if (contentCache.thumbnails.size > 0) {
+        stats.averageHits /= contentCache.thumbnails.size;
+    }
+    
+    return stats;
+}
+
+// Log cache stats every 5 minutes
+setInterval(() => {
+    logGallery('Cache Stats', 'Status', null, getCacheStats());
+}, 300000);
 
 // Image optimization middleware
-const optimizeImage = async (req, res, next) => {
-    if (!req.path.match(/\.(jpg|jpeg|png|gif)$/i)) {
+async function optimizeImage(req, res, next) {
+    if (!req.path.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
         return next();
     }
 
-    const isThumb = req.query.size === 'thumb';
-    const isPreview = req.query.size === 'preview';
-    
-    if (!isThumb && !isPreview) {
-        return next();
-    }
+    const imageName = path.basename(req.path);
+    const size = req.query.thumbnail ? 'thumb' : 'full';
+    const imagePath = path.join(process.cwd(), 'public', req.path);
+    const startTime = process.hrtime();
 
-    const width = isThumb ? THUMBNAIL_WIDTH : PREVIEW_WIDTH;
-    const cacheKey = `${req.path}-${width}`;
-    const cacheMap = isThumb ? contentCache.thumbnails : contentCache.previews;
+    try {
+        // Check cache first
+        const cached = checkThumbnailCache(imageName, size);
+        if (cached) {
+            logGallery('Image Cache', 'Hit', null, { 
+                imageName,
+                size,
+                cacheSize: contentCache.thumbnails.size
+            });
+            
+            res.type('image/webp');
+            return res.send(cached);
+        }
 
-    if (cacheMap.has(cacheKey)) {
+        // Check if file exists
+        const stat = await fs.promises.stat(imagePath);
+        
+        // Generate ETag
+        const etag = await generateETag(imagePath, stat);
+        res.set('ETag', etag);
+        
+        // Check if client has valid cache
+        if (req.headers['if-none-match'] === etag) {
+            logGallery('Image Cache', 'Browser Hit', null, { path: req.path });
+            return res.status(304).end();
+        }
+
+        // Set caching headers
+        res.set({
+            'Cache-Control': `public, max-age=${CACHE_DURATION}, stale-while-revalidate=86400`,
+            'Expires': new Date(Date.now() + CACHE_DURATION * 1000).toUTCString()
+        });
+
+        const imageBuffer = await fs.promises.readFile(imagePath);
+        let processedImage;
+
+        if (size === 'thumb') {
+            processedImage = await sharp(imageBuffer)
+                .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+                    fit: 'cover',
+                    position: 'attention'
+                })
+                .webp({ quality: 80 })
+                .toBuffer();
+        } else {
+            processedImage = await sharp(imageBuffer)
+                .webp({ quality: 85 })
+                .toBuffer();
+        }
+
+        logGallery('Image Processing', 'Complete', null, {
+            size,
+            bufferSize: processedImage.length,
+            willCache: true
+        });
+
+        // Store in cache
+        storeThumbnail(imageName, size, processedImage);
+        
+        const diff = process.hrtime(startTime);
+        const duration = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
+
+        logGallery('Image Processing', 'Success', parseFloat(duration), {
+            path: req.path,
+            originalSize: imageBuffer.length,
+            processedSize: processedImage.length,
+            thumbnail: size === 'thumb',
+            cached: false
+        });
+
         res.type('image/webp');
-        res.send(cacheMap.get(cacheKey));
-        return;
+        res.send(processedImage);
+        
+    } catch (error) {
+        logGallery('Image Processing', 'Error', null, {
+            path: req.path,
+            error: error.message
+        });
+        next(error);
+    }
+}
+
+// Batch image endpoint with improved error handling and metrics
+router.post('/batch-images', async (req, res) => {
+    const startTime = process.hrtime();
+    const batchId = Date.now().toString();
+    
+    logGallery('Batch Images', 'Request received', null, { 
+        batchId,
+        imageCount: req.body.imageNames?.length || 0,
+        memory: process.memoryUsage().heapUsed
+    });
+
+    if (!req.body.imageNames || !Array.isArray(req.body.imageNames)) {
+        logGallery('Batch Images', 'Invalid request', null, { batchId, error: 'Invalid request body' });
+        return res.status(400).json({ error: 'Invalid request body' });
     }
 
     try {
-        const imagePath = path.join(process.cwd(), 'public', req.path);
-        const image = await sharp(imagePath)
-            .resize(width, null, { withoutEnlargement: true })
-            .webp({ quality: 80 })
-            .toBuffer();
+        const images = [];
+        const errors = [];
+        const startProcessing = process.hrtime();
 
-        cacheMap.set(cacheKey, image);
-        res.type('image/webp');
-        res.send(image);
+        // Process images in sequence to avoid memory spikes
+        for (const imageName of req.body.imageNames) {
+            try {
+                const imagePath = path.join(process.cwd(), 'public', 'images', imageName);
+                const imageStartTime = process.hrtime();
+                
+                if (fs.existsSync(imagePath)) {
+                    const imageBuffer = await fs.promises.readFile(imagePath);
+                    
+                    // Process thumbnail
+                    const thumbnail = await sharp(imageBuffer)
+                        .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+                            fit: 'cover',
+                            position: 'attention'
+                        })
+                        .webp({ quality: 80 })
+                        .toBuffer();
+
+                    const imageDiff = process.hrtime(imageStartTime);
+                    const imageTime = (imageDiff[0] * 1e3 + imageDiff[1] * 1e-6).toFixed(2);
+                    
+                    images.push({
+                        name: imageName,
+                        data: `data:image/webp;base64,${thumbnail.toString('base64')}`
+                    });
+
+                    logGallery('Image Processing', 'Success', parseFloat(imageTime), {
+                        batchId,
+                        imageName,
+                        originalSize: imageBuffer.length,
+                        thumbnailSize: thumbnail.length
+                    });
+                } else {
+                    errors.push({ name: imageName, error: 'File not found' });
+                    logGallery('Image Processing', 'File not found', null, { batchId, imageName });
+                }
+            } catch (error) {
+                errors.push({ name: imageName, error: error.message });
+                logGallery('Image Processing', 'Error', null, { batchId, imageName, error: error.message });
+            }
+        }
+
+        const processingDiff = process.hrtime(startProcessing);
+        const processingTime = (processingDiff[0] * 1e3 + processingDiff[1] * 1e-6).toFixed(2);
+
+        const totalDiff = process.hrtime(startTime);
+        const totalTime = (totalDiff[0] * 1e3 + totalDiff[1] * 1e-6).toFixed(2);
+
+        logGallery('Batch Images', 'Processing complete', parseFloat(processingTime), {
+            batchId,
+            successCount: images.length,
+            errorCount: errors.length,
+            totalTime: parseFloat(totalTime),
+            memory: process.memoryUsage().heapUsed
+        });
+
+        res.json({
+            images,
+            errors: errors.length > 0 ? errors : undefined,
+            metrics: {
+                processingTime: parseFloat(processingTime),
+                totalTime: parseFloat(totalTime)
+            }
+        });
     } catch (error) {
-        console.error('Image optimization error:', error);
-        next();
+        logGallery('Batch Images', 'Fatal error', null, { batchId, error: error.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
-};
-
-// Apply middleware
-router.use(compression());
-router.use(optimizeImage);
+});
 
 // Serve individual media files
 router.get('/images/:imageName', async (req, res) => {
     const imageName = decodeURIComponent(req.params.imageName);
-    logGallery('Image Serve', 'Request received', null, { imageName });
+    logGallery('Image Serve', 'Request received', null, { imageName, query: req.query });
     
     try {
-        const filePath = path.join('/Volumes/VideosNew/Models', imageName);
+        const filePath = path.join(IMAGE_DIRECTORY, imageName);
         
-        try {
-            if (!fs.existsSync(filePath)) {
-                logGallery('Image Serve', 'Error', null, { error: 'File not found', filePath });
-                res.status(404).json({ 
-                    error: 'File not found',
-                    details: `File not found at ${filePath}`,
-                    path: filePath
-                });
-                return;
-            }
-            
-            // Determine content type based on file extension
-            const ext = path.extname(imageName).toLowerCase();
-            let contentType = 'image/jpeg';  // default
-            
-            if (ext === '.png') contentType = 'image/png';
-            else if (ext === '.webp') contentType = 'image/webp';
-            else if (ext === '.gif') contentType = 'image/gif';
-            else if (ext === '.mp4') contentType = 'video/mp4';
-            else if (ext === '.webm') contentType = 'video/webm';
-            else if (ext === '.mov') contentType = 'video/quicktime';
-
-            // Handle video thumbnail requests
-            if (req.query.poster && ['.mp4', '.webm', '.mov'].includes(ext)) {
-                // Generate or fetch video thumbnail
-                const thumbnailPath = path.join(path.dirname(filePath), '.thumbnails', `${path.basename(filePath, ext)}.jpg`);
-                
-                try {
-                    if (!fs.existsSync(thumbnailPath)) {
-                        logGallery('Image Serve', 'Error', null, { error: 'Thumbnail not found', thumbnailPath });
-                        // If thumbnail doesn't exist, send a default video thumbnail or generate one
-                        const defaultThumbnailPath = path.join(__dirname, '../public/images/video-thumbnail.jpg');
-                        res.sendFile(defaultThumbnailPath, {
-                            headers: { 'Content-Type': 'image/jpeg' }
-                        });
-                        return;
-                    }
-                    res.sendFile(thumbnailPath, {
-                        headers: { 'Content-Type': 'image/jpeg' }
-                    });
-                    return;
-                } catch (err) {
-                    logGallery('Image Serve', 'Error', null, { error: 'Failed to serve thumbnail', details: err.message });
-                    res.status(500).json({ 
-                        error: 'Failed to serve thumbnail',
-                        details: err.message
-                    });
-                    return;
-                }
-            }
-
-            // Set appropriate headers for range requests (video streaming)
-            if (['.mp4', '.webm', '.mov'].includes(ext)) {
-                const stat = fs.statSync(filePath);
-                const fileSize = stat.size;
-                const range = req.headers.range;
-
-                if (range) {
-                    const parts = range.replace(/bytes=/, "").split("-");
-                    const start = parseInt(parts[0], 10);
-                    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-                    const chunksize = (end - start) + 1;
-                    const file = fs.createReadStream(filePath, { start, end });
-
-                    res.writeHead(206, {
-                        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-                        'Accept-Ranges': 'bytes',
-                        'Content-Length': chunksize,
-                        'Content-Type': contentType
-                    });
-
-                    file.pipe(res);
-                    return;
-                }
-            }
-
-            // For non-range requests, send the file normally
-            res.sendFile(filePath, {
-                headers: { 'Content-Type': contentType }
-            });
-        } catch (err) {
+        if (!fs.existsSync(filePath)) {
             logGallery('Image Serve', 'Error', null, { error: 'File not found', filePath });
             res.status(404).json({ 
                 error: 'File not found',
                 details: `File not found at ${filePath}`,
                 path: filePath
             });
+            return;
         }
+        
+        // Determine content type based on file extension
+        const ext = path.extname(imageName).toLowerCase();
+        let contentType = 'image/jpeg';  // default
+        
+        if (ext === '.png') contentType = 'image/png';
+        else if (ext === '.webp') contentType = 'image/webp';
+        else if (ext === '.gif') contentType = 'image/gif';
+        else if (ext === '.mp4') contentType = 'video/mp4';
+        else if (ext === '.webm') contentType = 'video/webm';
+        else if (ext === '.mov') contentType = 'video/quicktime';
+
+        // Handle thumbnail requests for images
+        if (req.query.thumbnail && ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext)) {
+            const thumbnailDir = path.join(IMAGE_DIRECTORY, '.thumbnails');
+            const thumbnailPath = path.join(thumbnailDir, imageName);
+            
+            // Create thumbnail directory if it doesn't exist
+            if (!fs.existsSync(thumbnailDir)) {
+                fs.mkdirSync(thumbnailDir, { recursive: true });
+            }
+            
+            // Check if thumbnail exists
+            if (fs.existsSync(thumbnailPath)) {
+                res.sendFile(thumbnailPath);
+                return;
+            }
+            
+            // Generate thumbnail
+            const image = sharp(filePath);
+            const metadata = await image.metadata();
+            
+            // Resize maintaining aspect ratio
+            const resized = await image
+                .resize(300, 300, {
+                    fit: 'inside',
+                    withoutEnlargement: true
+                })
+                .jpeg({ quality: 80 })
+                .toBuffer();
+            
+            // Save thumbnail
+            await fs.promises.writeFile(thumbnailPath, resized);
+            
+            // Send response
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.send(resized);
+            return;
+        }
+
+        // Handle video thumbnail requests
+        if (req.query.poster && ['.mp4', '.webm', '.mov'].includes(ext)) {
+            // Generate or fetch video thumbnail
+            const thumbnailPath = path.join(path.dirname(filePath), '.thumbnails', `${path.basename(filePath, ext)}.jpg`);
+            
+            try {
+                if (!fs.existsSync(thumbnailPath)) {
+                    logGallery('Image Serve', 'Error', null, { error: 'Thumbnail not found', thumbnailPath });
+                    // If thumbnail doesn't exist, send a default video thumbnail or generate one
+                    const defaultThumbnailPath = path.join(__dirname, '../public/images/video-thumbnail.jpg');
+                    res.sendFile(defaultThumbnailPath, {
+                        headers: { 'Content-Type': 'image/jpeg' }
+                    });
+                    return;
+                }
+                res.sendFile(thumbnailPath, {
+                    headers: { 'Content-Type': 'image/jpeg' }
+                });
+                return;
+            } catch (err) {
+                logGallery('Image Serve', 'Error', null, { error: 'Failed to serve thumbnail', details: err.message });
+                res.status(500).json({ 
+                    error: 'Failed to serve thumbnail',
+                    details: err.message
+                });
+                return;
+            }
+        }
+
+        // Set appropriate headers for range requests (video streaming)
+        if (['.mp4', '.webm', '.mov'].includes(ext)) {
+            const stat = fs.statSync(filePath);
+            const fileSize = stat.size;
+            const range = req.headers.range;
+
+            if (range) {
+                const parts = range.replace(/bytes=/, "").split("-");
+                const start = parseInt(parts[0], 10);
+                const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+                const chunksize = (end - start) + 1;
+                const file = fs.createReadStream(filePath, { start, end });
+
+                res.writeHead(206, {
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': chunksize,
+                    'Content-Type': contentType
+                });
+
+                file.pipe(res);
+                return;
+            }
+
+            res.writeHead(200, {
+                'Content-Length': fileSize,
+                'Content-Type': contentType
+            });
+
+            fs.createReadStream(filePath).pipe(res);
+            return;
+        }
+
+        // For regular images, just send the file
+        res.setHeader('Content-Type', contentType);
+        res.sendFile(filePath);
+        
     } catch (error) {
         logGallery('Image Serve', 'Error', null, { error: error.message });
-        res.status(500).json({ 
-            error: 'Failed to serve file',
-            details: error.message
-        });
+        res.status(500).json({ error: 'Failed to serve image' });
     }
 });
 
@@ -564,7 +936,7 @@ router.get('/video/:videoName', async (req, res) => {
     
     try {
         // Get the directory path from the query or use default
-        const directoryPath = '/Volumes/VideosNew/Models';
+        const directoryPath = IMAGE_DIRECTORY;
         const videoPath = path.join(directoryPath, videoName);
         
         // Check if file exists
@@ -805,64 +1177,6 @@ end tell`;
             details: error.message,
             stack: error.stack
         });
-    }
-});
-
-// Initial endpoint for gallery data
-router.get('/initial', async (req, res) => {
-    const startTime = performance.now();
-    logGallery('Initial', 'Request received', null, { query: req.query });
-    
-    const { page = 1, batchSize = 50 } = req.query;
-    
-    try {
-        const scanStart = performance.now();
-        const directoryPath = '/Volumes/VideosNew/Models';
-        const files = await fs.promises.readdir(directoryPath);
-        const scanDuration = performance.now() - scanStart;
-        logGallery('Initial', 'Directory scan complete', scanDuration, { fileCount: files.length });
-        
-        const imageFiles = files.filter(isImageFile);
-        logGallery('Initial', 'Image files filtered', null, { imageCount: imageFiles.length });
-        
-        const start = (page - 1) * batchSize;
-        const end = start + batchSize;
-        const batch = imageFiles.slice(start, end);
-        
-        const processStart = performance.now();
-        const processedFiles = await Promise.all(
-            batch.map(async (file) => {
-                const processed = await processFile(file, directoryPath);
-                if (!processed) {
-                    logGallery('Initial', 'File processing failed', null, { file });
-                    return null;
-                }
-                return {
-                    ...processed,
-                    thumbnailUrl: `/gallery/thumbnail/${encodeURIComponent(file)}`,
-                    fullUrl: `/gallery/image/${encodeURIComponent(file)}`
-                };
-            })
-        );
-        const processDuration = performance.now() - processStart;
-        logGallery('Initial', 'Batch processing complete', processDuration, { batchSize: batch.length });
-        
-        const validFiles = processedFiles.filter(f => f !== null);
-        
-        const response = {
-            files: validFiles,
-            total: imageFiles.length,
-            page: parseInt(page),
-            totalPages: Math.ceil(imageFiles.length / batchSize)
-        };
-        
-        const totalDuration = performance.now() - startTime;
-        logGallery('Initial', 'Request complete', totalDuration, { responseSize: JSON.stringify(response).length });
-        
-        res.json(response);
-    } catch (error) {
-        logGallery('Initial', 'Error', null, { error: error.message, stack: error.stack });
-        res.status(500).json({ error: 'Failed to load gallery' });
     }
 });
 
