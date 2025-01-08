@@ -416,77 +416,78 @@ function isImageFile(filename) {
 router.get('/initial', async (req, res) => {
     const startTime = performance.now();
     logGallery('Initial', 'Request received', null, { query: req.query });
-    
-    const page = parseInt(req.query.page) || 1;
-    const batchSize = parseInt(req.query.batchSize) || 80;
+
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const batchSize = parseInt(req.query.batchSize) || 80;
+        const start = (page - 1) * batchSize;
+        
+        // Get all image files
+        const files = fs.readdirSync(IMAGE_DIRECTORY)
+            .filter(file => isImageFile(file))
+            .sort((a, b) => a.localeCompare(b));
+            
+        const totalFiles = files.length;
+        const totalPages = Math.ceil(totalFiles / batchSize);
+        const hasMore = page < totalPages;
+        
+        // Get subset of files for current page
+        const pageFiles = files.slice(start, start + batchSize);
+        
+        res.json({
+            files: pageFiles,
+            total: totalFiles,
+            page: page,
+            totalPages: totalPages,
+            hasMore: hasMore
+        });
+
+        const duration = performance.now() - startTime;
+        logGallery('Initial', 'Response sent', duration, {
+            filesCount: pageFiles.length,
+            totalFiles,
+            page,
+            totalPages
+        });
+    } catch (error) {
+        logGallery('Initial', 'Error', null, { error: error.message });
+        res.status(500).json({ error: 'Failed to get initial images' });
+    }
+});
+
+// Serve image files
+router.get('/image/:imageName', async (req, res) => {
+    const imageName = decodeURIComponent(req.params.imageName);
+    const thumbnail = req.query.thumbnail === 'true';
     
     try {
-        const scanStart = performance.now();
-        const directoryPath = IMAGE_DIRECTORY;
-        const files = await fs.promises.readdir(directoryPath);
-        const scanDuration = performance.now() - scanStart;
-        logGallery('Initial', 'Directory scan complete', scanDuration, { fileCount: files.length });
+        const filePath = path.join(IMAGE_DIRECTORY, imageName);
         
-        const imageFiles = files.filter(isImageFile);
-        logGallery('Initial', 'Image files filtered', null, { imageCount: imageFiles.length });
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Image not found' });
+        }
         
-        // Sort files by name
-        imageFiles.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        // Set caching headers
+        res.setHeader('Cache-Control', `public, max-age=${CACHE_DURATION}`);
         
-        // Calculate pagination
-        const totalPages = Math.ceil(imageFiles.length / batchSize);
-        const start = (page - 1) * batchSize;
-        const end = Math.min(start + batchSize, imageFiles.length);
-        const batch = imageFiles.slice(start, end);
-        
-        logGallery('Initial', 'Pagination calculated', null, {
-            page,
-            batchSize,
-            totalPages,
-            start,
-            end,
-            batchLength: batch.length
-        });
-        
-        const processStart = performance.now();
-        const processedFiles = await Promise.all(
-            batch.map(async (file) => {
-                try {
-                    const filePath = path.join(directoryPath, file);
-                    const stats = await fs.promises.stat(filePath);
-                    return {
-                        name: file,
-                        modified: stats.mtime.toISOString(),
-                        size: stats.size
-                    };
-                } catch (err) {
-                    logGallery('Initial', 'File processing failed', null, { file, error: err.message });
-                    return null;
-                }
-            })
-        );
-        const processDuration = performance.now() - processStart;
-        logGallery('Initial', 'Batch processing complete', processDuration, { batchSize: batch.length });
-        
-        const validFiles = processedFiles.filter(f => f !== null);
-        
-        const response = {
-            files: validFiles,
-            total: imageFiles.length,
-            page: page,
-            batchSize: batchSize,
-            totalPages: totalPages,
-            start: start,
-            end: end
-        };
-        
-        const totalDuration = performance.now() - startTime;
-        logGallery('Initial', 'Request complete', totalDuration, response);
-        
-        res.json(response);
+        if (thumbnail) {
+            // Generate and serve thumbnail
+            const thumbnailBuffer = await sharp(filePath)
+                .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
+                    fit: 'cover',
+                    position: 'center'
+                })
+                .webp({ quality: 80 })
+                .toBuffer();
+                
+            res.type('image/jpeg').send(thumbnailBuffer);
+        } else {
+            // Serve original image
+            res.sendFile(filePath);
+        }
     } catch (error) {
-        logGallery('Initial', 'Error', null, { error: error.message, stack: error.stack });
-        res.status(500).json({ error: 'Failed to load images', details: error.message });
+        console.error('Error serving image:', error);
+        res.status(500).json({ error: 'Failed to serve image' });
     }
 });
 
@@ -1178,6 +1179,29 @@ end tell`;
             stack: error.stack
         });
     }
+});
+
+// Add route to trigger Finder search
+router.get('/finder-search/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const searchScript = `tell application "Finder"
+        activate
+        set searchText to "${filename}"
+        tell application "System Events"
+            keystroke "f" using {command down, shift down}
+            delay 0.5
+            keystroke searchText
+        end tell
+    end tell`;
+    
+    exec(`osascript -e '${searchScript}'`, (error, stdout, stderr) => {
+        if (error) {
+            console.error('Error executing AppleScript:', error);
+            res.status(500).json({ error: 'Failed to open Finder search' });
+            return;
+        }
+        res.json({ success: true });
+    });
 });
 
 // Export the router

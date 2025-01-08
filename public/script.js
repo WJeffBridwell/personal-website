@@ -21,53 +21,42 @@ console.log('Full HTML:', document.documentElement.outerHTML);
 console.log('Script file loaded and starting execution');
 
 // Initialize gallery functionality
-function initializeGallery() {
+async function initializeGallery() {
     console.log('\n=== Initializing Gallery ===');
-    // Only run once
-    if (window._galleryInitialized) {
-        console.log('Gallery already initialized, skipping');
-        return;
-    }
-
-    // Check if gallery section exists on the page
-    const gallerySection = document.getElementById('gallery');
+    
+    // Check for required elements
+    const gallerySection = document.querySelector('.gallery');
     const imageGrid = document.getElementById('image-grid');
     
     console.log('Gallery elements check:', {
         gallerySection: !!gallerySection,
         imageGrid: !!imageGrid
     });
-
+    
     if (!gallerySection || !imageGrid) {
-        console.log('Gallery elements not found, skipping initialization');
+        console.error('Required gallery elements not found');
         return;
     }
-
-    window._galleryInitialized = true;
-
+    
     // Initialize gallery state
-    window._galleryState = {
-        currentPage: 1,
-        totalPages: 0,
-        isLoading: false,
-        images: [],
-        hasMore: true,
-        initialized: false,
-        observer: null,
-        batchSize: 40,
-        loadedImages: new Set(),
-        backgroundLoading: true,
-        backgroundTimer: null,
-        maxConcurrentLoads: 2,
-        activeLoads: 0,
-        lastVisiblePage: 1
-    };
-
-    console.log('Gallery state initialized:', window._galleryState);
+    if (typeof window._galleryState === 'undefined') {
+        window._galleryState = {
+            currentPage: 1,
+            totalPages: 0,
+            isLoading: false,
+            images: [],
+            initialized: false,
+            batchSize: 80,
+            loadedImages: new Set()
+        };
+        
+        console.log('Gallery state initialized:', window._galleryState);
+    }
     
     // Load initial images
-    loadInitialImages();
-    console.log('=== Gallery Initialization Complete ===\n');
+    await loadInitialImages();
+    
+    console.log('\n=== Gallery Initialization Complete ===');
 }
 
 // Initialize when DOM is ready
@@ -238,186 +227,92 @@ function closeModal() {
     }
 }
 
-/**
- * Creates an image container with thumbnail and caption
- * @param {Object} image - Image object containing url, name, and thumbnail
- * @returns {HTMLElement} The configured image container
- */
+// Create image container with overlays
 function createImageContainer(image) {
-    console.log('Creating container for image:', image);
-    
     const container = document.createElement('div');
     container.className = 'image-container';
     
     // Create image element
-    const img = renderImage(image);
+    const img = document.createElement('img');
+    img.src = `/gallery/image/${encodeURIComponent(image)}?thumbnail=true`;
+    img.alt = image;
+    img.loading = 'lazy';
+    img.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const fullImageUrl = `/gallery/image/${encodeURIComponent(image)}`;
+        openModal(fullImageUrl, image);
+    });
     container.appendChild(img);
     
-    // Add load event listener
-    img.addEventListener('load', () => {
-        container.classList.add('loaded');
-    });
+    // Add icons container
+    const icons = document.createElement('div');
+    icons.className = 'image-icons';
     
-    // Add error event listener
-    img.addEventListener('error', () => {
-        console.error('Failed to load image:', image.name);
-        container.classList.add('error');
-        img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24"><path fill="%23ccc" d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>';
-    });
-
-    // Create folder icon
-    const folderIcon = document.createElement('div');
-    folderIcon.className = 'folder-icon';
-    folderIcon.innerHTML = '<i class="fas fa-folder"></i>';
-    folderIcon.addEventListener('click', (e) => {
-        e.stopPropagation();
-        searchImageInFinder(image.name);
-    });
-    container.appendChild(folderIcon);
-
-    // Create image icon
-    const imageIcon = document.createElement('div');
-    imageIcon.className = 'image-icon';
-    imageIcon.innerHTML = '<i class="fas fa-image"></i>';
+    // Add image icon
+    const imageIcon = document.createElement('i');
+    imageIcon.className = 'fas fa-image';
     imageIcon.addEventListener('click', (e) => {
         e.stopPropagation();
-        openImageInNewTab(`/gallery/images/${encodeURIComponent(image.name)}`);
+        window.open(`/gallery/image/${encodeURIComponent(image)}`, '_blank');
     });
-    container.appendChild(imageIcon);
-
-    // Create caption
-    const caption = document.createElement('div');
-    caption.className = 'image-caption';
-    caption.textContent = image.name;
-    container.appendChild(caption);
+    icons.appendChild(imageIcon);
     
-    // Add click event to container
-    container.addEventListener('click', () => {
-        openModal(`/gallery/images/${encodeURIComponent(image.name)}`, image.name);
+    // Add folder icon
+    const folderIcon = document.createElement('i');
+    folderIcon.className = 'fas fa-folder';
+    folderIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        searchImageInFinder(image);
     });
-
-    // Create info bar
-    const info = document.createElement('div');
-    info.className = 'image-info';
+    icons.appendChild(folderIcon);
+    
+    container.appendChild(icons);
+    
+    // Add tags container
+    const tags = document.createElement('div');
+    tags.className = 'image-tags';
+    // Add sample tag dots - replace with actual tags
+    for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'tag-dot';
+        tags.appendChild(dot);
+    }
+    container.appendChild(tags);
+    
+    // Create overlay container
+    const overlay = document.createElement('div');
+    overlay.className = 'image-overlay';
     
     // Add image name
-    const name = document.createElement('div');
-    name.className = 'image-name';
-    name.textContent = image.name;
-    info.appendChild(name);
+    const nameLabel = document.createElement('div');
+    nameLabel.className = 'image-name';
+    nameLabel.textContent = image;
+    overlay.appendChild(nameLabel);
     
-    // Add tag dots if present
-    if (image.tags && image.tags.length > 0) {
-        const dots = document.createElement('div');
-        dots.className = 'tag-dots';
-        
-        image.tags.forEach(tag => {
-            const dot = document.createElement('div');
-            dot.className = 'tag-dot';
-            dot.title = tag;
-            dot.style.backgroundColor = getTagColor(tag);
-            dots.appendChild(dot);
-        });
-        
-        container.appendChild(dots);
-    }
+    container.appendChild(overlay);
     
-    container.appendChild(info);
     return container;
 }
 
-// Helper function to generate tag colors
-function getTagColor(tag) {
-    // Define specific colors for common tags
-    const tagColors = {
-        'jpeg': '#4CAF50',      // Green
-        'png': '#2196F3',       // Blue
-        'gif': '#9C27B0',       // Purple
-        'dated': '#FF9800',     // Orange
-        'camera': '#E91E63',    // Pink
-        'digital': '#00BCD4',   // Cyan
-        'screenshot': '#795548', // Brown
-        'edited': '#607D8B',    // Blue Grey
-        'year': '#FF9800'       // Orange
-    };
-
-    // If we have a predefined color, use it
-    if (tagColors[tag]) {
-        return tagColors[tag];
-    }
-
-    // Otherwise generate a consistent color based on the tag name
-    let hash = 0;
-    for (let i = 0; i < tag.length; i++) {
-        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-    }
+// Display images in the grid
+async function displayImages(images, append = false) {
+    console.log('Displaying images:', images.length);
     
-    // Generate HSL color with good saturation and lightness
-    const hue = hash % 360;
-    return `hsl(${hue}, 65%, 50%)`;
-}
-
-// Helper function to open image in new tab
-function openImageInNewTab(url) {
-    window.open(url, '_blank');
-}
-
-// Update image loading
-async function loadImages(page = 1, batchSize = 80) {
-    try {
-        const response = await fetch(`/gallery/initial?page=${page}&batchSize=${batchSize}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch images');
-        }
-        const data = await response.json();
-        return data.files || [];
-    } catch (error) {
-        console.error('Error loading images:', error);
-        throw error;
-    }
-}
-
-// Update image rendering
-function renderImage(image) {
-    const img = document.createElement('img');
-    img.src = `/gallery/images/${encodeURIComponent(image.name)}?thumbnail=true`;
-    img.alt = image.name;
-    img.loading = 'lazy';
-    return img;
-}
-
-/**
- * Displays images in the grid
- * @param {Array} images - Array of image objects to display
- */
-async function displayImages(images, skipExisting = false) {
     const grid = document.getElementById('image-grid');
     if (!grid) {
-        console.error('Image grid element not found');
+        console.error('Image grid not found');
         return;
     }
-
-    if (!skipExisting) {
+    
+    // Clear grid if not appending
+    if (!append) {
         grid.innerHTML = '';
-        window._galleryState.loadedImages.clear();
     }
-
-    const fragment = document.createDocumentFragment();
     
+    // Create and append image containers
     for (const image of images) {
-        if (skipExisting && window._galleryState.loadedImages.has(image.name)) continue;
-        window._galleryState.loadedImages.add(image.name);
-        
         const container = createImageContainer(image);
-        fragment.appendChild(container);
-    }
-    
-    grid.appendChild(fragment);
-    
-    // Make sure the load more trigger stays at the bottom
-    const loadMoreTrigger = document.querySelector('.load-more-trigger');
-    if (loadMoreTrigger) {
-        grid.appendChild(loadMoreTrigger);
+        grid.appendChild(container);
     }
 }
 
@@ -461,109 +356,34 @@ async function searchImageInFinder(imageName) {
     }
 }
 
-// Show loading skeleton
-function showLoadingSkeleton(count = 8) {
-    const grid = document.getElementById('image-grid');
-    for (let i = 0; i < count; i++) {
-        const skeleton = document.createElement('div');
-        skeleton.className = 'image-container skeleton';
-        skeleton.innerHTML = '<div class="skeleton-img"></div><div class="skeleton-text"></div>';
-        grid.appendChild(skeleton);
-    }
-}
-
-// Remove loading skeletons
-function removeLoadingSkeletons() {
-    const skeletons = document.querySelectorAll('.skeleton');
-    skeletons.forEach(skeleton => skeleton.remove());
-}
-
-// Set up infinite scroll with intersection observer
-function setupInfiniteScroll() {
-    console.log('Setting up infinite scroll');
-    
-    // Remove existing trigger if any
-    const existingTrigger = document.querySelector('.load-more-trigger');
-    if (existingTrigger) {
-        existingTrigger.remove();
-    }
-
-    // Disconnect existing observer
-    if (window._galleryState.observer) {
-        window._galleryState.observer.disconnect();
-    }
-
-    // Create and style loading trigger
-    const loadMoreTrigger = document.createElement('div');
-    loadMoreTrigger.className = 'load-more-trigger';
-    loadMoreTrigger.style.height = '20px';
-    loadMoreTrigger.style.width = '100%';
-    loadMoreTrigger.style.display = 'flex';
-    loadMoreTrigger.style.justifyContent = 'center';
-    loadMoreTrigger.style.alignItems = 'center';
-    loadMoreTrigger.style.padding = '20px';
-    
-    // Create loading indicator
-    const loadingIndicator = document.createElement('div');
-    loadingIndicator.className = 'loading-indicator';
-    loadingIndicator.style.display = 'none';
-    loadingIndicator.innerHTML = `
-        <div class="spinner"></div>
-        <span>Loading more images...</span>
-    `;
-    loadMoreTrigger.appendChild(loadingIndicator);
-
-    // Add trigger to the grid
-    const grid = document.getElementById('image-grid');
-    grid.appendChild(loadMoreTrigger);
-
-    const loadMoreImages = async (entries) => {
-        const trigger = entries[0];
-        
-        if (trigger.isIntersecting && !window._galleryState.isLoading && window._galleryState.hasMore) {
-            console.log('Trigger intersecting, loading more images...');
-            loadingIndicator.style.display = 'flex';
-            
-            try {
-                window._galleryState.isLoading = true;
-                window._galleryState.currentPage++;
-                
-                console.log('Fetching page:', window._galleryState.currentPage);
-                const response = await loadImages(window._galleryState.currentPage, 40); // Load more per page
-                
-                if (response && response.length > 0) {
-                    console.log('Received images:', response.length);
-                    window._galleryState.hasMore = response.length >= 40;
-                    await displayImages(response, true);
-                    
-                    // Update total count display
-                    const totalCountElement = document.querySelector('.total-count');
-                    if (totalCountElement) {
-                        const loadedCount = window._galleryState.loadedImages.size;
-                        totalCountElement.textContent = `${loadedCount} / ${window._galleryState.totalPages} images`;
-                    }
-                    
-                    console.log('Has more:', window._galleryState.hasMore);
-                }
-            } catch (error) {
-                console.error('Error loading more images:', error);
-            } finally {
-                window._galleryState.isLoading = false;
-                loadingIndicator.style.display = 'none';
-            }
+// Update image loading
+async function loadImages(page = 1, batchSize = 80) {
+    try {
+        const response = await fetch(`/gallery/initial?page=${page}&batchSize=${batchSize}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch images');
         }
-    };
+        const data = await response.json();
+        return {
+            files: data.files,
+            total: data.total,
+            page: data.page,
+            totalPages: data.totalPages,
+            hasMore: data.hasMore
+        };
+    } catch (error) {
+        console.error('Error loading images:', error);
+        throw error;
+    }
+}
 
-    // Create new observer with larger rootMargin
-    window._galleryState.observer = new IntersectionObserver(loadMoreImages, {
-        root: null,
-        rootMargin: '500px', // Start loading earlier
-        threshold: 0
-    });
-
-    // Start observing
-    window._galleryState.observer.observe(loadMoreTrigger);
-    console.log('Infinite scroll setup complete');
+// Update image rendering
+function renderImage(image) {
+    const img = document.createElement('img');
+    img.src = `/gallery/image/${encodeURIComponent(image)}?thumbnail=true`;
+    img.alt = image;
+    img.loading = 'lazy';
+    return img;
 }
 
 /**
@@ -613,7 +433,7 @@ function initializeSortButtons() {
  * Handles cleanup of existing filters and sets up error boundaries
  */
 async function initializeLetterFilter() {
-    console.log('Initializing letter filter');
+    console.log('Initializing letter filter...');
     const letterButtons = document.querySelector('.letter-buttons');
     if (!letterButtons) return;
     
@@ -678,20 +498,17 @@ async function filterByLetter(letter) {
         // Fetch filtered images
         const response = await loadImages(1, window._galleryState.batchSize);
         
-        if (response && response.length > 0) {
-            await displayImages(response);
+        if (response && response.files.length > 0) {
+            await displayImages(response.files);
             
             // Update total count
             const totalCountElement = document.querySelector('.total-count');
             if (totalCountElement) {
-                totalCountElement.textContent = `${response.length} / ${window._galleryState.totalPages} images`;
+                totalCountElement.textContent = `${response.files.length} / ${response.totalPages} images`;
             }
             
-            // Reset infinite scroll
-            setupInfiniteScroll();
-            
-            // Restart background loading with new filter
-            startBackgroundLoading();
+            // Reset pagination controls
+            updatePagination(response.page, response.totalPages);
         }
     } catch (error) {
         console.error('Error filtering images:', error);
@@ -714,17 +531,17 @@ async function loadInBackground() {
         
         const response = await loadImages(nextPage, window._galleryState.batchSize);
         
-        if (response && response.length > 0) {
-            window._galleryState.currentPage = nextPage;
-            window._galleryState.hasMore = response.length >= 40;
+        if (response && response.files.length > 0) {
+            window._galleryState.currentPage = response.page;
+            window._galleryState.hasMore = response.hasMore;
             
             // Pre-load images in memory
-            const imagePromises = response.map(image => {
+            const imagePromises = response.files.map(image => {
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.onload = () => resolve();
                     img.onerror = () => resolve();
-                    img.src = `/gallery/thumbnail/${encodeURIComponent(image.name)}`;
+                    img.src = `/gallery/thumbnail/${encodeURIComponent(image)}`;
                 });
             });
             
@@ -733,12 +550,12 @@ async function loadInBackground() {
             
             // Add to DOM if we're still in background loading mode
             if (window._galleryState.backgroundLoading) {
-                await displayImages(response, true);
+                await displayImages(response.files, true);
                 
                 // Update total count
                 const totalCountElement = document.querySelector('.total-count');
                 if (totalCountElement) {
-                    totalCountElement.textContent = `${window._galleryState.loadedImages.size} / ${window._galleryState.totalPages} images`;
+                    totalCountElement.textContent = `${window._galleryState.loadedImages.size} / ${response.totalPages} images`;
                 }
             }
             
@@ -773,61 +590,27 @@ function stopBackgroundLoading() {
     }
 }
 
-// Load initial images
-async function loadInitialImages() {
-    console.log('\n=== Loading Initial Images ===');
-    
-    if (window._galleryState.isLoading) {
-        console.log('Already loading images, skipping');
-        return;
-    }
-    
-    try {
-        window._galleryState.isLoading = true;
-        showLoadingSkeleton();
-        
-        // Add total count display
-        const header = document.querySelector('.gallery-header');
-        const totalCount = document.createElement('div');
-        totalCount.className = 'total-count';
-        totalCount.textContent = 'Loading...';
-        header.appendChild(totalCount);
-        
-        // Fetch first page of images
-        const response = await loadImages(1, window._galleryState.batchSize);
-        
-        if (response && response.length > 0) {
-            window._galleryState.images = response;
-            window._galleryState.totalPages = 100;
-            window._galleryState.hasMore = response.length >= 40;
-            
-            // Update total count
-            totalCount.textContent = `${response.length} / ${window._galleryState.totalPages} images`;
-            
-            // Display images
-            await displayImages(response);
-            
-            // Initialize filters after images are loaded
-            await initializeLetterFilter();
-            initializeSortButtons();
-            await initializeTagFilter();
-            
-            // Set up infinite scroll
-            setupInfiniteScroll();
-            
-            // Start background loading
-            startBackgroundLoading();
-            
-            window._galleryState.initialized = true;
-        }
-    } catch (error) {
-        console.error('Error loading initial images:', error);
-    } finally {
-        window._galleryState.isLoading = false;
-        removeLoadingSkeletons();
+// Show loading skeleton
+function showLoadingSkeleton(count = 8) {
+    const grid = document.getElementById('image-grid');
+    for (let i = 0; i < count; i++) {
+        const skeleton = document.createElement('div');
+        skeleton.className = 'image-container skeleton';
+        skeleton.innerHTML = '<div class="skeleton-img"></div><div class="skeleton-text"></div>';
+        grid.appendChild(skeleton);
     }
 }
 
+// Remove loading skeletons
+function removeLoadingSkeletons() {
+    const skeletons = document.querySelectorAll('.skeleton');
+    skeletons.forEach(skeleton => skeleton.remove());
+}
+
+/**
+ * Initializes the tag filter component with all necessary elements and event listeners
+ * Handles cleanup of existing filters and sets up error boundaries
+ */
 async function initializeTagFilter() {
     try {
         console.log('Initializing tag filter...');
@@ -839,13 +622,12 @@ async function initializeTagFilter() {
 
         // Fetch available tags
         const response = await fetch('/gallery/tags');
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.details || 'Failed to fetch tags');
-        }
-        
         const data = await response.json();
-        console.log('Received tags:', data);
+        
+        if (!data.tags || !Array.isArray(data.tags)) {
+            console.error('Invalid tags data:', data);
+            return;
+        }
         
         const tagFilter = $('#tag-filter');
         if (tagFilter.length === 0) {
@@ -925,61 +707,6 @@ function filterImagesByTags(selectedTags) {
     });
 }
 
-// Filter functions
-if (typeof window._filterFunctions === 'undefined') {
-    window._filterFunctions = {
-        filterImagesByLetter: function(letter) {
-            const imageContainers = document.querySelectorAll('.image-container');
-            imageContainers.forEach(container => {
-                const nameLabel = container.querySelector('.image-name');
-                if (!nameLabel) return;
-                
-                const imageName = nameLabel.textContent;
-                const isVisible = !letter || imageName.toLowerCase().startsWith(letter.toLowerCase());
-                container.classList.toggle('hidden', !isVisible);
-            });
-        },
-        initializeLetterFilter,
-        filterImagesBySearch: function(searchTerm) {
-            const imageContainers = document.querySelectorAll('.image-container');
-            const searchLower = searchTerm.toLowerCase().trim();
-            
-            imageContainers.forEach(container => {
-                const nameLabel = container.querySelector('.image-name');
-                if (!nameLabel) return;
-                
-                const imageName = nameLabel.textContent;
-                // Show images where the name contains the search term anywhere
-                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
-                container.classList.toggle('hidden', !isVisible);
-            });
-        },
-        initializeSearchFilter,
-        fetchImages,
-        displayImages,
-        createImageContainer,
-        initializeModal,
-        openModal,
-        closeModal
-    };
-}
-
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', async () => {
-        try {
-            // const images = await fetchImages();
-            // await displayImages(images);
-        } catch (error) {
-            console.error('Failed to initialize gallery:', error);
-            const grid = document.getElementById('image-grid');
-            if (grid) {
-                grid.innerHTML = `<div class="error-message">Failed to load images: ${error.message}</div>`;
-            }
-        }
-    });
-}
-
 /**
  * Initializes the search filter component with all necessary elements and event listeners
  * Handles cleanup of existing filters and sets up error boundaries
@@ -1050,6 +777,144 @@ function initializeSearchFilter() {
     }
 }
 
+// Create pagination controls
+function createPaginationControls(currentPage, totalPages) {
+    const paginationContainer = document.createElement('div');
+    paginationContainer.className = 'pagination-controls';
+    paginationContainer.style.cssText = `
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin: 20px 0;
+        padding: 10px;
+    `;
+
+    // Helper function to create page button
+    function createPageButton(page, text, isActive = false, isDisabled = false) {
+        const button = document.createElement('button');
+        button.textContent = text;
+        button.className = `page-button ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
+        button.style.cssText = `
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: ${isActive ? '#007bff' : 'white'};
+            color: ${isActive ? 'white' : isDisabled ? '#999' : '#333'};
+            cursor: ${isDisabled ? 'default' : 'pointer'};
+            border-radius: 4px;
+        `;
+        
+        if (!isDisabled) {
+            button.addEventListener('click', async () => {
+                const data = await loadImages(page, window._galleryState.batchSize);
+                if (data && data.files.length > 0) {
+                    window._galleryState.currentPage = page;
+                    window._galleryState.images = data.files;
+                    await displayImages(data.files);
+                    updatePagination(page, data.totalPages);
+                }
+            });
+        }
+        
+        return button;
+    }
+
+    // Previous button
+    paginationContainer.appendChild(
+        createPageButton(currentPage - 1, '←', false, currentPage === 1)
+    );
+
+    // First page
+    paginationContainer.appendChild(createPageButton(1, '1', currentPage === 1));
+
+    // Ellipsis and pages
+    if (totalPages > 1) {
+        if (currentPage > 3) {
+            paginationContainer.appendChild(document.createTextNode('...'));
+        }
+
+        // Current page and surrounding pages
+        for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+            if (i === currentPage) {
+                paginationContainer.appendChild(createPageButton(i, i.toString(), true));
+            } else {
+                paginationContainer.appendChild(createPageButton(i, i.toString()));
+            }
+        }
+
+        if (currentPage < totalPages - 2) {
+            paginationContainer.appendChild(document.createTextNode('...'));
+        }
+
+        // Last page
+        if (totalPages > 1) {
+            paginationContainer.appendChild(
+                createPageButton(totalPages, totalPages.toString(), currentPage === totalPages)
+            );
+        }
+    }
+
+    // Next button
+    paginationContainer.appendChild(
+        createPageButton(currentPage + 1, '→', false, currentPage === totalPages)
+    );
+
+    return paginationContainer;
+}
+
+// Update pagination controls
+function updatePagination(currentPage, totalPages) {
+    const oldPagination = document.querySelector('.pagination-controls');
+    if (oldPagination) {
+        oldPagination.remove();
+    }
+
+    const grid = document.getElementById('image-grid');
+    if (grid) {
+        const newPagination = createPaginationControls(currentPage, totalPages);
+        grid.parentNode.insertBefore(newPagination, grid.nextSibling);
+    }
+}
+
+// Filter functions
+if (typeof window._filterFunctions === 'undefined') {
+    window._filterFunctions = {
+        filterImagesByLetter: function(letter) {
+            const imageContainers = document.querySelectorAll('.image-container');
+            imageContainers.forEach(container => {
+                const nameLabel = container.querySelector('.image-name');
+                if (!nameLabel) return;
+                
+                const imageName = nameLabel.textContent;
+                const isVisible = !letter || imageName.toLowerCase().startsWith(letter.toLowerCase());
+                container.classList.toggle('hidden', !isVisible);
+            });
+        },
+        initializeLetterFilter,
+        filterImagesBySearch: function(searchTerm) {
+            const imageContainers = document.querySelectorAll('.image-container');
+            const searchLower = searchTerm.toLowerCase().trim();
+            
+            imageContainers.forEach(container => {
+                const nameLabel = container.querySelector('.image-name');
+                if (!nameLabel) return;
+                
+                const imageName = nameLabel.textContent;
+                // Show images where the name contains the search term anywhere
+                const isVisible = searchLower === '' || imageName.toLowerCase().includes(searchLower);
+                container.classList.toggle('hidden', !isVisible);
+            });
+        },
+        initializeSearchFilter,
+        fetchImages,
+        displayImages,
+        createImageContainer,
+        initializeModal,
+        openModal,
+        closeModal
+    };
+}
+
 // Export functions for testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -1092,4 +957,77 @@ if (document.readyState === 'loading') {
 } else {
     initializeGallery();
     initializeTagFilter();
+}
+
+// Load initial images
+async function loadInitialImages() {
+    console.log('\n=== Loading Initial Images ===');
+    
+    if (window._galleryState.isLoading) {
+        console.log('Already loading images, skipping');
+        return;
+    }
+    
+    try {
+        window._galleryState.isLoading = true;
+        showLoadingSkeleton();
+        
+        // Get or create gallery header
+        let header = document.querySelector('.gallery__header');
+        if (!header) {
+            const gallery = document.querySelector('.gallery');
+            header = document.createElement('div');
+            header.className = 'gallery__header';
+            
+            const title = document.createElement('h2');
+            title.className = 'gallery__title';
+            title.textContent = 'My Collections';
+            header.appendChild(title);
+            
+            if (gallery.firstChild) {
+                gallery.insertBefore(header, gallery.firstChild);
+            } else {
+                gallery.appendChild(header);
+            }
+        }
+        
+        // Add or update total count display
+        let totalCount = header.querySelector('.total-count');
+        if (!totalCount) {
+            totalCount = document.createElement('div');
+            totalCount.className = 'total-count';
+            header.appendChild(totalCount);
+        }
+        totalCount.textContent = 'Loading...';
+        
+        // Fetch first page of images
+        const data = await loadImages(1, window._galleryState.batchSize);
+        
+        if (data && data.files.length > 0) {
+            window._galleryState.images = data.files;
+            window._galleryState.currentPage = data.page;
+            window._galleryState.totalPages = data.totalPages;
+            
+            // Update total count
+            totalCount.textContent = `${data.total} images`;
+            
+            // Display images
+            await displayImages(data.files);
+            
+            // Initialize filters after images are loaded
+            await initializeLetterFilter();
+            initializeSortButtons();
+            await initializeTagFilter();
+            
+            // Add pagination controls
+            updatePagination(data.page, data.totalPages);
+            
+            window._galleryState.initialized = true;
+        }
+    } catch (error) {
+        console.error('Error loading initial images:', error);
+    } finally {
+        window._galleryState.isLoading = false;
+        removeLoadingSkeletons();
+    }
 }
