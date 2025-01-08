@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Content Gallery | Jeff Bridwell</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="modal.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/content-gallery.css">
     <style>
         /* Modal styles */
         .modal {
@@ -359,24 +359,22 @@
     <div class="container">
         <main>
             <section class="o-gallery">
-                <div class="header-band">
-                    <h2>Content Gallery</h2>
-                </div>
                 <div class="o-gallery__controls">
                     <div class="m-controls-group">
                         <div class="m-search-container">
                             <i class="fas fa-search a-search-icon"></i>
                             <input type="text" id="search-input" class="a-search-input" placeholder="Search content...">
                         </div>
-                        <button id="sort-name" class="a-button a-button--secondary">Sort by Name</button>
+                        <button id="sort-name" class="a-button a-button--secondary">
+                            <i class="fas fa-sort-alpha-down"></i>
+                            Sort by Name
+                        </button>
                         <select id="tag-filter" class="a-select">
                             <option value="">All Tags</option>
                         </select>
                     </div>
                 </div>
-                <div id="image-grid" class="o-gallery__grid">
-                    <!-- Content will be loaded here dynamically -->
-                </div>
+                <div id="gallery-grid" class="o-gallery__grid"></div>
             </section>
         </main>
 
@@ -409,17 +407,10 @@
         </div>
     </template>
 
-    <script type="module">
-        import { ContentPlayer } from './js/content-player.js';
-        import { ContentGallery } from './js/content-gallery.js';
-
+    <script src="/js/content-gallery.js"></script>
+    <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const imageName = urlParams.get('image-name') || '';
-            
-            const contentPlayer = new ContentPlayer('contentModal');
-            const gallery = new ContentGallery('image-grid', '/proxy/image-content', imageName);
-            gallery.initializeWithContentPlayer(contentPlayer);
+            const gallery = new ContentGallery('gallery-grid', '/api/content');
             gallery.loadContent();
         });
     </script>

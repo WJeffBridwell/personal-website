@@ -2,8 +2,6 @@
  * Content Gallery
  * Handles displaying and filtering content in a grid layout
  */
-import Gallery from './gallery.js';
-import { initializeModal } from './modal.js';
 
 class ImageLoader {
     constructor(maxConcurrent = 6) {
@@ -120,85 +118,154 @@ class ImageLoader {
 
 const imageLoader = new ImageLoader(6);
 
-export class ContentGallery {
-    constructor(galleryId, apiEndpoint, imageName = '') {
-        this.galleryGrid = document.getElementById(galleryId);
-        if (!this.galleryGrid) {
-            throw new Error(`Gallery grid with ID ${galleryId} not found`);
+class ContentGallery {
+    constructor(containerId, apiEndpoint) {
+        this.container = document.getElementById(containerId);
+        if (!this.container) {
+            throw new Error(`Container with ID ${containerId} not found`);
         }
-
+        
         this.apiEndpoint = apiEndpoint;
-        this.imageName = imageName;
-        this.content = [];
-        this.searchInput = document.getElementById('search-input');
-        this.contentPlayer = null;
-        this.searchQuery = '';
-        this.sortBy = 'name-asc';
-        this.selectedTag = '';
-        this.modal = initializeModal();
-        this.batchSize = 40;  // Reduced batch size
+        this.currentSort = 'name';
+        this.currentFilter = '';
+        this.searchTerm = '';
+        this.items = [];
         this.imageCache = new Map();
         this.loadingImages = new Set();
-        this.observer = this.setupIntersectionObserver();
         this.metrics = {
-            loadStart: Date.now(),
-            imagesLoaded: 0,
+            totalImages: 0,
+            loadedImages: 0,
+            errors: 0,
             totalLoadTime: 0,
-            errors: 0
+            cacheSize: 0,
+            memoryEstimate: undefined
         };
+
+        // Create modal for full-size images/videos
+        this.createModal();
         
-        // Always use the same host as the main site, but with port 8082
-        const videoServerHost = window.location.hostname;
-        this.videoServerUrl = `http://${videoServerHost}:8082`;
-
-        this.galleryInstance = new Gallery(this.galleryGrid);
+        // Bind methods
+        this.handleImageClick = this.handleImageClick.bind(this);
         this.initializeControls();
-        this.setupPerformanceMonitoring();
     }
 
-    setupPerformanceMonitoring() {
-        // Log performance metrics
-        const logMetrics = () => {
-            const metrics = {
-                totalImages: this.content.length,
-                loadedImages: this.metrics.imagesLoaded,
-                averageLoadTime: this.metrics.imagesLoaded > 0 ? 
-                    this.metrics.totalLoadTime / this.metrics.imagesLoaded : 0,
-                errorRate: this.metrics.errors / this.content.length,
-                totalTime: Date.now() - this.metrics.loadStart,
-                cacheSize: this.imageCache.size,
-                memoryEstimate: performance.memory?.usedJSHeapSize
-            };
-            console.log('[Gallery Metrics]', metrics);
-        };
-
-        // Log metrics every 5 seconds during loading
-        const metricsInterval = setInterval(() => {
-            if (this.metrics.imagesLoaded === this.content.length) {
-                clearInterval(metricsInterval);
-            }
-            logMetrics();
-        }, 5000);
-
-        // Final metrics when page unloads
-        window.addEventListener('beforeunload', logMetrics);
-    }
-
-    setupIntersectionObserver() {
-        return new IntersectionObserver((entries, observer) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const img = entry.target;
-                    if (!this.loadingImages.has(img.dataset.imageName)) {
-                        this.loadImage(img);
-                    }
-                }
+    initializeControls() {
+        // Search input
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchTerm = e.target.value.toLowerCase();
+                this.filterAndDisplayItems();
             });
-        }, {
-            root: null,
-            rootMargin: '50px',
-            threshold: 0.1
-        });
+        }
+
+        // Sort button
+        const sortButton = document.getElementById('sort-name');
+        if (sortButton) {
+            sortButton.addEventListener('click', () => {
+                this.currentSort = this.currentSort === 'name' ? 'name-desc' : 'name';
+                const icon = sortButton.querySelector('i');
+                icon.className = this.currentSort === 'name' ? 
+                    'fas fa-sort-alpha-down' : 
+                    'fas fa-sort-alpha-up';
+                this.filterAndDisplayItems();
+            });
+        }
+
+        // Tag filter
+        const tagFilter = document.getElementById('tag-filter');
+        if (tagFilter) {
+            tagFilter.addEventListener('change', (e) => {
+                this.currentFilter = e.target.value;
+                this.filterAndDisplayItems();
+            });
+        }
+    }
+
+    createModal() {
+        this.modal = document.createElement('div');
+        this.modal.className = 'content-modal';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        const closeButton = document.createElement('span');
+        closeButton.className = 'close';
+        closeButton.innerHTML = '&times;';
+        closeButton.onclick = () => this.closeModal();
+        
+        const contentContainer = document.createElement('div');
+        contentContainer.className = 'content-container';
+        
+        const modalImage = document.createElement('img');
+        modalImage.className = 'modal-image';
+        modalImage.style.display = 'none';
+        
+        const modalVideo = document.createElement('video');
+        modalVideo.className = 'modal-video';
+        modalVideo.controls = true;
+        modalVideo.style.display = 'none';
+        
+        contentContainer.appendChild(modalImage);
+        contentContainer.appendChild(modalVideo);
+        modalContent.appendChild(closeButton);
+        modalContent.appendChild(contentContainer);
+        this.modal.appendChild(modalContent);
+        
+        document.body.appendChild(this.modal);
+        
+        // Click outside to close
+        this.modal.onclick = (e) => {
+            if (e.target === this.modal) {
+                this.closeModal();
+            }
+        };
+    }
+
+    closeModal() {
+        this.modal.style.display = 'none';
+        const modalVideo = this.modal.querySelector('.modal-video');
+        if (modalVideo) {
+            modalVideo.pause();
+            modalVideo.currentTime = 0;
+        }
+    }
+
+    async handleImageClick(e) {
+        const tile = e.currentTarget;
+        const imageName = tile.dataset.imageName;
+        const contentType = tile.dataset.contentType;
+        
+        // Show modal
+        this.modal.style.display = 'block';
+        
+        const modalImage = this.modal.querySelector('.modal-image');
+        const modalVideo = this.modal.querySelector('.modal-video');
+        
+        // Reset display
+        modalImage.style.display = 'none';
+        modalVideo.style.display = 'none';
+        
+        try {
+            // Fetch full-size content
+            const response = await fetch(`${this.apiEndpoint}/images/${encodeURIComponent(imageName)}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            
+            if (contentType.startsWith('video/')) {
+                modalVideo.src = url;
+                modalVideo.style.display = 'block';
+            } else {
+                modalImage.src = url;
+                modalImage.style.display = 'block';
+            }
+        } catch (error) {
+            console.error('Error loading full content:', error);
+            alert('Failed to load full-size content');
+            this.closeModal();
+        }
     }
 
     async loadImage(img) {
@@ -214,8 +281,13 @@ export class ContentGallery {
                 return;
             }
 
+            // Always load thumbnail version
             const response = await fetch(`${this.apiEndpoint}/images/${encodeURIComponent(imageName)}?thumbnail=true`);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             
@@ -224,10 +296,11 @@ export class ContentGallery {
             img.classList.add('loaded');
 
             // Update metrics
-            this.metrics.imagesLoaded++;
+            this.metrics.loadedImages++;
             this.metrics.totalLoadTime += performance.now() - startTime;
         } catch (error) {
             console.error(`Error loading image ${imageName}:`, error);
+            img.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23ddd"/><text x="50%" y="50%" text-anchor="middle" fill="%23666">Error</text></svg>';
             img.classList.add('error');
             this.metrics.errors++;
         } finally {
@@ -235,192 +308,261 @@ export class ContentGallery {
         }
     }
 
-    createGalleryItem(item) {
-        const div = document.createElement('div');
-        div.className = 'gallery-item';
-        
-        const img = document.createElement('img');
-        img.className = 'gallery-image';
-        img.alt = item.name;
-        img.dataset.imageName = item.name;
-        img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Transparent placeholder
-        
-        this.observer.observe(img);
-        div.appendChild(img);
-        
-        return div;
-    }
-
-    async loadContent() {
-        if (this.content.length > 0) {
-            this.renderContent();
+    async displayImages(items) {
+        if (!Array.isArray(items)) {
+            console.error('Invalid items array:', items);
             return;
         }
 
-        try {
-            const startTime = performance.now();
-            
-            // First, get the list of all images
-            const response = await fetch(`${this.apiEndpoint}?image_name=${encodeURIComponent(this.imageName)}`);
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            
-            const data = await response.json();
-            this.content = Array.isArray(data) ? data : (data.content || []);
-            
-            console.log(`[Gallery] Fetched ${this.content.length} items in ${performance.now() - startTime}ms`);
-            
-            // Update tag filter and render content
-            this.updateTagFilter();
-            this.renderContent();
-            
-        } catch (error) {
-            console.error('Error loading content:', error);
-            this.galleryGrid.innerHTML = '<div class="error-message">Error loading gallery content</div>';
-        }
-    }
-
-    renderContent() {
         // Clear existing content
-        this.galleryGrid.innerHTML = '';
-        
-        // Create and append items
-        this.content.forEach(item => {
-            const element = this.createGalleryItem(item);
-            this.galleryGrid.appendChild(element);
+        this.container.innerHTML = '';
+
+        // Create grid container
+        const grid = document.createElement('div');
+        grid.className = 'o-gallery__grid';
+
+        items.forEach(item => {
+            const tile = document.createElement('div');
+            tile.className = 'o-gallery__item';
+            tile.dataset.imageName = item.content_name;
+            tile.dataset.contentType = item.content_type;
+
+            const mediaContainer = document.createElement('div');
+            mediaContainer.className = 'm-card__media';
+
+            // Determine content type
+            const type = this.getContentType(item.content_type, item.content_name);
+
+            if (type === 'folder') {
+                // Folder preview
+                mediaContainer.className = 'm-folder-preview';
+                mediaContainer.innerHTML = '<i class="fas fa-folder fa-3x"></i>';
+            } else if (type === 'video') {
+                // Video preview with thumbnail
+                mediaContainer.className = 'm-video-preview';
+                
+                // Create video element with thumbnail
+                const video = document.createElement('video');
+                video.className = 'tile-video';
+                video.src = `/api/content/images/${encodeURIComponent(item.content_name)}`;
+                video.controls = true;
+                video.preload = 'none'; // Don't preload video
+                video.poster = `/api/content/images/${encodeURIComponent(item.content_name)}?thumbnail=true`;
+                
+                // Prevent tile click when interacting with video controls
+                video.addEventListener('click', (e) => e.stopPropagation());
+                
+                mediaContainer.appendChild(video);
+            } else {
+                // Image preview
+                mediaContainer.className = 'm-image-preview';
+                mediaContainer.innerHTML = `<img src="/api/content/images/${encodeURIComponent(item.content_name)}?thumbnail=true" alt="${item.content_name}">`;
+            }
+
+            // Add tags if present
+            if (item.content_tags && item.content_tags.length > 0) {
+                const tagsContainer = document.createElement('div');
+                tagsContainer.className = 'tags-container';
+                
+                item.content_tags.forEach(tag => {
+                    const tagElement = document.createElement('span');
+                    tagElement.className = 'tag';
+                    tagElement.innerHTML = `<span class="tag-dot" style="background-color: ${tag.toLowerCase()}"></span>`;
+                    tagElement.title = tag;
+                    tagsContainer.appendChild(tagElement);
+                });
+                
+                mediaContainer.appendChild(tagsContainer);
+            }
+
+            // Add overlay with metadata
+            const overlay = document.createElement('div');
+            overlay.className = 'm-card__overlay';
+            overlay.innerHTML = `
+                <h3 class="a-card__title">${item.content_name}</h3>
+                <div class="a-card__metadata">
+                    ${item.content_size ? `<span class="a-content-size">${this.formatSize(item.content_size)}</span>` : ''}
+                    ${item.content_tags && item.content_tags.length > 0 ? `<span class="a-content-tags">${item.content_tags.join(', ')}</span>` : ''}
+                </div>
+            `;
+
+            tile.appendChild(mediaContainer);
+            tile.appendChild(overlay);
+
+            // For non-video content, add click handler for modal view
+            if (type !== 'video') {
+                tile.addEventListener('click', () => this.handleItemClick(item));
+            }
+
+            grid.appendChild(tile);
         });
+
+        this.container.appendChild(grid);
     }
 
-    initializeControls() {
-        // Search input
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.searchQuery = e.target.value.toLowerCase();
-                this.renderContent();
-            });
+    getContentType(contentType, filename) {
+        if (!contentType) {
+            return filename.includes('.') ? this.getTypeFromExtension(filename) : 'folder';
+        }
+        
+        if (contentType.startsWith('video/') || contentType === 'mp4') {
+            return 'video';
+        }
+        if (contentType.startsWith('image/') || ['jpeg', 'jpg', 'png', 'gif', 'webp'].includes(contentType)) {
+            return 'image';
+        }
+        return 'folder';
+    }
+
+    getTypeFromExtension(filename) {
+        const ext = filename.split('.').pop().toLowerCase();
+        if (['mp4', 'webm', 'mov'].includes(ext)) return 'video';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return 'image';
+        return 'folder';
+    }
+
+    async handleItemClick(item) {
+        const type = this.getContentType(item.content_type, item.content_name);
+        
+        if (type === 'folder') {
+            // Handle folder navigation
+            window.location.href = `${window.location.pathname}?path=${encodeURIComponent(item.content_url)}`;
+            return;
         }
 
-        // Tag filter
-        const tagFilter = document.getElementById('tag-filter');
-        if (tagFilter) {
-            tagFilter.addEventListener('change', (e) => {
-                this.selectedTag = e.target.value;
-                this.renderContent();
-            });
-        }
-
-        // Sort button
-        const sortNameBtn = document.getElementById('sort-name');
-        if (sortNameBtn) {
-            sortNameBtn.addEventListener('click', () => {
-                this.sortBy = this.sortBy === 'name-asc' ? 'name-desc' : 'name-asc';
-                this.updateSortButtons();
-                this.renderContent();
-            });
+        // Show modal
+        this.modal.style.display = 'block';
+        
+        const modalImage = this.modal.querySelector('.modal-image');
+        const modalVideo = this.modal.querySelector('.modal-video');
+        
+        // Reset display
+        modalImage.style.display = 'none';
+        modalVideo.style.display = 'none';
+        
+        try {
+            if (type === 'video') {
+                modalVideo.style.display = 'block';
+                modalVideo.src = `/api/content/images/${encodeURIComponent(item.content_name)}`;
+                modalVideo.play();
+            } else {
+                modalImage.style.display = 'block';
+                modalImage.src = `/api/content/images/${encodeURIComponent(item.content_name)}`;
+            }
+        } catch (error) {
+            console.error('Error displaying content:', error);
         }
     }
 
-    updateTagFilter() {
+    formatSize(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let size = bytes;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+        }
+        return `${size.toFixed(1)} ${units[unitIndex]}`;
+    }
+
+    updateTagFilter(items) {
         const tagFilter = document.getElementById('tag-filter');
         if (!tagFilter) return;
 
-        // Get unique tags from all content
-        const allTags = new Set();
-        this.content.forEach(item => {
-            if (item.content_tags && Array.isArray(item.content_tags)) {
-                item.content_tags.forEach(tag => allTags.add(tag));
+        // Get unique tags
+        const tags = new Set();
+        items.forEach(item => {
+            if (item.content_tags) {
+                item.content_tags.forEach(tag => tags.add(tag));
             }
         });
 
         // Sort tags alphabetically
-        const sortedTags = Array.from(allTags).sort();
+        const sortedTags = Array.from(tags).sort();
 
-        // Clear existing options except "All Tags"
-        while (tagFilter.options.length > 1) {
-            tagFilter.remove(1);
-        }
-
-        // Add tag options
+        // Update dropdown
+        const currentValue = tagFilter.value;
+        tagFilter.innerHTML = '<option value="">All Tags</option>';
         sortedTags.forEach(tag => {
             const option = document.createElement('option');
             option.value = tag;
             option.textContent = tag;
             tagFilter.appendChild(option);
         });
+        tagFilter.value = currentValue;
     }
 
-    updateSortButtons() {
-        const sortNameBtn = document.getElementById('sort-name');
-        if (sortNameBtn) {
-            sortNameBtn.classList.add('active');
-            sortNameBtn.innerHTML = `Sort by Name ${this.sortBy === 'name-asc' ? '↑' : '↓'}`;
-        }
-    }
+    filterAndDisplayItems() {
+        if (!this.items.length) return;
 
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    getFilteredContent() {
-        let filtered = [...this.content];
+        let filtered = [...this.items];
 
         // Apply search filter
-        if (this.searchQuery) {
+        if (this.searchTerm) {
             filtered = filtered.filter(item => 
-                item.content_name.toLowerCase().includes(this.searchQuery) ||
-                (item.content_tags && item.content_tags.some(tag => 
-                    tag.toLowerCase().includes(this.searchQuery)
-                ))
+                item.content_name.toLowerCase().includes(this.searchTerm)
             );
         }
 
         // Apply tag filter
-        if (this.selectedTag) {
+        if (this.currentFilter) {
             filtered = filtered.filter(item => 
-                item.content_tags && item.content_tags.includes(this.selectedTag)
+                item.content_tags && item.content_tags.includes(this.currentFilter)
             );
         }
 
-        // Apply sorting
+        // Apply sort
         filtered.sort((a, b) => {
-            if (this.sortBy === 'name-asc') {
-                return a.content_name.localeCompare(b.content_name);
-            } else if (this.sortBy === 'name-desc') {
-                return b.content_name.localeCompare(a.content_name);
-            }
-            return 0;
+            const nameA = a.content_name.toLowerCase();
+            const nameB = b.content_name.toLowerCase();
+            return this.currentSort === 'name' ? 
+                nameA.localeCompare(nameB) : 
+                nameB.localeCompare(nameA);
         });
 
-        return filtered;
+        this.displayImages(filtered);
     }
 
-    isVideoFile(filename) {
-        const videoExtensions = ['.mp4', '.MP4', '.m4v', '.webm', '.mov'];
-        return videoExtensions.some(ext => filename.toLowerCase().endsWith(ext));
-    }
-
-    isImageFile(filename) {
-        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-        const lowerFilename = filename.toLowerCase();
-        // Check both the full extension and parts of compound extensions (e.g., .jpeg.webp)
-        const isImage = imageExtensions.some(ext => 
-            lowerFilename.endsWith(ext.toLowerCase()) || 
-            lowerFilename.includes(ext.toLowerCase() + '.')
-        );
-        console.log('Checking if file is image:', filename, isImage);
-        return isImage;
-    }
-
-    initializeWithContentPlayer(contentPlayer) {
-        this.contentPlayer = contentPlayer;
+    async loadContent() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const imageName = urlParams.get('image-name') || urlParams.get('image_name') || '';
+            const apiUrl = `${this.apiEndpoint}?image_name=${encodeURIComponent(imageName)}`;
+            
+            console.log('[Gallery] Fetching content from:', apiUrl);
+            const response = await fetch(apiUrl);
+            
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            if (!data) {
+                throw new Error('No data received');
+            }
+            
+            console.log('[Gallery] Received data:', data);
+            const items = Array.isArray(data) ? data : (data.content || []);
+            
+            if (items.length === 0) {
+                this.container.innerHTML = '<div class="error-message">No content found</div>';
+                return;
+            }
+            
+            console.log(`[Gallery] Processing ${items.length} items`);
+            this.items = items;
+            this.updateTagFilter(items);
+            this.filterAndDisplayItems();
+            
+        } catch (error) {
+            console.error('Error loading content:', error);
+            this.container.innerHTML = `<div class="error-message">Error loading gallery content: ${error.message}</div>`;
+        }
     }
 }
+
+// Export the class
+window.ContentGallery = ContentGallery;
 
 function initGallery() {
     const gallery = document.querySelector('.gallery-grid');
@@ -489,7 +631,10 @@ async function loadMoreImages() {
 }
 
 // Initialize gallery when DOM is loaded
-document.addEventListener('DOMContentLoaded', initGallery);
+document.addEventListener('DOMContentLoaded', () => {
+    const gallery = new ContentGallery('gallery-grid', '/api/content');
+    gallery.loadContent();
+});
 
 // Cleanup on page unload
 window.addEventListener('unload', () => {
