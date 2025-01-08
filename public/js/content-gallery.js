@@ -5,6 +5,121 @@
 import Gallery from './gallery.js';
 import { initializeModal } from './modal.js';
 
+class ImageLoader {
+    constructor(maxConcurrent = 6) {
+        this.queue = [];
+        this.running = new Set();
+        this.maxConcurrent = maxConcurrent;
+        this.observer = null;
+        this.initIntersectionObserver();
+    }
+
+    initIntersectionObserver() {
+        this.observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const container = entry.target;
+                if (entry.isIntersecting) {
+                    const priority = this.calculatePriority(entry);
+                    this.loadImage(container, priority);
+                } else if (!entry.isIntersecting && entry.intersectionRatio === 0) {
+                    this.cleanupImage(container);
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '50px',
+            threshold: [0, 0.1, 0.5, 1.0]
+        });
+    }
+
+    calculatePriority(entry) {
+        // Higher priority for elements closer to the viewport center
+        const viewportHeight = window.innerHeight;
+        const rect = entry.boundingClientRect;
+        const distanceToCenter = Math.abs((rect.top + rect.height / 2) - viewportHeight / 2);
+        return 1 - (distanceToCenter / viewportHeight);
+    }
+
+    cleanupImage(container) {
+        const img = container.querySelector('img');
+        if (img && img.src.startsWith('blob:')) {
+            URL.revokeObjectURL(img.src);
+        }
+    }
+
+    async loadImage(container, priority) {
+        if (container.dataset.loading === 'true') return;
+        
+        const imageName = container.dataset.image;
+        if (!imageName) return;
+
+        container.dataset.loading = 'true';
+        container.dataset.priority = priority;
+
+        this.queue.push({ container, priority });
+        this.queue.sort((a, b) => b.priority - a.priority);
+        this.processQueue();
+    }
+
+    async processQueue() {
+        if (this.running.size >= this.maxConcurrent || this.queue.length === 0) return;
+
+        const { container, priority } = this.queue.shift();
+        const imageName = container.dataset.image;
+
+        if (!imageName || this.running.has(imageName)) return;
+
+        this.running.add(imageName);
+
+        try {
+            const response = await fetch('/gallery/batch-images', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ imageNames: [imageName] })
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const data = await response.json();
+            if (data.images && data.images[0]) {
+                const img = new Image();
+                img.onload = () => {
+                    container.innerHTML = '';
+                    container.appendChild(img);
+                    container.classList.add('loaded');
+                    this.running.delete(imageName);
+                    this.processQueue();
+                };
+                img.onerror = () => {
+                    container.classList.add('error');
+                    this.running.delete(imageName);
+                    this.processQueue();
+                };
+                img.src = data.images[0].data;
+                img.alt = imageName;
+            }
+        } catch (error) {
+            console.error('Error loading image:', imageName, error);
+            container.classList.add('error');
+            this.running.delete(imageName);
+            this.processQueue();
+        }
+
+        container.dataset.loading = 'false';
+    }
+
+    observe(container) {
+        this.observer.observe(container);
+    }
+
+    unobserve(container) {
+        this.observer.unobserve(container);
+        this.cleanupImage(container);
+    }
+}
+
+const imageLoader = new ImageLoader(6);
+
 export class ContentGallery {
     constructor(galleryId, apiEndpoint, imageName = '') {
         this.galleryGrid = document.getElementById(galleryId);
@@ -21,114 +136,103 @@ export class ContentGallery {
         this.sortBy = 'name-asc';
         this.selectedTag = '';
         this.modal = initializeModal();
-        this.batchSize = 1000;
-        this.imageCache = new Map(); // Cache for loaded images
+        this.batchSize = 40;  // Reduced batch size
+        this.imageCache = new Map();
+        this.loadingImages = new Set();
+        this.observer = this.setupIntersectionObserver();
+        this.metrics = {
+            loadStart: Date.now(),
+            imagesLoaded: 0,
+            totalLoadTime: 0,
+            errors: 0
+        };
         
         // Always use the same host as the main site, but with port 8082
         const videoServerHost = window.location.hostname;
         this.videoServerUrl = `http://${videoServerHost}:8082`;
-        console.log('Video server URL:', this.videoServerUrl);
 
         this.galleryInstance = new Gallery(this.galleryGrid);
         this.initializeControls();
+        this.setupPerformanceMonitoring();
+    }
+
+    setupPerformanceMonitoring() {
+        // Log performance metrics
+        const logMetrics = () => {
+            const metrics = {
+                totalImages: this.content.length,
+                loadedImages: this.metrics.imagesLoaded,
+                averageLoadTime: this.metrics.imagesLoaded > 0 ? 
+                    this.metrics.totalLoadTime / this.metrics.imagesLoaded : 0,
+                errorRate: this.metrics.errors / this.content.length,
+                totalTime: Date.now() - this.metrics.loadStart,
+                cacheSize: this.imageCache.size,
+                memoryEstimate: performance.memory?.usedJSHeapSize
+            };
+            console.log('[Gallery Metrics]', metrics);
+        };
+
+        // Log metrics every 5 seconds during loading
+        const metricsInterval = setInterval(() => {
+            if (this.metrics.imagesLoaded === this.content.length) {
+                clearInterval(metricsInterval);
+            }
+            logMetrics();
+        }, 5000);
+
+        // Final metrics when page unloads
+        window.addEventListener('beforeunload', logMetrics);
     }
 
     setupIntersectionObserver() {
-        return new IntersectionObserver((entries) => {
+        return new IntersectionObserver((entries, observer) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const img = entry.target;
-                    if (img.dataset.src) {
-                        // First load thumbnail
-                        this.loadImage(img, true).then(() => {
-                            // Then load preview quality
-                            if (!img.dataset.preview) {
-                                this.loadImage(img, false);
-                            }
-                        });
+                    if (!this.loadingImages.has(img.dataset.imageName)) {
+                        this.loadImage(img);
                     }
                 }
             });
         }, {
-            rootMargin: '50px 0px',
-            threshold: 0.1
-        });
-    }
-
-    async loadImage(img, isThumb) {
-        const size = isThumb ? 'thumb' : 'preview';
-        const url = `${img.dataset.src}?size=${size}`;
-        
-        try {
-            if (!this.imageCache.has(url)) {
-                const response = await fetch(url);
-                const blob = await response.blob();
-                this.imageCache.set(url, URL.createObjectURL(blob));
-            }
-            
-            const imageUrl = this.imageCache.get(url);
-            if (isThumb) {
-                img.src = imageUrl;
-                img.dataset.preview = 'pending';
-            } else {
-                img.src = imageUrl;
-                img.dataset.preview = 'loaded';
-            }
-            
-            img.classList.add('loaded');
-        } catch (error) {
-            console.error('Error loading image:', error);
-        }
-    }
-
-    setupInfiniteScroll() {
-        const options = {
             root: null,
-            rootMargin: '100px',
+            rootMargin: '50px',
             threshold: 0.1
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting && !this.loading) {
-                    this.loadMoreContent();
-                }
-            });
-        }, options);
-
-        // Observe the last item in the gallery
-        const sentinel = document.createElement('div');
-        sentinel.className = 'scroll-sentinel';
-        this.galleryGrid.appendChild(sentinel);
-        observer.observe(sentinel);
-    }
-
-    async loadMoreContent() {
-        if (this.loading) return;
-        
-        this.loading = true;
-        try {
-            const response = await fetch(`${this.apiEndpoint}/initial?page=${this.currentPage}&batchSize=${this.batchSize}`);
-            if (!response.ok) throw new Error('Network response was not ok');
-            
-            const data = await response.json();
-            if (data.content && data.content.length > 0) {
-                this.content.push(...data.content);
-                this.currentPage++;
-                this.renderNewContent(data.content);
-            }
-        } catch (error) {
-            console.error('Error loading more content:', error);
-        } finally {
-            this.loading = false;
-        }
-    }
-
-    renderNewContent(newContent) {
-        newContent.forEach(item => {
-            const element = this.createGalleryItem(item);
-            this.galleryGrid.appendChild(element);
         });
+    }
+
+    async loadImage(img) {
+        const imageName = img.dataset.imageName;
+        this.loadingImages.add(imageName);
+        
+        const startTime = performance.now();
+        
+        try {
+            if (this.imageCache.has(imageName)) {
+                img.src = this.imageCache.get(imageName);
+                img.classList.add('loaded');
+                return;
+            }
+
+            const response = await fetch(`${this.apiEndpoint}/images/${encodeURIComponent(imageName)}?thumbnail=true`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            
+            this.imageCache.set(imageName, url);
+            img.src = url;
+            img.classList.add('loaded');
+
+            // Update metrics
+            this.metrics.imagesLoaded++;
+            this.metrics.totalLoadTime += performance.now() - startTime;
+        } catch (error) {
+            console.error(`Error loading image ${imageName}:`, error);
+            img.classList.add('error');
+            this.metrics.errors++;
+        } finally {
+            this.loadingImages.delete(imageName);
+        }
     }
 
     createGalleryItem(item) {
@@ -138,12 +242,12 @@ export class ContentGallery {
         const img = document.createElement('img');
         img.className = 'gallery-image';
         img.alt = item.name;
-        img.dataset.src = `/images/${encodeURIComponent(item.name)}`;
-        img.src = 'placeholder.jpg';  // Add a placeholder image
+        img.dataset.imageName = item.name;
+        img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Transparent placeholder
         
-        this.intersectionObserver.observe(img);
-        
+        this.observer.observe(img);
         div.appendChild(img);
+        
         return div;
     }
 
@@ -154,181 +258,37 @@ export class ContentGallery {
         }
 
         try {
+            const startTime = performance.now();
+            
             // First, get the list of all images
             const response = await fetch(`${this.apiEndpoint}?image_name=${encodeURIComponent(this.imageName)}`);
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }
+            
             const data = await response.json();
             this.content = Array.isArray(data) ? data : (data.content || []);
             
-            // Update tag filter after loading content
-            this.updateTagFilter();
-
-            // Load images in batches
-            const imageNames = this.content.map(item => item.content_name);
-            const batches = [];
+            console.log(`[Gallery] Fetched ${this.content.length} items in ${performance.now() - startTime}ms`);
             
-            for (let i = 0; i < imageNames.length; i += this.batchSize) {
-                const batch = imageNames.slice(i, i + this.batchSize);
-                batches.push(batch);
-            }
-
-            console.log(`Loading ${this.content.length} images in ${batches.length} batches`);
-
-            // Load all batches in parallel
-            const batchPromises = batches.map(async (batch, index) => {
-                try {
-                    // Fix the endpoint URL by using the base URL
-                    const baseUrl = this.apiEndpoint.replace(/\/gallery$/, '');
-                    const batchResponse = await fetch(`${baseUrl}/gallery/batch-images`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({ imageNames: batch })
-                    });
-
-                    if (!batchResponse.ok) {
-                        throw new Error(`Failed to load batch ${index + 1}`);
-                    }
-
-                    const batchData = await batchResponse.json();
-                    
-                    // Cache the loaded images
-                    batchData.images.forEach(img => {
-                        if (img.data) {
-                            this.imageCache.set(img.name, `data:image/jpeg;base64,${img.data}`);
-                        }
-                    });
-
-                    console.log(`Loaded batch ${index + 1}/${batches.length}`);
-                } catch (error) {
-                    console.error(`Error loading batch ${index + 1}:`, error);
-                }
-            });
-
-            // Wait for all batches to load
-            await Promise.all(batchPromises);
-            console.log('All batches loaded');
-
-            // Render the gallery
+            // Update tag filter and render content
+            this.updateTagFilter();
             this.renderContent();
+            
         } catch (error) {
             console.error('Error loading content:', error);
-            this.galleryGrid.innerHTML = `
-                <div class="error-message">
-                    <p>Error loading content: ${error.message}</p>
-                </div>
-            `;
+            this.galleryGrid.innerHTML = '<div class="error-message">Error loading gallery content</div>';
         }
-    }
-
-    createContentElement(item) {
-        const element = document.createElement('div');
-        element.className = 'o-gallery__item';
-
-        if (item.content_type === 'directory') {
-            element.innerHTML = `
-                <div class="m-folder-preview">
-                    <i class="fas fa-folder fa-4x"></i>
-                </div>
-                <div class="m-item-info">
-                    <span class="a-item-name">${item.content_name}</span>
-                    <div class="a-content-tags">
-                        ${item.content_tags ? item.content_tags.map(tag => 
-                            `<span class="a-tag">${tag}</span>`
-                        ).join('') : ''}
-                    </div>
-                </div>`;
-        } else if (item.content_type === 'image' || this.isImageFile(item.content_name)) {
-            // Use cached image data if available
-            const imageData = this.imageCache.get(item.content_name);
-            const imageUrl = imageData || `${this.videoServerUrl}/videos/direct?path=${encodeURIComponent(item.content_url)}`;
-            
-            element.innerHTML = `
-                <div class="m-image-preview">
-                    <img src="${imageUrl}" alt="${item.content_name}" loading="lazy" class="preview-image">
-                </div>
-                <div class="m-item-info">
-                    <span class="a-item-name">${item.content_name}</span>
-                    <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
-                    <div class="a-content-tags">
-                        ${item.content_tags ? item.content_tags.map(tag => 
-                            `<span class="a-tag">${tag}</span>`
-                        ).join('') : ''}
-                    </div>
-                </div>`;
-
-            // Add click handler for the image preview
-            const previewImage = element.querySelector('.preview-image');
-            if (previewImage) {
-                previewImage.addEventListener('click', () => {
-                    this.modal.openModal(imageUrl, item.content_name);
-                });
-            }
-        } else if (item.content_type === 'video' || this.isVideoFile(item.content_name)) {
-            console.log('Creating video player for:', item.content_name);
-            
-            element.innerHTML = `
-                <div class="m-video-player">
-                    <video class="a-video-element" controls preload="metadata" playsinline>
-                        <source src="${this.videoServerUrl}/videos/direct?path=${encodeURIComponent(item.content_url)}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-                <div class="m-item-info">
-                    <span class="a-item-name">${item.content_name}</span>
-                    <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
-                    <div class="a-content-tags">
-                        ${item.content_tags ? item.content_tags.map(tag => 
-                            `<span class="a-tag">${tag}</span>`
-                        ).join('') : ''}
-                    </div>
-                </div>`;
-        } else {
-            // Default file icon for other types
-            element.innerHTML = `
-                <div class="m-file-preview">
-                    <i class="fas fa-file fa-4x"></i>
-                </div>
-                <div class="m-item-info">
-                    <span class="a-item-name">${item.content_name}</span>
-                    <span class="a-item-size">${this.formatFileSize(item.content_size)}</span>
-                    <div class="a-content-tags">
-                        ${item.content_tags ? item.content_tags.map(tag => 
-                            `<span class="a-tag">${tag}</span>`
-                        ).join('') : ''}
-                    </div>
-                </div>`;
-        }
-
-        return element;
     }
 
     renderContent() {
-        if (!this.galleryGrid) {
-            console.error('Gallery grid container not found');
-            return;
-        }
-
+        // Clear existing content
         this.galleryGrid.innerHTML = '';
-        const filteredContent = this.getFilteredContent();
-
-        if (filteredContent.length === 0) {
-            const noContent = document.createElement('div');
-            noContent.className = 'o-gallery__no-content';
-            noContent.textContent = 'No content found';
-            this.galleryGrid.appendChild(noContent);
-            return;
-        }
-
-        // Render all content at once since we have all images cached
-        filteredContent.forEach(item => {
-            const element = this.createContentElement(item);
-            if (element) {
-                this.galleryGrid.appendChild(element);
-            }
+        
+        // Create and append items
+        this.content.forEach(item => {
+            const element = this.createGalleryItem(item);
+            this.galleryGrid.appendChild(element);
         });
     }
 
@@ -461,3 +421,79 @@ export class ContentGallery {
         this.contentPlayer = contentPlayer;
     }
 }
+
+function initGallery() {
+    const gallery = document.querySelector('.gallery-grid');
+    if (!gallery) return;
+
+    // Observe all existing image containers
+    document.querySelectorAll('.image-container').forEach(container => {
+        imageLoader.observe(container);
+    });
+
+    // Infinite scroll handling with debouncing
+    let scrollTimeout;
+    let lastScrollPosition = 0;
+    const scrollThreshold = 1000; // pixels from bottom
+
+    window.addEventListener('scroll', () => {
+        if (scrollTimeout) {
+            clearTimeout(scrollTimeout);
+        }
+
+        scrollTimeout = setTimeout(() => {
+            const currentScroll = window.scrollY;
+            const scrollingDown = currentScroll > lastScrollPosition;
+            lastScrollPosition = currentScroll;
+
+            if (scrollingDown) {
+                const bottomReached = window.innerHeight + window.scrollY >= document.documentElement.offsetHeight - scrollThreshold;
+                if (bottomReached) {
+                    loadMoreImages();
+                }
+            }
+        }, 100);
+    });
+}
+
+// Load more images when scrolling
+async function loadMoreImages() {
+    if (window.loadingMore) return;
+    window.loadingMore = true;
+
+    try {
+        const response = await fetch('/gallery/next-batch', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
+        if (data.images && data.images.length > 0) {
+            const gallery = document.querySelector('.gallery-grid');
+            
+            data.images.forEach(image => {
+                const container = document.createElement('div');
+                container.className = 'image-container';
+                container.dataset.image = image.name;
+                gallery.appendChild(container);
+                imageLoader.observe(container);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading more images:', error);
+    } finally {
+        window.loadingMore = false;
+    }
+}
+
+// Initialize gallery when DOM is loaded
+document.addEventListener('DOMContentLoaded', initGallery);
+
+// Cleanup on page unload
+window.addEventListener('unload', () => {
+    document.querySelectorAll('.image-container').forEach(container => {
+        imageLoader.unobserve(container);
+    });
+});

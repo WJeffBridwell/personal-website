@@ -91,21 +91,24 @@
                 <div id="image-grid" class="gallery__grid">
                     <!-- Images will be loaded here dynamically -->
                 </div>
+                
+                <div class="pagination-controls">
+                    <button id="prevPage" class="page-button">&lt; Previous</button>
+                    <div id="pageNumbers" class="page-numbers"></div>
+                    <button id="nextPage" class="page-button">Next &gt;</button>
+                </div>
             </section>
         </main>
+
+        <div id="imageModal" class="modal">
+            <span class="close-modal">&times;</span>
+            <img class="modal-img" src="" alt="" />
+            <div class="modal-caption"></div>
+        </div>
 
         <footer class="footer">
             <p class="footer__text">&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
         </footer>
-    </div>
-
-    <!-- Image Modal -->
-    <div id="imageModal" class="modal">
-        <div class="modal__content">
-            <button class="modal__close close-button">&times;</button>
-            <img id="modalImage" class="modal__image" src="" alt="">
-            <div id="modalCaption" class="modal__caption"></div>
-        </div>
     </div>
 
     <!-- Card Template -->
@@ -127,8 +130,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             const galleryElement = document.querySelector('.gallery');
             if (galleryElement) {
+                console.log('Creating gallery instance...');
                 const gallery = new Gallery(galleryElement);
+                console.log('Gallery instance created, loading images...');
                 gallery.loadImages();
+            } else {
+                console.error('Gallery element not found');
             }
         });
     </script>

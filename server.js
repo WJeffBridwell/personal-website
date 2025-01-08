@@ -165,13 +165,17 @@ app.get('/api/search', async (req, res) => {
                 const name = file.replace(/\.[^/.]+$/, '').toLowerCase();
                 return /\.(jpg|jpeg|png|gif)$/i.test(file) && name.includes(query);
             })
-            .map(file => ({
-                name: file.replace(/\.[^/.]+$/, ''),
-                url: `/images/${file}`,
-                thumbnailUrl: `/images/thumbnails/${file}`
-            }));
+            .map(async file => {
+                const stats = await fsPromises.stat(path.join(imagesDir, file));
+                return {
+                    name: file,
+                    url: `/images/${file}`,
+                    modified: stats.mtime.toISOString(),
+                    size: stats.size
+                };
+            });
         
-        res.json({ results });
+        res.json({ results: await Promise.all(results) });
     } catch (error) {
         console.error('Error searching images:', error);
         res.status(500).json({ error: 'Failed to search images' });

@@ -1,0 +1,3 @@
+# Ignore everything in logs except gallery-debug.log
+logs/*
+!logs/gallery-debug.log

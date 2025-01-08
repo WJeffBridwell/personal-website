@@ -20,10 +20,28 @@ export class Gallery {
     this.imageGrid = galleryElement.querySelector('#image-grid');
     this.searchInput = galleryElement.querySelector('#search-input');
     this.letterFilter = galleryElement.querySelector('#letter-filter');
-    this.modal = galleryElement.querySelector('#imageModal');
+    
+    // Get modal elements
+    this.modal = document.querySelector('#imageModal');
+    console.log('Found modal:', this.modal);
     this.modalImg = this.modal?.querySelector('.modal-img');
+    console.log('Found modal img:', this.modalImg);
     this.modalCaption = this.modal?.querySelector('.modal-caption');
+    console.log('Found modal caption:', this.modalCaption);
     this.closeButton = this.modal?.querySelector('.close-modal');
+    console.log('Found close button:', this.closeButton);
+    
+    // Pagination elements
+    this.prevButton = document.querySelector('#prevPage');
+    this.nextButton = document.querySelector('#nextPage');
+    this.pageNumbers = document.querySelector('#pageNumbers');
+    if (!this.prevButton || !this.nextButton || !this.pageNumbers) {
+      console.error('Missing pagination elements');
+    }
+    this.currentPage = 1;
+    this.totalPages = 1;
+    this.batchSize = 80; // Show 80 images per page
+    
     this.sortNameButton = galleryElement.querySelector('#sort-name');
     this.sortDateButton = galleryElement.querySelector('#sort-date');
     this.images = [];
@@ -77,73 +95,40 @@ export class Gallery {
     this.logClient('Images', 'Loading started');
     
     try {
-      const progress = document.querySelector('.loading-progress');
-      if (progress) {
-        progress.textContent = 'Loading images...';
-      }
-
-      const response = await fetch('/gallery/images');
-      const fetchDuration = performance.now() - startTime;
-      this.logClient('Images', 'Fetch complete', fetchDuration);
-      
+      const response = await fetch(`/gallery/initial?page=${this.currentPage}&batchSize=${this.batchSize}`);
       if (!response.ok) {
         throw new Error('Failed to fetch images');
       }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let images = [];
-
-      // Read the stream
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        
-        // Update progress
-        if (progress) {
-          progress.textContent = `Loading images... (${buffer.length} bytes)`;
-        }
+      
+      const data = await response.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      if (!data.files || !Array.isArray(data.files)) {
+        throw new Error('Invalid image data received');
       }
 
-      // Parse the complete JSON
-      try {
-        const parseStart = performance.now();
-        const data = JSON.parse(buffer);
-        const parseDuration = performance.now() - parseStart;
-        this.logClient('Images', 'JSON parsed', parseDuration, { dataSize: JSON.stringify(data).length });
-        
-        images = data.images;
-        
-        if (progress) {
-          progress.textContent = `Loaded ${images.length} images`;
-          setTimeout(() => progress.remove(), 2000);
-        }
-
-        this.images = images;
-        this.renderImages();
-        const renderDuration = performance.now() - startTime;
-        this.logClient('Images', 'Render complete', renderDuration, { itemCount: images.length });
-        
-        const totalDuration = performance.now() - startTime;
-        this.logClient('Images', 'Loading complete', totalDuration);
-        
-        return images;
-      } catch (error) {
-        this.logClient('Images', 'Error', null, { error: error.message });
-        console.error('Error parsing JSON:', error);
-        throw error;
-      }
+      this.images = data.files;
+      this.totalPages = data.totalPages;
+      this.currentPage = data.page;
+      
+      this.renderImages();
+      this.updatePaginationControls();
+      
+      const renderDuration = performance.now() - startTime;
+      this.logClient('Images', 'Render complete', renderDuration, { 
+        renderedCount: data.files.length,
+        totalImages: data.total,
+        currentPage: data.page,
+        totalPages: data.totalPages
+      });
+      
+      const totalDuration = performance.now() - startTime;
+      this.logClient('Images', 'Loading complete', totalDuration);
     } catch (error) {
       this.logClient('Images', 'Error', null, { error: error.message });
-      const errorMessage = document.createElement('div');
-      errorMessage.className = 'error-message';
-      errorMessage.textContent = error.message || 'Network error';
-      errorMessage.style.display = 'block';
-      this.imageGrid.appendChild(errorMessage);
-      throw error;
+      this.handleError(error);
     }
   }
 
@@ -154,19 +139,11 @@ export class Gallery {
    * @returns {void}
    */
   renderImages() {
-    const startTime = performance.now();
-    this.logClient('Render', 'Started', null, { 
-      itemCount: this.images.length
-    });
-    
     if (!this.imageGrid) return;
 
     // Clear the grid
     this.imageGrid.innerHTML = '';
     
-    // Sort images by name
-    this.images.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
     // Create fragment to avoid reflows
     const fragment = document.createDocumentFragment();
 
@@ -176,19 +153,16 @@ export class Gallery {
       container.className = 'image-container';
       container.dataset.date = img.modified || '';
 
-      const imgUrl = img.url || '';
-      const imgName = img.name || 'undefined';
-      const thumbnailUrl = img.thumbnailUrl || imgUrl;
+      const imgUrl = img.url;
+      const imgName = img.name;
 
       container.innerHTML = `
-        <img src="${thumbnailUrl}" alt="${imgName}" loading="lazy" data-full-url="${imgUrl}" />
-        <div class="image-icon">
-            <i class="fas fa-image"></i>
+        <div class="image-container" data-name="${imgName}">
+            <img src="${imgUrl}" alt="${imgName}" loading="lazy" />
+            <div class="image-info">
+                <span class="image-name">${imgName}</span>
+            </div>
         </div>
-        <div class="folder-icon">
-            <i class="fas fa-folder"></i>
-        </div>
-        <div class="image-name">${imgName}</div>
       `;
 
       // Add click handler for folder icon
@@ -211,11 +185,14 @@ export class Gallery {
 
       // Add click handler for image modal
       container.addEventListener('click', (e) => {
+        console.log('Container clicked');
         if (!e.target.closest('.folder-icon') && !e.target.closest('.image-icon')) {
+          console.log('Not clicking icons');
           const img = container.querySelector('img');
           if (img) {
+            console.log('Found img:', img);
             this.openModal({
-              url: img.dataset.fullUrl,
+              url: img.src,
               name: imgName
             });
           }
@@ -228,7 +205,13 @@ export class Gallery {
     // Add all images at once
     this.imageGrid.appendChild(fragment);
     
-    const duration = performance.now() - startTime;
+    // Update pagination display
+    const paginationInfo = document.createElement('div');
+    paginationInfo.className = 'pagination-info';
+    paginationInfo.textContent = `Showing ${this.images.length} images - Page ${this.currentPage} of ${this.totalPages}`;
+    this.imageGrid.parentNode.insertBefore(paginationInfo, this.imageGrid.nextSibling);
+    
+    const duration = performance.now() - this.startTime;
     this.logClient('Render', 'Complete', duration, { 
       renderedCount: this.images.length 
     });
@@ -246,17 +229,6 @@ export class Gallery {
     this.sortNameButton?.addEventListener('click', () => this.sortByName());
     this.sortDateButton?.addEventListener('click', () => this.sortByDate());
 
-    // Image click for modal
-    this.imageGrid?.addEventListener('click', (e) => {
-      const container = e.target.closest('.image-container');
-      if (container) {
-        const img = container.querySelector('img');
-        if (img) {
-          this.openModal(img);
-        }
-      }
-    });
-
     // Modal events
     this.modal?.addEventListener('click', (e) => {
       if (e.target === this.modal) this.closeModal();
@@ -267,6 +239,89 @@ export class Gallery {
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.closeModal();
     });
+
+    // Pagination events
+    this.prevButton?.addEventListener('click', () => {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+        this.loadImages();
+      }
+    });
+
+    this.nextButton?.addEventListener('click', () => {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.loadImages();
+      }
+    });
+
+    this.pageNumbers?.addEventListener('click', (e) => {
+      const pageButton = e.target.closest('.page-number');
+      if (pageButton) {
+        const page = parseInt(pageButton.dataset.page);
+        if (page !== this.currentPage) {
+          this.currentPage = page;
+          this.loadImages();
+        }
+      }
+    });
+  }
+
+  updatePaginationControls() {
+    if (!this.pageNumbers) return;
+
+    this.pageNumbers.innerHTML = '';
+    this.prevButton.disabled = this.currentPage === 1;
+    this.nextButton.disabled = this.currentPage === this.totalPages;
+
+    const createPageButton = (page, text = page) => {
+      const button = document.createElement('button');
+      button.className = `page-number ${page === this.currentPage ? 'active' : ''}`;
+      button.dataset.page = page;
+      button.textContent = text;
+      return button;
+    };
+
+    const maxButtons = 7;
+    const pages = [];
+
+    // Always show first page
+    pages.push(1);
+
+    if (this.totalPages <= maxButtons) {
+      // Show all pages if total is less than maxButtons
+      for (let i = 2; i <= this.totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Complex pagination with ellipsis
+      if (this.currentPage <= 3) {
+        // Near start
+        pages.push(2, 3, 4, '...', this.totalPages);
+      } else if (this.currentPage >= this.totalPages - 2) {
+        // Near end
+        pages.push('...', this.totalPages - 3, this.totalPages - 2, this.totalPages - 1, this.totalPages);
+      } else {
+        // Middle
+        pages.push('...', this.currentPage - 1, this.currentPage, this.currentPage + 1, '...', this.totalPages);
+      }
+    }
+
+    // Create and append page buttons
+    pages.forEach(page => {
+      if (page === '...') {
+        const span = document.createElement('span');
+        span.className = 'page-ellipsis';
+        span.textContent = '...';
+        this.pageNumbers.appendChild(span);
+      } else {
+        this.pageNumbers.appendChild(createPageButton(page));
+      }
+    });
+
+    // Update button states
+    this.prevButton.disabled = this.currentPage === 1;
+    this.nextButton.disabled = this.currentPage === this.totalPages;
   }
 
   /**
@@ -446,13 +501,24 @@ export class Gallery {
   /**
    * Opens modal with image details.
    * 
-   * @param {HTMLImageElement} img - Image element
+   * @param {Object} img - Image object
    * @returns {void}
    */
   openModal(img) {
-    if (this.modal && this.modalImg) {
+    console.log('Opening modal with:', img);
+    console.log('Modal elements:', {
+      modal: this.modal,
+      modalImg: this.modalImg,
+      modalCaption: this.modalCaption
+    });
+    
+    if (this.modal && this.modalImg && this.modalCaption) {
       this.modalImg.src = img.url;
-      this.modal.style.display = 'block';
+      this.modalCaption.textContent = img.name;
+      this.modal.classList.add('show');
+      console.log('Modal opened');
+    } else {
+      console.error('Missing modal elements');
     }
   }
 
@@ -463,7 +529,7 @@ export class Gallery {
    */
   closeModal() {
     if (this.modal) {
-      this.modal.style.display = 'none';
+      this.modal.classList.remove('show');
     }
   }
 
@@ -475,10 +541,11 @@ export class Gallery {
    */
   handleError(error) {
     console.error('Gallery error:', error);
-    const errorElement = document.createElement('div');
-    errorElement.className = 'error-message';
-    errorElement.textContent = error.message;
-    this.container?.insertBefore(errorElement, this.imageGrid);
+    const errorMessage = document.createElement('div');
+    errorMessage.className = 'error-message';
+    errorMessage.textContent = error.message || 'Network error';
+    errorMessage.style.display = 'block';
+    this.imageGrid.appendChild(errorMessage);
   }
 
   /**
@@ -595,33 +662,18 @@ export function sortImages(sortBy = 'name', order = 'asc') {
  * @async
  * @returns {Promise<void>}
  */
-export function loadImages() {
-  return fetch('/gallery/images')
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error('Failed to fetch images');
-      }
-      return response.json();
-    })
-    .then((images) => {
-      const imageGrid = document.getElementById('image-grid');
-      images.forEach((img) => {
-        const container = document.createElement('div');
-        container.className = 'image-container';
-        container.innerHTML = `
-                    <img src="${img.url}" alt="${img.name}" loading="lazy" />
-                    <div class="image-name">${img.name}</div>
-                `;
-        imageGrid.appendChild(container);
-      });
-    })
-    .catch((error) => {
-      const errorMessage = document.querySelector('.error-message');
-      if (errorMessage) {
-        errorMessage.textContent = error.message;
-        errorMessage.style.display = 'block';
-      }
-    });
+export async function loadGalleryImages() {
+  try {
+    const response = await fetch(`/gallery/initial?page=1&batchSize=80`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch images');
+    }
+    const data = await response.json();
+    return data.files || [];
+  } catch (error) {
+    console.error('Error loading gallery images:', error);
+    throw error;
+  }
 }
 
 /**
@@ -773,17 +825,6 @@ export function debounce(func, wait) {
     clearTimeout(timeout);
     timeout = setTimeout(later, wait);
   };
-}
-
-/**
- * Initializes and loads gallery images.
- * Entry point for gallery functionality.
- * 
- * @returns {Promise<void>}
- */
-async function loadGalleryImages() {
-  const gallery = new Gallery(document.getElementById('gallery'));
-  return gallery.loadImages();
 }
 
 export default Gallery;

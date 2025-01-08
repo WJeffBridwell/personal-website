@@ -19,9 +19,11 @@
 
 .gallery-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-    padding: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+    contain: content;
+    will-change: contents;
 }
 
 .gallery-item {
@@ -32,17 +34,74 @@
     overflow: hidden;
 }
 
-.gallery-image {
+.image-container {
+    position: relative;
+    padding-bottom: 100%;
+    background: #f0f0f0;
+    border-radius: 8px;
+    overflow: hidden;
+    contain: strict;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+.image-container img {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
     opacity: 0;
     transition: opacity 0.3s ease-in-out;
-    background: #f0f0f0;
+    will-change: opacity;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+.image-container.loaded img {
+    opacity: 1;
+}
+
+.image-container::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 30px;
+    height: 30px;
+    border: 3px solid #ddd;
+    border-top-color: #666;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: spin 1s linear infinite;
+    opacity: 0.5;
+}
+
+.image-container.loaded::before {
+    display: none;
+}
+
+.image-container.error::before {
+    content: '!';
+    animation: none;
+    border: none;
+    background: #ff5555;
+    color: white;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    opacity: 0.8;
 }
 
 .gallery-image.loaded {
     opacity: 1;
+}
+
+.gallery-image.error {
+    opacity: 0.5;
 }
 
 .scroll-sentinel {
@@ -68,12 +127,136 @@
     animation: loading 1s infinite;
 }
 
+.gallery-item:has(.gallery-image.loaded)::before {
+    display: none;
+}
+
 @keyframes loading {
     to {
         left: 100%;
     }
 }
 
-.gallery-image.loaded + .gallery-item::before {
-    display: none;
+@keyframes spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+.error-message {
+    text-align: center;
+    padding: 20px;
+    color: #721c24;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    margin: 20px;
+}
+
+@media (max-width: 768px) {
+    .gallery-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}
+
+/* Performance optimizations */
+.gallery-grid > * {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+}
+
+/* Reduce repaints */
+.image-container {
+    transform: translate3d(0, 0, 0);
+    -webkit-transform-style: preserve-3d;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Optimize for GPU */
+.image-container img {
+    -webkit-transform: translate3d(0, 0, 0);
+    -webkit-backface-visibility: hidden;
+}
+
+/* Loading placeholder animation */
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.image-container:not(.loaded):not(.error) {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+.pagination-info {
+  text-align: center;
+  margin: 1rem 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin: 2rem 0;
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: sticky;
+  bottom: 1rem;
+  z-index: 10;
+}
+
+.page-button,
+.page-number {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.page-button:hover,
+.page-number:hover {
+  background: #f0f0f0;
+  border-color: #999;
+}
+
+.page-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f0f0f0;
+}
+
+.page-number.active {
+  background: #007bff;
+  color: white;
+  border-color: #0056b3;
+}
+
+.page-number.active:hover {
+  background: #0056b3;
+}
+
+.page-ellipsis {
+  padding: 0 0.5rem;
+  color: #666;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }

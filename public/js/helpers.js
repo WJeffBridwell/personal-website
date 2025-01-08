@@ -335,36 +335,16 @@ export function sortImages(sortBy = 'name', order = 'asc') {
  * @throws {Error} If image loading fails
  */
 export async function loadImages() {
-  const imageGrid = document.getElementById('image-grid');
-  if (!imageGrid) {
-    throw new Error('Image grid element not found');
-  }
-
   try {
-    const response = await fetch('/gallery/images');
+    const response = await fetch('/gallery/initial?page=1&batchSize=80');
     if (!response.ok) {
-      throw new Error('Failed to load images');
+      throw new Error('Failed to fetch images');
     }
-    const images = await response.json();
-
-    // Clear existing images
-    imageGrid.innerHTML = '';
-
-    // Add new images
-    images.forEach((imageData) => {
-      const imageElement = createImageElement(imageData);
-      imageGrid.appendChild(imageElement);
-    });
-
-    return images;
+    const data = await response.json();
+    return data.files || [];
   } catch (error) {
-    handleError(error);
-    const errorElement = document.querySelector('.error-message');
-    if (errorElement) {
-      errorElement.textContent = 'Error loading images';
-      errorElement.style.display = 'block';
-    }
-    throw error; // Re-throw to propagate to caller
+    console.error('Error loading images:', error);
+    throw error;
   }
 }
 
