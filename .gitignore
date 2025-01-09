@@ -78,6 +78,7 @@ public/content-gallery.before
 
 # Logs
 logs/
-logs/**/*
+logs/
+*.log
 !logs/
 !logs/gallery-debug.log
