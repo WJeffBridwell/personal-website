@@ -26,14 +26,8 @@ Thumbs.db
 
 # Log files
 *.log
-logs/
 debug.log
 gallery-debug.log
-
-# Logs (except gallery-debug.log)
-logs/**/*
-!logs/
-!logs/gallery-debug.log
 
 # Temporary files
 t.txt
@@ -81,3 +75,9 @@ dups/
 response.json
 public/content-gallery-html.old
 public/content-gallery.before
+
+# Logs
+logs/
+logs/**/*
+!logs/
+!logs/gallery-debug.log
