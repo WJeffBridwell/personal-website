@@ -102,202 +102,43 @@
         }
 
         .a-button:hover {
-            background-color: var(--secondary-color);
-        }
-
-        .a-button--secondary {
-            background-color: #f0f0f0;
-            color: #333;
-        }
-
-        .a-button--secondary:hover {
-            background-color: #e0e0e0;
+            background-color: var(--primary-color-dark);
         }
 
         .a-select {
             padding: 8px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
-            background-color: white;
             font-size: 14px;
-            cursor: pointer;
-            min-width: 120px;
-        }
-
-        /* Content-specific styles */
-        .o-gallery__item {
-            background: #ffffff;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease-in-out;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            overflow: hidden;
-        }
-
-        .o-gallery__item:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
-
-        .m-video-player {
-            width: 100%;
-            position: relative;
-            aspect-ratio: 16/9;
-            margin-bottom: 10px;
-            background: #000;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .a-video-element {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background: #000;
-        }
-
-        .m-video-controls {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            z-index: 10;
-        }
-
-        .a-video-progress {
-            width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
-            cursor: pointer;
-            position: relative;
-            transition: height 0.1s;
-        }
-
-        .a-video-progress:hover {
-            height: 8px;
-        }
-
-        .a-progress-bar {
-            height: 100%;
-            background: var(--primary-color);
-            border-radius: 2px;
-            width: 0;
-            pointer-events: none;
-            transition: width 0.1s linear;
-        }
-
-        .a-video-progress:hover .a-progress-bar {
-            height: 100%;
-        }
-
-        .a-video-buttons {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .a-play-button,
-        .a-mute-button,
-        .a-fullscreen-button {
-            background: none;
-            border: none;
-            color: white;
-            cursor: pointer;
-            padding: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.2s;
-        }
-
-        .a-play-button:hover,
-        .a-mute-button:hover,
-        .a-fullscreen-button:hover {
-            opacity: 0.8;
-        }
-
-        .a-volume-control {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .a-volume-slider {
-            width: 60px;
-            height: 4px;
-            -webkit-appearance: none;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
-            outline: none;
-        }
-
-        .a-volume-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 12px;
-            height: 12px;
-            background: white;
-            border-radius: 50%;
+            background-color: white;
             cursor: pointer;
         }
 
-        .a-volume-slider::-moz-range-thumb {
-            width: 12px;
-            height: 12px;
-            background: white;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-
-        video::-webkit-media-controls {
-            display: none !important;
-        }
-
-        video::-webkit-media-controls-enclosure {
-            display: none !important;
-        }
-
-        .m-item-info {
-            padding: 10px 0;
-        }
-
-        .a-item-name {
-            font-weight: 500;
-            font-size: 0.9em;
-            color: #333;
-            margin-bottom: 5px;
-            display: block;
-            word-break: break-word;
-        }
-
-        .a-item-size {
-            font-size: 0.8em;
-            color: #666;
-            display: block;
-        }
-
+        /* Gallery Grid */
         .o-gallery__grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 20px;
             padding: 20px;
-            max-width: 1400px;
+            max-width: var(--max-width);
             margin: 0 auto;
         }
 
-        .m-folder-preview,
-        .m-file-preview,
-        .m-image-preview {
+        .o-gallery__item {
+            position: relative;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+
+        .o-gallery__item:hover {
+            transform: translateY(-5px);
+        }
+
+        .m-card__media {
             width: 100%;
             aspect-ratio: 16/9;
             display: flex;
@@ -373,6 +214,16 @@
                     <option value="size-desc">Size (Large to Small)</option>
                     <option value="date-asc">Date (Oldest First)</option>
                     <option value="date-desc">Date (Newest First)</option>
+                </select>
+
+                <!-- Type Filter -->
+                <select id="type-filter" class="a-select">
+                    <option value="">All Types</option>
+                    <option value="vr">VR</option>
+                    <option value="video">Video</option>
+                    <option value="zip">Archive</option>
+                    <option value="folder">Folder</option>
+                    <option value="other">Other</option>
                 </select>
 
                 <!-- Tag Filter -->

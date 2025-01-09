@@ -381,10 +381,14 @@ class ContentGallery {
     displayImages(items) {
         if (!this.container) return;
         
+        console.log('[Gallery] Displaying items:', items.length);
         this.container.innerHTML = '';
-        items.forEach(async (item) => {
+        
+        // Create all item containers first
+        const containers = items.map(item => {
             const itemContainer = document.createElement('div');
             itemContainer.className = 'gallery-item';
+            itemContainer.dataset.contentName = item.content_name;
             
             const contentContainer = document.createElement('div');
             contentContainer.className = 'content-container';
@@ -419,26 +423,27 @@ class ContentGallery {
                 
                 // Error handling for unsupported format
                 video.onerror = () => {
-                    console.error('Video error:', video.error);
+                    console.error('Video error for:', item.content_name, video.error);
                     video.remove();
                     contentContainer.classList.remove('media-container');
-                    contentContainer.classList.add('vr-container');
-                    const vrIcon = document.createElement('i');
-                    vrIcon.className = 'fas fa-vr-cardboard fa-4x';
-                    contentContainer.appendChild(vrIcon);
+                    contentContainer.classList.add('error-container');
+                    const errorIcon = document.createElement('i');
+                    errorIcon.className = 'fas fa-exclamation-triangle fa-4x';
+                    contentContainer.appendChild(errorIcon);
                 };
                 
                 contentContainer.appendChild(video);
                 
-                // Generate and show thumbnail
-                try {
-                    const thumbnailUrl = await this.generateVideoThumbnail(source.src);
-                    if (thumbnailUrl) {
-                        video.poster = thumbnailUrl;
-                    }
-                } catch (error) {
-                    console.error('Error generating thumbnail:', error);
-                }
+                // Generate thumbnail asynchronously
+                this.generateVideoThumbnail(source.src)
+                    .then(thumbnailUrl => {
+                        if (thumbnailUrl) {
+                            video.poster = thumbnailUrl;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Thumbnail error for:', item.content_name, error);
+                    });
             } else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
                 contentContainer.classList.add('media-container');
                 const img = document.createElement('img');
@@ -446,15 +451,13 @@ class ContentGallery {
                 img.alt = item.content_name;
                 img.dataset.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
                 contentContainer.appendChild(img);
-                imageLoader.observer.observe(contentContainer);
+                // We'll observe the container after it's added to the DOM
             } else if (item.content_type === 'zip') {
-                // Show zip icon for zip files
                 contentContainer.classList.add('zip-container');
                 const zipIcon = document.createElement('i');
                 zipIcon.className = 'fas fa-file-archive fa-4x';
                 contentContainer.appendChild(zipIcon);
             } else {
-                // Show folder icon for other types
                 contentContainer.classList.add('folder-container');
                 const folderIcon = document.createElement('i');
                 folderIcon.className = 'fas fa-folder fa-4x';
@@ -465,32 +468,55 @@ class ContentGallery {
             const metadataContainer = document.createElement('div');
             metadataContainer.className = 'metadata-container';
 
+            // Content name
             const nameElement = document.createElement('div');
             nameElement.className = 'content-name';
             nameElement.textContent = item.content_name;
             metadataContainer.appendChild(nameElement);
 
+            // Metadata info (size and tags)
+            const metadataInfo = document.createElement('div');
+            metadataInfo.className = 'metadata-info';
+
             const sizeElement = document.createElement('div');
             sizeElement.className = 'content-size';
             sizeElement.textContent = this.formatFileSize(item.content_size);
-            metadataContainer.appendChild(sizeElement);
+            metadataInfo.appendChild(sizeElement);
 
+            // Tags as colored circles
             if (item.content_tags && item.content_tags.length > 0) {
                 const tagsContainer = document.createElement('div');
                 tagsContainer.className = 'content-tags';
                 item.content_tags.forEach(tag => {
                     const tagElement = document.createElement('span');
-                    tagElement.className = `tag ${tag.toLowerCase()}`;
-                    tagElement.textContent = tag;
+                    const tagColor = tag.toLowerCase();
+                    tagElement.className = `tag ${tagColor}`;
+                    tagElement.title = tag; // Show tag name on hover
                     tagsContainer.appendChild(tagElement);
                 });
-                metadataContainer.appendChild(tagsContainer);
+                metadataInfo.appendChild(tagsContainer);
             }
 
+            metadataContainer.appendChild(metadataInfo);
             itemContainer.appendChild(contentContainer);
             itemContainer.appendChild(metadataContainer);
-            this.container.appendChild(itemContainer);
+            return itemContainer;
         });
+
+        // Add all containers to the DOM at once
+        containers.forEach(container => {
+            this.container.appendChild(container);
+        });
+
+        // Start observing images after they're in the DOM
+        containers.forEach(container => {
+            const mediaContainer = container.querySelector('.media-container');
+            if (mediaContainer && mediaContainer.querySelector('img')) {
+                imageLoader.observe(mediaContainer);
+            }
+        });
+
+        console.log('[Gallery] Rendered items:', containers.length);
     }
 
     showModal(imageSrc) {
