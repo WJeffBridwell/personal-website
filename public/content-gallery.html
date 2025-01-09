@@ -358,24 +358,31 @@
 
     <div class="container">
         <main>
-            <section class="o-gallery">
-                <div class="o-gallery__controls">
-                    <div class="m-controls-group">
-                        <div class="m-search-container">
-                            <i class="fas fa-search a-search-icon"></i>
-                            <input type="text" id="search-input" class="a-search-input" placeholder="Search content...">
-                        </div>
-                        <button id="sort-name" class="a-button a-button--secondary">
-                            <i class="fas fa-sort-alpha-down"></i>
-                            Sort by Name
-                        </button>
-                        <select id="tag-filter" class="a-select">
-                            <option value="">All Tags</option>
-                        </select>
-                    </div>
+            <div class="m-controls-group">
+                <!-- Search -->
+                <div class="m-search-container">
+                    <i class="fas fa-search a-search-icon"></i>
+                    <input type="text" class="a-search-input" placeholder="Search by name or tag...">
                 </div>
-                <div id="gallery-grid" class="o-gallery__grid"></div>
-            </section>
+
+                <!-- Sort Order -->
+                <select id="sort-order" class="a-select">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="size-asc">Size (Small to Large)</option>
+                    <option value="size-desc">Size (Large to Small)</option>
+                    <option value="date-asc">Date (Oldest First)</option>
+                    <option value="date-desc">Date (Newest First)</option>
+                </select>
+
+                <!-- Tag Filter -->
+                <select id="tag-filter" class="a-select">
+                    <option value="">All Tags</option>
+                </select>
+            </div>
+
+            <!-- Gallery Grid -->
+            <div id="gallery-grid" class="o-gallery__grid"></div>
         </main>
 
         <footer>
