@@ -7,6 +7,14 @@ import fetch from 'node-fetch';
 const app = express();
 const port = 8082;
 
+// Enable CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 app.use(cors({
     origin: '*',
     methods: ['GET', 'HEAD'],
@@ -205,7 +213,7 @@ app.get('/videos/:filename', async (req, res) => {
         console.error('Base name for lookup:', baseName);
         
         // Get the full path from images-api
-        const apiUrl = `http://localhost:8081/image-content?image_name=${encodeURIComponent(baseName)}`;
+        const apiUrl = `http://192.168.86.242:8081/image-content?image_name=${encodeURIComponent(baseName)}`;
         console.error('API URL:', apiUrl);
         
         const response = await fetch(apiUrl);
@@ -307,6 +315,6 @@ app.get('/videos/:filename', async (req, res) => {
 });
 
 // Start server
-app.listen(port, () => {
-    console.log(`Video server running at http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Video server running at http://0.0.0.0:${port}`);
 });

@@ -70,6 +70,14 @@ app.use(compression());
 // Set timeout to 5 minutes
 app.use(timeout('300s'));
 
+// Enable CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    next();
+});
+
 // Middleware Configuration
 // Log all incoming HTTP requests with timestamp
 app.use((req, res, next) => {
@@ -340,7 +348,7 @@ app.get('/api/content', async (req, res) => {
         }
 
         // Forward to content service
-        const contentResponse = await fetch(`http://localhost:8081/image-content?image_name=${encodeURIComponent(imageName)}`);
+        const contentResponse = await fetch(`http://192.168.86.242:8081/image-content?image_name=${encodeURIComponent(imageName)}`);
         if (!contentResponse.ok) {
             throw new Error(`Content service error: ${contentResponse.statusText}`);
         }
@@ -360,7 +368,7 @@ app.get('/proxy/video/direct', async (req, res) => {
         console.log('[Proxy] Video request path:', path);
         
         // Forward the request to the video server
-        const videoServerUrl = `http://localhost:8082/videos/direct?path=${path}`;
+        const videoServerUrl = `http://192.168.86.242:8082/videos/direct?path=${path}`;
         console.log('[Proxy] Forwarding to:', videoServerUrl);
         
         const response = await fetch(videoServerUrl);
@@ -438,7 +446,7 @@ app.get('/proxy/image/direct', async (req, res) => {
 
 // Create proxy server
 const proxy = httpProxy.createProxyServer({
-    target: 'http://localhost:8082',
+    target: 'http://192.168.86.242:8082',
     ws: true,
     changeOrigin: true,
     proxyTimeout: 60000,
@@ -482,6 +490,6 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-server.listen(port, '0.0.0.0', () => {
+app.listen(port, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}`);
 });

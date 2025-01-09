@@ -146,6 +146,20 @@ class ContentGallery {
         this.searchTerm = '';
         this.sortOrder = 'name-asc'; // Default sort order
         this.selectedType = ''; // Add type filter
+        this.currentPage = 1;
+        this.pageSize = 21;
+        this.totalItems = 0;
+        this.totalPages = 0;
+        this.lastImageName = '';
+        this.isFiltered = false; // Track if filters are active
+        this.isLoading = false;
+        this.pendingOperation = null;
+        
+        // Create pagination container
+        const paginationContainer = document.createElement('div');
+        paginationContainer.className = 'pagination-controls';
+        // Insert after gallery grid
+        this.container.parentNode.insertBefore(paginationContainer, this.container.nextSibling);
         
         // Initialize event listeners
         this.initializeFilters();
@@ -190,6 +204,266 @@ class ContentGallery {
                 this.filterAndDisplayItems();
             });
         }
+    }
+
+    async loadContent(imageName) {
+        if (!imageName) {
+            console.error('[Gallery] No image name provided');
+            return;
+        }
+
+        if (this.isLoading) {
+            console.log('[Gallery] Already loading, storing as pending operation');
+            this.pendingOperation = { type: 'load', imageName };
+            return;
+        }
+        
+        console.log('[Gallery] Loading content with page size:', this.pageSize);
+        this.isLoading = true;
+        this.lastImageName = imageName;
+        
+        try {
+            const response = await fetch(`http://192.168.86.242:8081/image-content?image_name=${imageName}&page=${this.currentPage}&page_size=${this.pageSize}`);
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.statusText}`);
+            }
+            const data = await response.json();
+            
+            if (data) {
+                let items, total, page, totalPages;
+                
+                if (Array.isArray(data)) {
+                    items = data;
+                    total = data.length;
+                    page = 1;
+                    totalPages = Math.ceil(total / this.pageSize);
+                } else if (data.items && Array.isArray(data.items)) {
+                    items = data.items;
+                    total = data.total;
+                    page = data.page;
+                    totalPages = Math.ceil(total / this.pageSize);
+                } else {
+                    throw new Error('Invalid data format received');
+                }
+                
+                console.log('[Gallery] Loaded items:', items.length);
+                console.log('[Gallery] Total items:', total);
+                console.log('[Gallery] Current page:', page);
+                console.log('[Gallery] Total pages:', totalPages);
+                
+                this.items = items;
+                this.totalItems = total;
+                this.totalPages = totalPages;
+                this.currentPage = page;
+                
+                this.updateTagFilter(items);
+                await this.displayItems(items);
+                this.updatePaginationControls();
+            }
+        } catch (error) {
+            console.error('Error loading content:', error);
+            this.container.innerHTML = `<div class="error-message">Error loading gallery content: ${error.message}</div>`;
+        } finally {
+            this.isLoading = false;
+            
+            if (this.pendingOperation) {
+                const operation = this.pendingOperation;
+                this.pendingOperation = null;
+                
+                switch (operation.type) {
+                    case 'load':
+                        await this.loadContent(operation.imageName);
+                        break;
+                    case 'filter':
+                        this.filterAndDisplayItems();
+                        break;
+                    case 'page':
+                        this.currentPage = operation.page;
+                        await this.loadContent(this.lastImageName);
+                        break;
+                }
+            }
+        }
+    }
+
+    updateTagFilter(items) {
+        const tagFilter = document.querySelector('#tag-filter');
+        if (!tagFilter) return;
+
+        // Get unique tags - preserve original case
+        const tags = new Set();
+        items.forEach(item => {
+            if (item.content_tags) {
+                item.content_tags.forEach(tag => tags.add(tag));
+            }
+        });
+
+        // Sort tags alphabetically
+        const sortedTags = Array.from(tags).sort();
+
+        // Update dropdown
+        const currentValue = tagFilter.value;
+        tagFilter.innerHTML = '<option value="">All Tags</option>';
+        sortedTags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            tagFilter.appendChild(option);
+        });
+        tagFilter.value = currentValue;
+    }
+
+    filterAndDisplayItems() {
+        console.log('[Gallery] Starting filter with', this.items.length, 'items');
+        
+        if (this.isLoading) {
+            console.log('[Gallery] Data still loading, storing filter as pending operation');
+            this.pendingOperation = { type: 'filter' };
+            return;
+        }
+
+        let filteredItems = [...this.items];
+
+        // Apply search filter
+        if (this.searchTerm) {
+            const searchLower = this.searchTerm.toLowerCase();
+            filteredItems = filteredItems.filter(item => {
+                const nameMatch = item.content_name.toLowerCase().includes(searchLower);
+                const tagMatch = item.content_tags?.some(tag => tag.toLowerCase().includes(searchLower)) || false;
+                return nameMatch || tagMatch;
+            });
+        }
+
+        // Apply type filter
+        if (this.selectedType) {
+            filteredItems = filteredItems.filter(item => this.getItemType(item) === this.selectedType);
+        }
+
+        // Apply tag filter
+        if (this.selectedTags.size > 0) {
+            filteredItems = filteredItems.filter(item =>
+                item.content_tags?.some(tag => this.selectedTags.has(tag))
+            );
+        }
+
+        // Apply sort
+        this.sortItems(filteredItems);
+
+        // Update pagination for filtered results
+        const totalFilteredItems = filteredItems.length;
+        const totalFilteredPages = Math.ceil(totalFilteredItems / this.pageSize);
+        
+        console.log('[Gallery] After filtering:', totalFilteredItems, 'items,', totalFilteredPages, 'pages');
+        
+        // Reset to page 1 if current page is beyond total pages
+        if (this.currentPage > totalFilteredPages) {
+            this.currentPage = 1;
+        }
+
+        // Display the current page of filtered items
+        const startIndex = (this.currentPage - 1) * this.pageSize;
+        const endIndex = startIndex + this.pageSize;
+        const itemsToDisplay = filteredItems.slice(startIndex, endIndex);
+
+        console.log('[Gallery] Displaying page', this.currentPage, 'items', startIndex, 'to', endIndex);
+        
+        this.displayItems(itemsToDisplay);
+        
+        // Update pagination controls with filtered totals
+        this.totalItems = totalFilteredItems;
+        this.totalPages = totalFilteredPages;
+        this.updatePaginationControls();
+    }
+
+    async displayItems(items) {
+        if (!this.container) {
+            console.error('[Gallery] Container not found');
+            return;
+        }
+
+        this.container.innerHTML = '';
+        console.log('[Gallery] Displaying', items.length, 'items');
+
+        const template = document.getElementById('content-template');
+        if (!template) {
+            console.error('[Gallery] Template not found');
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        
+        for (const item of items) {
+            const clone = template.content.cloneNode(true);
+            const galleryItem = clone.querySelector('.o-gallery__item');
+            
+            // Set up media preview
+            const mediaContainer = clone.querySelector('.m-card__media');
+            await this.setupMediaPreview(item, mediaContainer);
+            
+            // Set up title and metadata
+            const title = clone.querySelector('.a-card__title');
+            title.textContent = item.content_name;
+            
+            const size = clone.querySelector('.a-content-size');
+            size.textContent = this.formatBytes(item.content_size);
+            
+            const tags = clone.querySelector('.a-content-tags');
+            if (item.content_tags && item.content_tags.length > 0) {
+                tags.textContent = item.content_tags.join(', ');
+            }
+            
+            // Add click handler
+            galleryItem.addEventListener('click', () => this.handleItemClick(item));
+            
+            fragment.appendChild(clone);
+        }
+
+        this.container.appendChild(fragment);
+        console.log('[Gallery] Rendered', items.length, 'items');
+    }
+
+    showModal(imageSrc) {
+        // Push state to enable back button
+        history.pushState({ modal: true }, '', window.location.pathname);
+
+        const modal = document.createElement('div');
+        modal.className = 'image-modal';
+        
+        const modalImg = document.createElement('img');
+        modalImg.src = imageSrc;
+        modal.appendChild(modalImg);
+
+        const closeModal = () => {
+            document.body.removeChild(modal);
+            document.removeEventListener('keydown', handleKeyPress);
+            document.removeEventListener('popstate', handlePopState);
+        };
+
+        const handleKeyPress = (e) => {
+            if (e.key === 'Escape' || e.key === 'Backspace') {
+                history.back();
+            }
+        };
+
+        const handlePopState = () => {
+            closeModal();
+        };
+
+        modal.addEventListener('click', () => {
+            history.back();
+        });
+        
+        document.addEventListener('keydown', handleKeyPress);
+        document.addEventListener('popstate', handlePopState);
+        document.body.appendChild(modal);
+    }
+
+    formatBytes(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     getItemType(item) {
@@ -254,313 +528,179 @@ class ContentGallery {
         });
     }
 
-    async loadContent(imageName) {
-        if (!imageName) {
-            console.error('[Gallery] No image name provided');
+    updatePaginationControls() {
+        console.log('[Gallery] Updating pagination controls');
+        console.log('[Gallery] Total items:', this.totalItems);
+        console.log('[Gallery] Page size:', this.pageSize);
+        console.log('[Gallery] Current page:', this.currentPage);
+        console.log('[Gallery] Total pages:', this.totalPages);
+
+        const paginationContainer = this.container.parentNode.querySelector('.pagination-controls');
+        if (!paginationContainer) {
+            console.error('[Gallery] Pagination container not found');
             return;
         }
+
+        // Clear existing buttons
+        paginationContainer.innerHTML = '';
         
-        try {
-            const response = await fetch(`http://localhost:8081/image-content?image_name=${imageName}`);
-            if (!response.ok) {
-                throw new Error(`Network response was not ok: ${response.statusText}`);
-            }
-            const data = await response.json();
-            
-            if (Array.isArray(data)) {
-                console.log('[Gallery] Total items from API:', data.length);
-                console.log('[Gallery] Items by type:', data.reduce((acc, item) => {
-                    const type = this.getItemType(item);
-                    acc[type] = (acc[type] || 0) + 1;
-                    return acc;
-                }, {}));
-                
-                this.items = data;
-                this.updateTagFilter(data);
-                this.filterAndDisplayItems();
-            } else {
-                console.error('[Gallery] Received invalid data format');
-                throw new Error('Invalid data format received');
-            }
-        } catch (error) {
-            console.error('Error loading content:', error);
-            this.container.innerHTML = `<div class="error-message">Error loading gallery content: ${error.message}</div>`;
+        // Calculate total pages
+        const calculatedTotalPages = Math.ceil(this.totalItems / this.pageSize);
+        this.totalPages = calculatedTotalPages;
+        
+        console.log('[Gallery] Calculated total pages:', calculatedTotalPages);
+        
+        if (this.totalPages <= 1) {
+            console.log('[Gallery] No pagination needed (total pages ≤ 1)');
+            paginationContainer.style.display = 'none';
+            return;
+        }
+
+        paginationContainer.style.display = 'flex';
+
+        // Previous button
+        if (this.currentPage > 1) {
+            const prevButton = document.createElement('button');
+            prevButton.className = 'page-button prev';
+            prevButton.dataset.page = (this.currentPage - 1).toString();
+            prevButton.textContent = '←';
+            prevButton.onclick = () => this.handlePageClick(this.currentPage - 1);
+            paginationContainer.appendChild(prevButton);
+        }
+
+        // Page numbers
+        let startPage = Math.max(1, this.currentPage - 2);
+        let endPage = Math.min(this.totalPages, startPage + 4);
+        
+        // Adjust start if we're near the end
+        if (endPage - startPage < 4) {
+            startPage = Math.max(1, endPage - 4);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageButton = document.createElement('button');
+            pageButton.className = 'page-button' + (i === this.currentPage ? ' active' : '');
+            pageButton.dataset.page = i.toString();
+            pageButton.textContent = i.toString();
+            pageButton.onclick = () => this.handlePageClick(i);
+            paginationContainer.appendChild(pageButton);
+        }
+
+        // Next button
+        if (this.currentPage < this.totalPages) {
+            const nextButton = document.createElement('button');
+            nextButton.className = 'page-button next';
+            nextButton.dataset.page = (this.currentPage + 1).toString();
+            nextButton.textContent = '→';
+            nextButton.onclick = () => this.handlePageClick(this.currentPage + 1);
+            paginationContainer.appendChild(nextButton);
+        }
+
+        console.log('[Gallery] Added', paginationContainer.children.length, 'pagination buttons');
+    }
+
+    async handlePageClick(page) {
+        console.log('[Gallery] Handling page click:', page);
+        if (page === this.currentPage) return;
+        
+        if (this.isLoading) {
+            console.log('[Gallery] Data still loading, storing page change as pending operation');
+            this.pendingOperation = { type: 'page', page };
+            return;
+        }
+
+        this.currentPage = page;
+        await this.loadContent(this.lastImageName);
+    }
+
+    sortItems(items) {
+        switch (this.sortOrder) {
+            case 'name-asc':
+                items.sort((a, b) => a.content_name.localeCompare(b.content_name));
+                break;
+            case 'name-desc':
+                items.sort((a, b) => b.content_name.localeCompare(a.content_name));
+                break;
+            case 'size-asc':
+                items.sort((a, b) => a.content_size - b.content_size);
+                break;
+            case 'size-desc':
+                items.sort((a, b) => b.content_size - a.content_size);
+                break;
+            case 'date-asc':
+                items.sort((a, b) => new Date(a.content_created) - new Date(b.content_created));
+                break;
+            case 'date-desc':
+                items.sort((a, b) => new Date(b.content_created) - new Date(a.content_created));
+                break;
+            default:
+                break;
         }
     }
 
-    updateTagFilter(items) {
-        const tagFilter = document.querySelector('#tag-filter');
-        if (!tagFilter) return;
-
-        // Get unique tags - preserve original case
-        const tags = new Set();
-        items.forEach(item => {
-            if (item.content_tags) {
-                item.content_tags.forEach(tag => tags.add(tag));
-            }
-        });
-
-        // Sort tags alphabetically
-        const sortedTags = Array.from(tags).sort();
-
-        // Update dropdown
-        const currentValue = tagFilter.value;
-        tagFilter.innerHTML = '<option value="">All Tags</option>';
-        sortedTags.forEach(tag => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            tagFilter.appendChild(option);
-        });
-        tagFilter.value = currentValue;
-    }
-
-    filterAndDisplayItems() {
-        if (!this.items.length) return;
-
-        console.log('[Gallery] Starting filter with', this.items.length, 'items');
-        let filtered = [...this.items];
-
-        // Apply search filter
-        if (this.searchTerm) {
-            filtered = filtered.filter(item => 
-                item.content_name.toLowerCase().includes(this.searchTerm) ||
-                (item.content_tags && item.content_tags.some(tag => 
-                    tag.toLowerCase().includes(this.searchTerm)
-                ))
-            );
-            console.log('[Gallery] After search filter:', filtered.length, 'items');
-        }
-
-        // Apply type filter
-        if (this.selectedType) {
-            filtered = filtered.filter(item => this.getItemType(item) === this.selectedType);
-            console.log('[Gallery] After type filter:', filtered.length, 'items');
-        }
-
-        // Apply tag filter
-        if (this.selectedTags.size > 0) {
-            filtered = filtered.filter(item => 
-                item.content_tags && item.content_tags.some(tag => 
-                    this.selectedTags.has(tag)
-                )
-            );
-            console.log('[Gallery] After tag filter:', filtered.length, 'items');
-        }
-
-        // Apply sorting
-        filtered.sort((a, b) => {
-            switch (this.sortOrder) {
-                case 'name-asc':
-                    return a.content_name.localeCompare(b.content_name);
-                case 'name-desc':
-                    return b.content_name.localeCompare(a.content_name);
-                case 'size-asc':
-                    return a.content_size - b.content_size;
-                case 'size-desc':
-                    return b.content_size - a.content_size;
-                case 'date-asc':
-                    return new Date(a.content_created) - new Date(b.content_created);
-                case 'date-desc':
-                    return new Date(b.content_created) - new Date(a.content_created);
-                default:
-                    return 0;
-            }
-        });
-
-        console.log('[Gallery] Final filtered items:', filtered.length);
-        console.log('[Gallery] Items by type:', filtered.reduce((acc, item) => {
-            const type = this.getItemType(item);
-            acc[type] = (acc[type] || 0) + 1;
-            return acc;
-        }, {}));
-
-        this.displayImages(filtered);
-    }
-
-    displayImages(items) {
-        if (!this.container) return;
-        
-        console.log('[Gallery] Displaying items:', items.length);
-        this.container.innerHTML = '';
-        
-        // Create all item containers first
-        const containers = items.map(item => {
-            const itemContainer = document.createElement('div');
-            itemContainer.className = 'gallery-item';
-            itemContainer.dataset.contentName = item.content_name;
+    async setupMediaPreview(item, mediaContainer) {
+        if (item.content_type === 'mp4' || item.content_type === 'webm') {
+            // Create video element for playback
+            const video = document.createElement('video');
+            video.className = 'content-player';
+            video.controls = true;
+            video.preload = 'metadata';
             
-            const contentContainer = document.createElement('div');
-            contentContainer.className = 'content-container';
-
-            // Check if it's a VR video by looking at the filename and tags
-            const isVRContent = (
-                item.content_tags?.includes('Yellow') || 
-                item.content_name.toLowerCase().includes('vr') ||
-                item.content_name.toLowerCase().includes('180x180')
-            );
+            // Add source
+            const source = document.createElement('source');
+            source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
+            source.type = `video/${item.content_type}`;
+            video.appendChild(source);
             
-            if (isVRContent) {
-                // Show VR icon for VR content
-                contentContainer.classList.add('vr-container');
-                const vrIcon = document.createElement('i');
-                vrIcon.className = 'fas fa-vr-cardboard fa-4x';
-                contentContainer.appendChild(vrIcon);
-            }
-            else if (item.content_type === 'mp4' || item.content_type === 'webm') {
-                contentContainer.classList.add('media-container');
-                // Create video element for playback
-                const video = document.createElement('video');
-                video.className = 'content-player';
-                video.controls = true;
-                video.preload = 'metadata';
-                
-                // Add source
-                const source = document.createElement('source');
-                source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
-                source.type = `video/${item.content_type}`;
-                video.appendChild(source);
-                
-                // Error handling for unsupported format
-                video.onerror = () => {
-                    console.error('Video error for:', item.content_name, video.error);
-                    video.remove();
-                    contentContainer.classList.remove('media-container');
-                    contentContainer.classList.add('error-container');
-                    const errorIcon = document.createElement('i');
-                    errorIcon.className = 'fas fa-exclamation-triangle fa-4x';
-                    contentContainer.appendChild(errorIcon);
-                };
-                
-                contentContainer.appendChild(video);
-                
-                // Generate thumbnail asynchronously
-                this.generateVideoThumbnail(source.src)
-                    .then(thumbnailUrl => {
-                        if (thumbnailUrl) {
-                            video.poster = thumbnailUrl;
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Thumbnail error for:', item.content_name, error);
-                    });
-            } else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
-                contentContainer.classList.add('media-container');
-                const img = document.createElement('img');
-                img.className = 'content-player';
-                img.alt = item.content_name;
-                img.dataset.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
-                contentContainer.appendChild(img);
-                // We'll observe the container after it's added to the DOM
-            } else if (item.content_type === 'zip') {
-                contentContainer.classList.add('zip-container');
-                const zipIcon = document.createElement('i');
-                zipIcon.className = 'fas fa-file-archive fa-4x';
-                contentContainer.appendChild(zipIcon);
-            } else {
-                contentContainer.classList.add('folder-container');
-                const folderIcon = document.createElement('i');
-                folderIcon.className = 'fas fa-folder fa-4x';
-                contentContainer.appendChild(folderIcon);
-            }
-
-            // Add metadata
-            const metadataContainer = document.createElement('div');
-            metadataContainer.className = 'metadata-container';
-
-            // Content name
-            const nameElement = document.createElement('div');
-            nameElement.className = 'content-name';
-            nameElement.textContent = item.content_name;
-            metadataContainer.appendChild(nameElement);
-
-            // Metadata info (size and tags)
-            const metadataInfo = document.createElement('div');
-            metadataInfo.className = 'metadata-info';
-
-            const sizeElement = document.createElement('div');
-            sizeElement.className = 'content-size';
-            sizeElement.textContent = this.formatFileSize(item.content_size);
-            metadataInfo.appendChild(sizeElement);
-
-            // Tags as colored circles
-            if (item.content_tags && item.content_tags.length > 0) {
-                const tagsContainer = document.createElement('div');
-                tagsContainer.className = 'content-tags';
-                item.content_tags.forEach(tag => {
-                    const tagElement = document.createElement('span');
-                    const tagColor = tag.toLowerCase();
-                    tagElement.className = `tag ${tagColor}`;
-                    tagElement.title = tag; // Show tag name on hover
-                    tagsContainer.appendChild(tagElement);
+            // Error handling for unsupported format
+            video.onerror = () => {
+                console.error('Video error for:', item.content_name, video.error);
+                video.remove();
+                mediaContainer.classList.remove('media-container');
+                mediaContainer.classList.add('error-container');
+                const errorIcon = document.createElement('i');
+                errorIcon.className = 'fas fa-exclamation-triangle fa-4x';
+                mediaContainer.appendChild(errorIcon);
+            };
+            
+            mediaContainer.appendChild(video);
+            
+            // Generate thumbnail asynchronously
+            this.generateVideoThumbnail(source.src)
+                .then(thumbnailUrl => {
+                    if (thumbnailUrl) {
+                        video.poster = thumbnailUrl;
+                    }
+                })
+                .catch(error => {
+                    console.error('Thumbnail error for:', item.content_name, error);
                 });
-                metadataInfo.appendChild(tagsContainer);
-            }
-
-            metadataContainer.appendChild(metadataInfo);
-            itemContainer.appendChild(contentContainer);
-            itemContainer.appendChild(metadataContainer);
-            return itemContainer;
-        });
-
-        // Add all containers to the DOM at once
-        containers.forEach(container => {
-            this.container.appendChild(container);
-        });
-
-        // Start observing images after they're in the DOM
-        containers.forEach(container => {
-            const mediaContainer = container.querySelector('.media-container');
-            if (mediaContainer && mediaContainer.querySelector('img')) {
-                imageLoader.observe(mediaContainer);
-            }
-        });
-
-        console.log('[Gallery] Rendered items:', containers.length);
+        } else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
+            const img = document.createElement('img');
+            img.className = 'content-player';
+            img.alt = item.content_name;
+            img.dataset.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
+            mediaContainer.appendChild(img);
+            // We'll observe the container after it's added to the DOM
+        } else if (item.content_type === 'zip') {
+            mediaContainer.classList.add('zip-container');
+            const zipIcon = document.createElement('i');
+            zipIcon.className = 'fas fa-file-archive fa-4x';
+            mediaContainer.appendChild(zipIcon);
+        } else {
+            mediaContainer.classList.add('folder-container');
+            const folderIcon = document.createElement('i');
+            folderIcon.className = 'fas fa-folder fa-4x';
+            mediaContainer.appendChild(folderIcon);
+        }
     }
 
-    showModal(imageSrc) {
-        // Push state to enable back button
-        history.pushState({ modal: true }, '', window.location.pathname);
-
-        const modal = document.createElement('div');
-        modal.className = 'image-modal';
-        
-        const modalImg = document.createElement('img');
-        modalImg.src = imageSrc;
-        modal.appendChild(modalImg);
-
-        const closeModal = () => {
-            document.body.removeChild(modal);
-            document.removeEventListener('keydown', handleKeyPress);
-            document.removeEventListener('popstate', handlePopState);
-        };
-
-        const handleKeyPress = (e) => {
-            if (e.key === 'Escape' || e.key === 'Backspace') {
-                history.back();
-            }
-        };
-
-        const handlePopState = () => {
-            closeModal();
-        };
-
-        modal.addEventListener('click', () => {
-            history.back();
-        });
-        
-        document.addEventListener('keydown', handleKeyPress);
-        document.addEventListener('popstate', handlePopState);
-        document.body.appendChild(modal);
-    }
-
-    formatFileSize(bytes) {
-        if (!bytes) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    handleItemClick(item) {
+        // Open modal with image preview
+        if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
+            const imageSrc = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
+            this.showModal(imageSrc);
+        }
     }
 }
 

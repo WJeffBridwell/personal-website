@@ -1019,7 +1019,7 @@ router.get('/video-content/:filename', async (req, res) => {
         logGallery('Video Content', 'Request received', null, { filename });
         
         // Forward request to content API
-        const apiUrl = `http://localhost:8081/video-stream/${encodeURIComponent(filename)}`;
+        const apiUrl = `http://192.168.86.242:8081/video-stream/${encodeURIComponent(filename)}`;
         
         const response = await fetch(apiUrl);
         if (!response.ok) {
