@@ -36,27 +36,40 @@
 
 .image-container {
     position: relative;
-    padding-bottom: 100%;
-    background: #f0f0f0;
-    border-radius: 8px;
+    width: 100%;
+    height: 200px;
     overflow: hidden;
-    contain: strict;
-    will-change: transform;
-    transform: translateZ(0);
 }
 
 .image-container img {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
-    will-change: opacity;
-    transform: translateZ(0);
-    backface-visibility: hidden;
+}
+
+.icon-overlay {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+}
+
+.icon-overlay:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.icon-overlay i {
+    color: white;
+    font-size: 16px;
 }
 
 .image-container.loaded img {
@@ -259,4 +272,10 @@
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+@media (max-width: 768px) {
+    .image-container {
+        height: 150px;
+    }
 }

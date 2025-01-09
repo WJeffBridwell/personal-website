@@ -253,7 +253,7 @@ function createImageContainer(image) {
     imageIcon.className = 'fas fa-image';
     imageIcon.addEventListener('click', (e) => {
         e.stopPropagation();
-        window.open(`/gallery/image/${encodeURIComponent(image)}`, '_blank');
+        window.location.href = `/content-gallery.html?image-name=${encodeURIComponent(image)}`;
     });
     icons.appendChild(imageIcon);
     

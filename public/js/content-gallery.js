@@ -145,6 +145,7 @@ class ContentGallery {
         this.thumbnailCache = new Map(); // Cache for video thumbnails
         this.searchTerm = '';
         this.sortOrder = 'name-asc'; // Default sort order
+        this.selectedType = ''; // Add type filter
         
         // Initialize event listeners
         this.initializeFilters();
@@ -156,6 +157,15 @@ class ContentGallery {
         if (searchInput) {
             searchInput.addEventListener('input', (e) => {
                 this.searchTerm = e.target.value.toLowerCase();
+                this.filterAndDisplayItems();
+            });
+        }
+
+        // Type filter
+        const typeFilter = document.querySelector('#type-filter');
+        if (typeFilter) {
+            typeFilter.addEventListener('change', (e) => {
+                this.selectedType = e.target.value;
                 this.filterAndDisplayItems();
             });
         }
@@ -180,6 +190,24 @@ class ContentGallery {
                 this.filterAndDisplayItems();
             });
         }
+    }
+
+    getItemType(item) {
+        if (item.content_tags?.includes('Yellow') || 
+            item.content_name.toLowerCase().includes('vr') ||
+            item.content_name.toLowerCase().includes('180x180')) {
+            return 'vr';
+        }
+        if (item.content_type === 'mp4' || item.content_type === 'webm') {
+            return 'video';
+        }
+        if (item.content_type === 'zip') {
+            return 'zip';
+        }
+        if (!item.content_type || item.content_type === '') {
+            return 'folder';
+        }
+        return 'other';
     }
 
     async generateVideoThumbnail(videoUrl) {
@@ -240,6 +268,13 @@ class ContentGallery {
             const data = await response.json();
             
             if (Array.isArray(data)) {
+                console.log('[Gallery] Total items from API:', data.length);
+                console.log('[Gallery] Items by type:', data.reduce((acc, item) => {
+                    const type = this.getItemType(item);
+                    acc[type] = (acc[type] || 0) + 1;
+                    return acc;
+                }, {}));
+                
                 this.items = data;
                 this.updateTagFilter(data);
                 this.filterAndDisplayItems();
@@ -254,14 +289,14 @@ class ContentGallery {
     }
 
     updateTagFilter(items) {
-        const tagFilter = document.getElementById('tag-filter');
+        const tagFilter = document.querySelector('#tag-filter');
         if (!tagFilter) return;
 
-        // Get unique tags
+        // Get unique tags - preserve original case
         const tags = new Set();
         items.forEach(item => {
-            if (item.tags) {
-                item.tags.forEach(tag => tags.add(tag));
+            if (item.content_tags) {
+                item.content_tags.forEach(tag => tags.add(tag));
             }
         });
 
@@ -283,6 +318,7 @@ class ContentGallery {
     filterAndDisplayItems() {
         if (!this.items.length) return;
 
+        console.log('[Gallery] Starting filter with', this.items.length, 'items');
         let filtered = [...this.items];
 
         // Apply search filter
@@ -293,6 +329,13 @@ class ContentGallery {
                     tag.toLowerCase().includes(this.searchTerm)
                 ))
             );
+            console.log('[Gallery] After search filter:', filtered.length, 'items');
+        }
+
+        // Apply type filter
+        if (this.selectedType) {
+            filtered = filtered.filter(item => this.getItemType(item) === this.selectedType);
+            console.log('[Gallery] After type filter:', filtered.length, 'items');
         }
 
         // Apply tag filter
@@ -302,6 +345,7 @@ class ContentGallery {
                     this.selectedTags.has(tag)
                 )
             );
+            console.log('[Gallery] After tag filter:', filtered.length, 'items');
         }
 
         // Apply sorting
@@ -316,13 +360,20 @@ class ContentGallery {
                 case 'size-desc':
                     return b.content_size - a.content_size;
                 case 'date-asc':
-                    return new Date(a.content_date) - new Date(b.content_date);
+                    return new Date(a.content_created) - new Date(b.content_created);
                 case 'date-desc':
-                    return new Date(b.content_date) - new Date(a.content_date);
+                    return new Date(b.content_created) - new Date(a.content_created);
                 default:
                     return 0;
             }
         });
+
+        console.log('[Gallery] Final filtered items:', filtered.length);
+        console.log('[Gallery] Items by type:', filtered.reduce((acc, item) => {
+            const type = this.getItemType(item);
+            acc[type] = (acc[type] || 0) + 1;
+            return acc;
+        }, {}));
 
         this.displayImages(filtered);
     }
@@ -337,8 +388,22 @@ class ContentGallery {
             
             const contentContainer = document.createElement('div');
             contentContainer.className = 'content-container';
+
+            // Check if it's a VR video by looking at the filename and tags
+            const isVRContent = (
+                item.content_tags?.includes('Yellow') || 
+                item.content_name.toLowerCase().includes('vr') ||
+                item.content_name.toLowerCase().includes('180x180')
+            );
             
-            if (item.content_type === 'mp4' || item.content_type === 'webm') {
+            if (isVRContent) {
+                // Show VR icon for VR content
+                contentContainer.classList.add('vr-container');
+                const vrIcon = document.createElement('i');
+                vrIcon.className = 'fas fa-vr-cardboard fa-4x';
+                contentContainer.appendChild(vrIcon);
+            }
+            else if (item.content_type === 'mp4' || item.content_type === 'webm') {
                 contentContainer.classList.add('media-container');
                 // Create video element for playback
                 const video = document.createElement('video');
@@ -346,23 +411,23 @@ class ContentGallery {
                 video.controls = true;
                 video.preload = 'metadata';
                 
-                // Add source with error handling
+                // Add source
                 const source = document.createElement('source');
                 source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
                 source.type = `video/${item.content_type}`;
+                video.appendChild(source);
                 
                 // Error handling for unsupported format
-                source.onerror = () => {
-                    // Show VR icon for unsupported videos
-                    video.style.display = 'none';
+                video.onerror = () => {
+                    console.error('Video error:', video.error);
+                    video.remove();
                     contentContainer.classList.remove('media-container');
                     contentContainer.classList.add('vr-container');
                     const vrIcon = document.createElement('i');
-                    vrIcon.className = 'fas fa-vr-cardboard';
+                    vrIcon.className = 'fas fa-vr-cardboard fa-4x';
                     contentContainer.appendChild(vrIcon);
                 };
                 
-                video.appendChild(source);
                 contentContainer.appendChild(video);
                 
                 // Generate and show thumbnail
@@ -382,6 +447,12 @@ class ContentGallery {
                 img.dataset.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
                 contentContainer.appendChild(img);
                 imageLoader.observer.observe(contentContainer);
+            } else if (item.content_type === 'zip') {
+                // Show zip icon for zip files
+                contentContainer.classList.add('zip-container');
+                const zipIcon = document.createElement('i');
+                zipIcon.className = 'fas fa-file-archive fa-4x';
+                contentContainer.appendChild(zipIcon);
             } else {
                 // Show folder icon for other types
                 contentContainer.classList.add('folder-container');
@@ -389,8 +460,8 @@ class ContentGallery {
                 folderIcon.className = 'fas fa-folder fa-4x';
                 contentContainer.appendChild(folderIcon);
             }
-            itemContainer.appendChild(contentContainer);
 
+            // Add metadata
             const metadataContainer = document.createElement('div');
             metadataContainer.className = 'metadata-container';
 
@@ -409,13 +480,14 @@ class ContentGallery {
                 tagsContainer.className = 'content-tags';
                 item.content_tags.forEach(tag => {
                     const tagElement = document.createElement('span');
-                    tagElement.className = 'tag';
+                    tagElement.className = `tag ${tag.toLowerCase()}`;
                     tagElement.textContent = tag;
                     tagsContainer.appendChild(tagElement);
                 });
                 metadataContainer.appendChild(tagsContainer);
             }
 
+            itemContainer.appendChild(contentContainer);
             itemContainer.appendChild(metadataContainer);
             this.container.appendChild(itemContainer);
         });

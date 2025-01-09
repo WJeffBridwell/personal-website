@@ -27,6 +27,8 @@ import timeout from 'connect-timeout';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import fs from 'fs';
+import httpProxy from 'http-proxy';
+import fetch from 'node-fetch';
 
 const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -258,60 +260,219 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
 });
 
-// Add proxy route for image-content
-app.get('/proxy/image-content', async (req, res) => {
+/**
+ * GET /api/content
+ * Get content items from the gallery
+ * 
+ * Query parameters:
+ * - image_name: Optional. If provided, returns details for that specific image
+ * 
+ * Response format:
+ * [{
+ *   name: string,
+ *   type: string,
+ *   url: string,
+ *   thumbnailUrl: string,
+ *   tags: string[],
+ *   size: number
+ * }]
+ */
+app.get('/api/content', async (req, res) => {
     try {
-        const response = await fetch(`http://localhost:8081/image-content?${new URLSearchParams(req.query)}`);
-        if (!response.ok) {
-            throw new Error('Content API response was not ok');
-        }
-        const data = await response.json();
+        const imageName = req.query.image_name;
+        const contentDir = path.join(__dirname, 'public/content');
         
-        // Modify content URLs to use our proxy
-        if (data.content_url) {
-            const url = new URL(data.content_url);
-            if (url.port === '8082') {
-                data.content_url = `/proxy/video${url.pathname}${url.search}`;
+        // Ensure content directory exists
+        if (!fs.existsSync(contentDir)) {
+            fs.mkdirSync(contentDir, { recursive: true });
+        }
+        
+        const files = await fsPromises.readdir(contentDir);
+        const items = await Promise.all(files.map(async file => {
+            const filePath = path.join(contentDir, file);
+            const stats = await fsPromises.stat(filePath);
+            const ext = path.extname(file).toLowerCase();
+            
+            // Skip directories and non-media files
+            if (!stats.isFile() || !['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov'].includes(ext)) {
+                return null;
             }
+            
+            const isVideo = ['.mp4', '.webm', '.mov'].includes(ext);
+            const type = isVideo ? 'video' : 'image';
+            
+            return {
+                name: file,
+                type,
+                url: `/content/${file}`,
+                thumbnailUrl: `/content/${file}`,
+                tags: [],
+                size: stats.size
+            };
+        }));
+        
+        // Filter out null values and sort by name
+        const filteredItems = items.filter(item => item !== null)
+            .sort((a, b) => a.name.localeCompare(b.name));
+        
+        if (imageName) {
+            const item = filteredItems.find(item => item.name === imageName);
+            if (!item) {
+                return res.status(404).json({ error: 'Content not found' });
+            }
+            return res.json([item]); // Return as array for consistency
         }
         
+        res.json(filteredItems);
+    } catch (error) {
+        console.error('Error getting content:', error);
+        res.status(500).json({ error: 'Failed to get content' });
+    }
+});
+
+// API endpoints
+app.get('/api/content', async (req, res) => {
+    console.log('[API] Content request received:', req.query);
+    try {
+        const imageName = req.query.image_name;
+        if (!imageName) {
+            return res.status(400).json({ error: 'Missing image_name parameter' });
+        }
+
+        // Forward to content service
+        const contentResponse = await fetch(`http://localhost:8081/image-content?image_name=${encodeURIComponent(imageName)}`);
+        if (!contentResponse.ok) {
+            throw new Error(`Content service error: ${contentResponse.statusText}`);
+        }
+
+        const data = await contentResponse.json();
         res.json(data);
     } catch (error) {
-        console.error('Proxy error:', error);
-        res.status(500).json({ error: 'Failed to fetch from content API' });
+        console.error('[API] Error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
 // Add proxy route for video content
 app.get('/proxy/video/direct', async (req, res) => {
     try {
-        const videoUrl = `http://localhost:8082/videos/direct${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`;
+        const path = req.query.path;
+        console.log('[Proxy] Video request path:', path);
         
-        // Forward the request with range headers if present
-        const headers = {};
-        if (req.headers.range) {
-            headers.range = req.headers.range;
-        }
+        // Forward the request to the video server
+        const videoServerUrl = `http://localhost:8082/videos/direct?path=${path}`;
+        console.log('[Proxy] Forwarding to:', videoServerUrl);
         
-        const response = await fetch(videoUrl, { headers });
-        if (!response.ok && response.status !== 206) {  // 206 is Partial Content
-            throw new Error('Video API response was not ok');
-        }
+        const response = await fetch(videoServerUrl);
         
-        // Forward all response headers
-        response.headers.forEach((value, key) => {
-            res.set(key, value);
-        });
-        
-        // Set the same status code
+        // Copy status and headers
         res.status(response.status);
+        for (const [key, value] of response.headers.entries()) {
+            res.setHeader(key, value);
+        }
         
-        // Pipe the video stream
+        // Pipe the response
         response.body.pipe(res);
     } catch (error) {
-        console.error('Video proxy error:', error);
-        res.status(500).json({ error: 'Failed to fetch video content' });
+        console.error('[Proxy] Error:', error);
+        res.status(500).json({ error: 'Error proxying video request' });
     }
+});
+
+// Add proxy route for image content
+app.get('/proxy/image/direct', async (req, res) => {
+    console.log('\n[Proxy] ========== Image Request Start ==========');
+    console.log('[Proxy] Raw URL:', req.url);
+    console.log('[Proxy] Method:', req.method);
+    console.log('[Proxy] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[Proxy] Query:', JSON.stringify(req.query, null, 2));
+    
+    try {
+        // Get the image path from query
+        const imagePath = decodeURIComponent(req.query.path);
+        console.log('[Proxy] Image path:', imagePath);
+        
+        // Check if file exists
+        if (!fs.existsSync(imagePath)) {
+            console.error('[Proxy] Image not found:', imagePath);
+            return res.status(404).json({ error: 'Image not found' });
+        }
+
+        // Set content type based on file extension
+        const ext = path.extname(imagePath).toLowerCase();
+        const mimeTypes = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp'
+        };
+        
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        
+        // Stream the file
+        const stream = fs.createReadStream(imagePath);
+        stream.pipe(res);
+        
+        stream.on('end', () => {
+            console.log('[Proxy] Image sent successfully');
+            console.log('[Proxy] ========== Image Request End ==========\n');
+        });
+        
+        stream.on('error', (error) => {
+            console.error('[Proxy] Stream error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to stream image' });
+            }
+            console.log('[Proxy] ========== Image Request End (Error) ==========\n');
+        });
+    } catch (error) {
+        console.error('[Proxy] Error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Proxy error', message: error.message });
+        }
+        console.log('[Proxy] ========== Image Request End (Error) ==========\n');
+    }
+});
+
+// Create proxy server
+const proxy = httpProxy.createProxyServer({
+    target: 'http://localhost:8082',
+    ws: true,
+    changeOrigin: true,
+    proxyTimeout: 60000,
+    timeout: 60000,
+    xfwd: true,
+    preserveHeaderKeyCase: true,
+    followRedirects: true,
+    secure: false,
+    prependPath: false,
+    ignorePath: false,
+});
+
+// Handle proxy errors
+proxy.on('error', (err, req, res) => {
+    console.error('[Proxy] Error:', err);
+    if (!res.headersSent) {
+        res.status(500).json({
+            error: 'Proxy error',
+            message: err.message,
+            code: err.code
+        });
+    }
+});
+
+// Log proxy events
+proxy.on('proxyReq', (proxyReq, req, res) => {
+    console.log('[Proxy] Outgoing request headers:', proxyReq.getHeaders());
+});
+
+proxy.on('proxyRes', (proxyRes, req, res) => {
+    console.log('[Proxy] Received response:', {
+        statusCode: proxyRes.statusCode,
+        headers: proxyRes.headers
+    });
 });
 
 // Error handling middleware

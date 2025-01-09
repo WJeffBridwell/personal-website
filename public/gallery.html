@@ -88,10 +88,55 @@
                         Loading images...
                     </div>
                 </div>
-                <div id="image-grid" class="gallery__grid">
-                    <!-- Images will be loaded here dynamically -->
+                <div class="gallery-controls">
+                    <div class="search-container">
+                        <input type="text" id="search-input" placeholder="Search images...">
+                    </div>
+                    <div class="tag-filter">
+                        <select id="tag-filter">
+                            <option value="">Filter by tag...</option>
+                        </select>
+                    </div>
+                    <div class="sort-container">
+                        <button id="sort-name" class="sort-button">
+                            <i class="fas fa-sort-alpha-down"></i>
+                            Sort A-Z
+                        </button>
+                    </div>
                 </div>
-                
+
+                <div class="letter-filter">
+                    <button class="letter-button active" data-letter="">All</button>
+                    <button class="letter-button" data-letter="A">A</button>
+                    <button class="letter-button" data-letter="B">B</button>
+                    <button class="letter-button" data-letter="C">C</button>
+                    <button class="letter-button" data-letter="D">D</button>
+                    <button class="letter-button" data-letter="E">E</button>
+                    <button class="letter-button" data-letter="F">F</button>
+                    <button class="letter-button" data-letter="G">G</button>
+                    <button class="letter-button" data-letter="H">H</button>
+                    <button class="letter-button" data-letter="I">I</button>
+                    <button class="letter-button" data-letter="J">J</button>
+                    <button class="letter-button" data-letter="K">K</button>
+                    <button class="letter-button" data-letter="L">L</button>
+                    <button class="letter-button" data-letter="M">M</button>
+                    <button class="letter-button" data-letter="N">N</button>
+                    <button class="letter-button" data-letter="O">O</button>
+                    <button class="letter-button" data-letter="P">P</button>
+                    <button class="letter-button" data-letter="Q">Q</button>
+                    <button class="letter-button" data-letter="R">R</button>
+                    <button class="letter-button" data-letter="S">S</button>
+                    <button class="letter-button" data-letter="T">T</button>
+                    <button class="letter-button" data-letter="U">U</button>
+                    <button class="letter-button" data-letter="V">V</button>
+                    <button class="letter-button" data-letter="W">W</button>
+                    <button class="letter-button" data-letter="X">X</button>
+                    <button class="letter-button" data-letter="Y">Y</button>
+                    <button class="letter-button" data-letter="Z">Z</button>
+                </div>
+
+                <div id="image-grid" class="gallery__grid"></div>
+
                 <div class="pagination-controls">
                     <button id="prevPage" class="page-button">&lt; Previous</button>
                     <div id="pageNumbers" class="page-numbers"></div>
@@ -99,6 +144,18 @@
                 </div>
             </section>
         </main>
+
+        <template id="gallery-card-template">
+            <div class="gallery__item">
+                <div class="item__icons">
+                    <i class="fas fa-image gallery-icon" title="View in Gallery"></i>
+                    <i class="fas fa-folder folder-icon" title="Open in Finder"></i>
+                </div>
+                <img class="item__image" src="" alt="" loading="lazy">
+                <div class="item__tags"></div>
+                <div class="item__name"></div>
+            </div>
+        </template>
 
         <div id="imageModal" class="modal">
             <span class="close-modal">&times;</span>
@@ -110,19 +167,6 @@
             <p class="footer__text">&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
         </footer>
     </div>
-
-    <!-- Card Template -->
-    <template id="gallery-card-template">
-        <div class="card gallery__item">
-            <div class="card__media">
-                <img class="card__image" src="" alt="">
-            </div>
-            <div class="card__overlay">
-                <h3 class="card__title"></h3>
-                <p class="card__description"></p>
-            </div>
-        </div>
-    </template>
 
     <script type="module">
         import Gallery from './js/gallery.js';
