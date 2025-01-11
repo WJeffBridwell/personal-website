@@ -147,7 +147,7 @@ class ContentGallery {
         this.sortOrder = 'name-asc'; // Default sort order
         this.selectedType = ''; // Add type filter
         this.currentPage = 1;
-        this.pageSize = 21;
+        this.pageSize = 16;
         this.totalItems = 0;
         this.totalPages = 0;
         this.lastImageName = '';
@@ -384,7 +384,7 @@ class ContentGallery {
         this.container.innerHTML = '';
         console.log('[Gallery] Displaying', items.length, 'items');
 
-        const template = document.getElementById('content-template');
+        const template = document.getElementById('gallery-item-template');
         if (!template) {
             console.error('[Gallery] Template not found');
             return;
@@ -409,7 +409,12 @@ class ContentGallery {
             
             const tags = clone.querySelector('.a-content-tags');
             if (item.content_tags && item.content_tags.length > 0) {
-                tags.textContent = item.content_tags.join(', ');
+                tags.innerHTML = '';
+                item.content_tags.forEach(tag => {
+                    const circle = document.createElement('span');
+                    circle.className = `tag-circle tag-${tag.toLowerCase()}`;
+                    tags.appendChild(circle);
+                });
             }
             
             // Add click handler
@@ -430,66 +435,14 @@ class ContentGallery {
         if (item.content_type === 'mp4' || item.content_type === 'webm') {
             const video = document.createElement('video');
             video.className = 'content-player';
+            video.controls = true;
             video.preload = 'metadata';
             video.playsinline = true;
-            video.disablePictureInPicture = true;
             
             const source = document.createElement('source');
             source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
             source.type = `video/${item.content_type}`;
             video.appendChild(source);
-            
-            // Create custom controls
-            const controls = document.createElement('div');
-            controls.className = 'video-controls';
-            
-            const playButton = document.createElement('button');
-            playButton.className = 'play-button';
-            playButton.innerHTML = '<i class="fas fa-play"></i>';
-            
-            const timeSlider = document.createElement('div');
-            timeSlider.className = 'time-slider';
-            
-            const progress = document.createElement('div');
-            progress.className = 'time-slider-progress';
-            timeSlider.appendChild(progress);
-            
-            const timeDisplay = document.createElement('div');
-            timeDisplay.className = 'time-display';
-            timeDisplay.textContent = '0:00 / 0:00';
-            
-            controls.appendChild(playButton);
-            controls.appendChild(timeSlider);
-            controls.appendChild(timeDisplay);
-            
-            // Add event listeners
-            playButton.addEventListener('click', () => {
-                if (video.paused) {
-                    video.play();
-                    playButton.innerHTML = '<i class="fas fa-pause"></i>';
-                } else {
-                    video.pause();
-                    playButton.innerHTML = '<i class="fas fa-play"></i>';
-                }
-            });
-            
-            video.addEventListener('timeupdate', () => {
-                const percent = (video.currentTime / video.duration) * 100;
-                progress.style.width = `${percent}%`;
-                
-                const currentMinutes = Math.floor(video.currentTime / 60);
-                const currentSeconds = Math.floor(video.currentTime % 60);
-                const durationMinutes = Math.floor(video.duration / 60);
-                const durationSeconds = Math.floor(video.duration % 60);
-                
-                timeDisplay.textContent = `${currentMinutes}:${currentSeconds.toString().padStart(2, '0')} / ${durationMinutes}:${durationSeconds.toString().padStart(2, '0')}`;
-            });
-            
-            timeSlider.addEventListener('click', (e) => {
-                const rect = timeSlider.getBoundingClientRect();
-                const pos = (e.clientX - rect.left) / rect.width;
-                video.currentTime = pos * video.duration;
-            });
             
             // Check if it's a VR video based on filename
             const isVRVideo = item.content_name.toLowerCase().includes('vr') || 
@@ -499,7 +452,6 @@ class ContentGallery {
             const handleError = () => {
                 console.log('Video error detected for:', item.content_name);
                 video.remove();
-                controls.remove();
                 
                 if (isVRVideo) {
                     console.log('Showing VR icon for:', item.content_name);
@@ -526,7 +478,6 @@ class ContentGallery {
             source.onerror = handleError;
             
             mediaContainer.appendChild(video);
-            mediaContainer.appendChild(controls);
             
             // Try to load video metadata
             try {
