@@ -268,79 +268,87 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
 });
 
-/**
- * GET /api/content
- * Get content items from the gallery
- * 
- * Query parameters:
- * - image_name: Optional. If provided, returns details for that specific image
- * 
- * Response format:
- * [{
- *   name: string,
- *   type: string,
- *   url: string,
- *   thumbnailUrl: string,
- *   tags: string[],
- *   size: number
- * }]
- */
-app.get('/api/content', async (req, res) => {
+// Add proxy route for video content
+app.get('/proxy/video/direct', async (req, res) => {
     try {
         const imageName = req.query.image_name;
-        const contentDir = path.join(__dirname, 'public/content');
+        console.log('[Proxy] Video request image_name:', imageName);
         
-        // Ensure content directory exists
-        if (!fs.existsSync(contentDir)) {
-            fs.mkdirSync(contentDir, { recursive: true });
+        // Forward the request to the video server
+        const videoServerUrl = `http://192.168.86.242:8082/videos/direct?image_name=${encodeURIComponent(imageName)}`;
+        console.log('[Proxy] Forwarding to:', videoServerUrl);
+        
+        const response = await fetch(videoServerUrl);
+        
+        // Copy status and headers
+        res.status(response.status);
+        for (const [key, value] of response.headers.entries()) {
+            res.setHeader(key, value);
         }
         
-        const files = await fsPromises.readdir(contentDir);
-        const items = await Promise.all(files.map(async file => {
-            const filePath = path.join(contentDir, file);
-            const stats = await fsPromises.stat(filePath);
-            const ext = path.extname(file).toLowerCase();
-            
-            // Skip directories and non-media files
-            if (!stats.isFile() || !['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.webm', '.mov'].includes(ext)) {
-                return null;
-            }
-            
-            const isVideo = ['.mp4', '.webm', '.mov'].includes(ext);
-            const type = isVideo ? 'video' : 'image';
-            
-            return {
-                name: file,
-                type,
-                url: `/content/${file}`,
-                thumbnailUrl: `/content/${file}`,
-                tags: [],
-                size: stats.size
-            };
-        }));
-        
-        // Filter out null values and sort by name
-        const filteredItems = items.filter(item => item !== null)
-            .sort((a, b) => a.name.localeCompare(b.name));
-        
-        if (imageName) {
-            const item = filteredItems.find(item => item.name === imageName);
-            if (!item) {
-                return res.status(404).json({ error: 'Content not found' });
-            }
-            return res.json([item]); // Return as array for consistency
-        }
-        
-        res.json(filteredItems);
+        // Pipe the response
+        response.body.pipe(res);
     } catch (error) {
-        console.error('Error getting content:', error);
-        res.status(500).json({ error: 'Failed to get content' });
+        console.error('[Proxy] Video error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-// API endpoints
-app.get('/api/content', async (req, res) => {
-    console.log('[API] Content request received:', req.query);
+// Add proxy route for image preview
+app.get('/proxy/image/preview', async (req, res) => {
+    try {
+        const imageName = req.query.image_name;
+        console.log('[Proxy] Image preview request image_name:', imageName);
+        
+        // Forward the request to the image server
+        const imageServerUrl = `http://192.168.86.242:8081/image-preview?image_name=${encodeURIComponent(imageName)}`;
+        console.log('[Proxy] Forwarding to:', imageServerUrl);
+        
+        const response = await fetch(imageServerUrl);
+        
+        // Copy status and headers
+        res.status(response.status);
+        for (const [key, value] of response.headers.entries()) {
+            res.setHeader(key, value);
+        }
+        
+        // Pipe the response
+        response.body.pipe(res);
+    } catch (error) {
+        console.error('[Proxy] Image preview error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add proxy route for direct image access
+app.get('/proxy/image/direct', async (req, res) => {
+    try {
+        const imageName = req.query.image_name;
+        console.log('[Proxy] Direct image request image_name:', imageName);
+        
+        // Forward the request to the image server
+        const imageServerUrl = `http://192.168.86.242:8081/image-direct?image_name=${encodeURIComponent(imageName)}`;
+        console.log('[Proxy] Forwarding to:', imageServerUrl);
+        
+        const response = await fetch(imageServerUrl);
+        
+        // Copy status and headers
+        res.status(response.status);
+        for (const [key, value] of response.headers.entries()) {
+            res.setHeader(key, value);
+        }
+        
+        // Pipe the response
+        response.body.pipe(res);
+    } catch (error) {
+        console.error('[Proxy] Direct image error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add proxy route for content listing
+app.get('/proxy/image/content', async (req, res) => {
+    console.log('[Proxy] Content request received:', req.query);
     try {
         const imageName = req.query.image_name;
         if (!imageName) {
@@ -356,34 +364,8 @@ app.get('/api/content', async (req, res) => {
         const data = await contentResponse.json();
         res.json(data);
     } catch (error) {
-        console.error('[API] Error:', error);
+        console.error('[Proxy] Content error:', error);
         res.status(500).json({ error: error.message });
-    }
-});
-
-// Add proxy route for video content
-app.get('/proxy/video/direct', async (req, res) => {
-    try {
-        const path = req.query.path;
-        console.log('[Proxy] Video request path:', path);
-        
-        // Forward the request to the video server
-        const videoServerUrl = `http://192.168.86.242:8082/videos/direct?path=${path}`;
-        console.log('[Proxy] Forwarding to:', videoServerUrl);
-        
-        const response = await fetch(videoServerUrl);
-        
-        // Copy status and headers
-        res.status(response.status);
-        for (const [key, value] of response.headers.entries()) {
-            res.setHeader(key, value);
-        }
-        
-        // Pipe the response
-        response.body.pipe(res);
-    } catch (error) {
-        console.error('[Proxy] Error:', error);
-        res.status(500).json({ error: 'Error proxying video request' });
     }
 });
 

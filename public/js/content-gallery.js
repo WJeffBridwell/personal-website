@@ -185,9 +185,72 @@ class ContentGallery {
     }
 
     async loadMediaPreview(mediaContainer, item) {
-        if (!mediaContainer.dataset.loaded) {
-            await this.setupMediaPreview(item, mediaContainer);
-            mediaContainer.dataset.loaded = 'true';
+        if (!mediaContainer || !item) return;
+
+        try {
+            const itemType = this.getItemType(item);
+            mediaContainer.innerHTML = '';
+
+            switch (itemType) {
+                case 'Images':
+                case 'VR':
+                    const img = document.createElement('img');
+                    img.className = 'preview-image';
+                    img.alt = item.content_name;
+                    img.src = `/proxy/image/preview?image_name=${encodeURIComponent(item.content_url)}`;
+                    mediaContainer.appendChild(img);
+                    break;
+
+                case 'Video':
+                    const video = document.createElement('video');
+                    video.className = 'preview-video';
+                    video.controls = true;
+                    video.preload = 'metadata';
+                    const source = document.createElement('source');
+                    source.src = `/proxy/video/stream?image_name=${encodeURIComponent(item.content_url)}`;
+                    source.type = 'video/mp4';
+                    video.appendChild(source);
+                    mediaContainer.appendChild(video);
+                    break;
+
+                case 'Folder':
+                    const folderIcon = document.createElement('i');
+                    folderIcon.className = 'fas fa-folder fa-3x';
+                    mediaContainer.appendChild(folderIcon);
+                    break;
+
+                case 'Archive':
+                    const archiveIcon = document.createElement('i');
+                    archiveIcon.className = 'fas fa-file-archive fa-3x';
+                    mediaContainer.appendChild(archiveIcon);
+                    break;
+
+                default:
+                    const fileIcon = document.createElement('i');
+                    fileIcon.className = 'fas fa-file fa-3x';
+                    mediaContainer.appendChild(fileIcon);
+            }
+
+            // Add click handler
+            mediaContainer.parentElement.addEventListener('click', () => this.handleItemClick(item));
+
+        } catch (error) {
+            console.error('Error loading media preview:', error);
+            mediaContainer.innerHTML = '<i class="fas fa-exclamation-circle fa-3x"></i>';
+        }
+    }
+
+    handleItemClick(item) {
+        if (!item) return;
+
+        const itemType = this.getItemType(item);
+        
+        if (itemType === 'Images' || itemType === 'VR') {
+            const imageSrc = `/proxy/image/direct?image_name=${encodeURIComponent(item.content_url)}`;
+            this.showModal(imageSrc, item.content_name);
+        } else if (itemType === 'Video') {
+            const videoSrc = `/proxy/video/stream?image_name=${encodeURIComponent(item.content_url)}`;
+            this.showModal(videoSrc, item.content_name, true);
         }
     }
 
@@ -206,8 +269,12 @@ class ContentGallery {
     async loadContent(imageName) {
         if (!imageName) {
             console.error('[Gallery] No image name provided');
+            this.container.innerHTML = '<div class="error-message">No image name provided</div>';
             return;
         }
+
+        // Decode the image name
+        imageName = decodeURIComponent(imageName);
 
         if (this.isLoading) {
             console.log('[Gallery] Already loading content');
@@ -216,33 +283,26 @@ class ContentGallery {
 
         this.isLoading = true;
         this.lastImageName = imageName;
-        console.log('[Gallery] Loading content with page size:', this.pageSize);
+        console.log('[Gallery] Loading content for:', imageName);
 
         try {
-            // Pre-fetch next page while loading current page
-            const currentPagePromise = fetch(`http://192.168.86.242:8081/image-content?image_name=${imageName}&page=${this.currentPage}&page_size=${this.pageSize}`);
-            const nextPagePromise = fetch(`http://192.168.86.242:8081/image-content?image_name=${imageName}&page=${this.currentPage + 1}&page_size=${this.pageSize}`);
+            // Load all items at once using proxy endpoint
+            const response = await fetch(`/proxy/image/content?image_name=${encodeURIComponent(imageName)}&page=1&page_size=1000`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
 
-            const [currentResponse, nextResponse] = await Promise.all([currentPagePromise, nextPagePromise]);
-            const [currentData, nextData] = await Promise.all([currentResponse.json(), nextResponse.json()]);
+            console.log('[Gallery] Response:', data);
 
-            console.log('[Gallery] Current page response:', currentData);
-            console.log('[Gallery] Next page response:', nextData);
-
-            // Update pagination data
-            this.nextPageData = nextData;
-            this.totalItems = currentData.total || currentData.total_items || 0;
-            this.totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize));
-            
-            console.log('[Gallery] Loaded items:', currentData.items?.length);
-            console.log('[Gallery] Total items:', this.totalItems);
-            console.log('[Gallery] Current page:', this.currentPage);
-            console.log('[Gallery] Total pages:', this.totalPages);
-
-            // Display items and update pagination
-            if (currentData.items && currentData.items.length > 0) {
-                await this.displayItems(currentData.items);
-                this.updatePaginationControls();
+            if (data.items && data.items.length > 0) {
+                // Store all items from all pages
+                this.items = data.items;
+                this.totalItems = data.total || data.items.length;
+                console.log('[Gallery] Loaded', this.items.length, 'total items');
+                
+                // Apply filters and display first page
+                await this.filterAndDisplayItems();
             } else {
                 console.error('[Gallery] No items found in response');
                 this.container.innerHTML = '<div class="error-message">No items found</div>';
@@ -255,9 +315,91 @@ class ContentGallery {
         }
     }
 
+    async filterAndDisplayItems() {
+        if (!this.items || !this.items.length) {
+            console.log('[Gallery] No items to filter');
+            return;
+        }
+
+        console.log('[Gallery] Filtering items with:', {
+            searchTerm: this.searchTerm,
+            selectedType: this.selectedType,
+            selectedTags: Array.from(this.selectedTags),
+            sortOrder: this.sortOrder,
+            currentPage: this.currentPage
+        });
+
+        // Apply filters
+        let filteredItems = this.items.filter(item => {
+            // Search filter
+            if (this.searchTerm && !item.content_name.toLowerCase().includes(this.searchTerm)) {
+                return false;
+            }
+
+            // Type filter
+            if (this.selectedType && this.getItemType(item) !== this.selectedType) {
+                return false;
+            }
+
+            // Tag filter
+            if (this.selectedTags.size > 0) {
+                const itemTags = new Set(item.content_tags || []);
+                for (const tag of this.selectedTags) {
+                    if (!itemTags.has(tag)) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        });
+
+        // Sort items
+        filteredItems.sort((a, b) => {
+            switch (this.sortOrder) {
+                case 'name-asc':
+                    return a.content_name.localeCompare(b.content_name);
+                case 'name-desc':
+                    return b.content_name.localeCompare(a.content_name);
+                case 'size-asc':
+                    return (a.content_size || 0) - (b.content_size || 0);
+                case 'size-desc':
+                    return (b.content_size || 0) - (a.content_size || 0);
+                case 'date-asc':
+                    return (a.content_date || '').localeCompare(b.content_date || '');
+                case 'date-desc':
+                    return (b.content_date || '').localeCompare(a.content_date || '');
+                default:
+                    return 0;
+            }
+        });
+
+        // Update pagination
+        this.totalItems = filteredItems.length;
+        this.totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize));
+        
+        // Ensure current page is valid
+        if (this.currentPage > this.totalPages) {
+            this.currentPage = this.totalPages;
+        }
+
+        // Get items for current page
+        const startIndex = (this.currentPage - 1) * this.pageSize;
+        const endIndex = Math.min(startIndex + this.pageSize, this.totalItems);
+        const pageItems = filteredItems.slice(startIndex, endIndex);
+
+        console.log('[Gallery] Displaying page', this.currentPage, 'of', this.totalPages);
+        console.log('[Gallery] Showing items', startIndex + 1, 'to', endIndex, 'of', this.totalItems);
+
+        // Display items and update controls
+        await this.displayItems(pageItems);
+        this.updatePaginationControls();
+    }
+
     async displayItems(items) {
         if (!items || !items.length) {
             console.log('[Gallery] No items to display');
+            this.container.innerHTML = '<div class="error-message">No items found</div>';
             return;
         }
 
@@ -265,25 +407,25 @@ class ContentGallery {
         console.log('[Gallery] Displaying', items.length, 'items');
 
         const fragment = document.createDocumentFragment();
+        const displayPromises = [];
         
         for (const item of items) {
             const clone = this.getTemplateClone();
-            if (!clone) return;
+            if (!clone) continue;
 
             const galleryItem = clone.querySelector('.o-gallery__item');
             
-            // Set up lazy media preview
+            // Set up media preview
             const mediaContainer = clone.querySelector('.m-card__media');
             mediaContainer.dataset.itemId = item.content_url;
-            this.mediaPreviewCache.set(item.content_url, item);
-            this.observer.observe(mediaContainer);
             
-            // Set up title and metadata
+            // Set up title and metadata immediately
             const title = clone.querySelector('.a-card__title');
             title.textContent = item.content_name;
             
             const metadataRow = document.createElement('div');
             metadataRow.className = 'metadata-row';
+            metadataRow.style.cssText = 'display: flex; justify-content: space-between; margin-top: 5px;';
             
             const size = document.createElement('div');
             size.className = 'a-content-size';
@@ -292,30 +434,54 @@ class ContentGallery {
             
             const tags = document.createElement('div');
             tags.className = 'a-content-tags';
+            tags.style.cssText = 'display: flex; gap: 4px;';
             if (item.content_tags && item.content_tags.length > 0) {
                 item.content_tags.forEach(tag => {
                     const circle = document.createElement('span');
                     circle.className = `tag-circle tag-${tag.toLowerCase()}`;
+                    circle.style.cssText = `
+                        width: 8px;
+                        height: 8px;
+                        border-radius: 50%;
+                        background-color: var(--tag-${tag.toLowerCase()}-color, #ccc);
+                    `;
                     tags.appendChild(circle);
                 });
             }
             metadataRow.appendChild(tags);
             
-            const metadata = clone.querySelector('.a-card__metadata');
-            metadata.appendChild(metadataRow);
-            
-            galleryItem.addEventListener('click', () => this.handleItemClick(item));
+            const cardContent = clone.querySelector('.m-card__content');
+            if (cardContent) {
+                cardContent.appendChild(metadataRow);
+            } else {
+                console.error('[Gallery] Card content element not found');
+            }
+
             fragment.appendChild(clone);
+            
+            // Queue media preview loading
+            displayPromises.push(this.loadMediaPreview(mediaContainer, item));
         }
 
+        // Add all items to DOM at once
         this.container.appendChild(fragment);
-        console.log('[Gallery] Rendered', items.length, 'items');
+        
+        // Load media previews in background
+        Promise.all(displayPromises).catch(error => {
+            console.error('[Gallery] Error loading media previews:', error);
+        });
     }
 
     async handlePageClick(page) {
         console.log('[Gallery] Handling page click:', page);
         if (page === this.currentPage || this.isLoading) return;
         
+        if (this.isLoading) {
+            console.log('[Gallery] Data still loading, storing page change as pending operation');
+            this.pendingOperation = { type: 'page', page };
+            return;
+        }
+
         this.currentPage = page;
         
         // If we have pre-fetched data for this page, use it
@@ -330,133 +496,122 @@ class ContentGallery {
     }
 
     initializeFilters() {
-        // Search filter
-        const searchInput = document.querySelector('.a-search-input');
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                this.searchTerm = e.target.value.toLowerCase();
-                this.filterAndDisplayItems();
-            });
+        // Remove any existing filter containers
+        const existingContainer = document.querySelector('.filter-container');
+        if (existingContainer) {
+            existingContainer.remove();
         }
+
+        const filterContainer = document.createElement('div');
+        filterContainer.className = 'filter-container';
+        filterContainer.style.cssText = `
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        `;
+
+        // Search input
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'search-container';
+        searchContainer.style.cssText = 'flex: 1;';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'a-search-input';
+        searchInput.placeholder = 'Search by name or tag...';
+        searchInput.style.cssText = `
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        `;
+        searchInput.addEventListener('input', (e) => {
+            this.searchTerm = e.target.value.toLowerCase();
+            this.currentPage = 1; // Reset to first page on search
+            this.filterAndDisplayItems();
+        });
+        searchContainer.appendChild(searchInput);
+        filterContainer.appendChild(searchContainer);
+
+        // Common select styles
+        const selectStyle = `
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            font-size: 14px;
+            min-width: 120px;
+        `;
 
         // Type filter
-        const typeFilter = document.querySelector('#type-filter');
-        if (typeFilter) {
-            typeFilter.addEventListener('change', (e) => {
-                this.selectedType = e.target.value;
-                this.filterAndDisplayItems();
-            });
-        }
+        const typeFilter = document.createElement('select');
+        typeFilter.className = 'type-filter';
+        typeFilter.style.cssText = selectStyle;
+        typeFilter.innerHTML = `
+            <option value="">All Types</option>
+            <option value="VR">VR</option>
+            <option value="Video">Video</option>
+            <option value="Images">Images</option>
+            <option value="Archive">Archive</option>
+            <option value="Folder">Folder</option>
+            <option value="Other">Other</option>
+        `;
+        typeFilter.addEventListener('change', (e) => {
+            this.selectedType = e.target.value;
+            this.currentPage = 1; // Reset to first page on type change
+            this.filterAndDisplayItems();
+        });
+        filterContainer.appendChild(typeFilter);
 
         // Sort order
-        const sortSelect = document.querySelector('#sort-order');
-        if (sortSelect) {
-            sortSelect.addEventListener('change', (e) => {
-                this.sortOrder = e.target.value;
-                this.filterAndDisplayItems();
-            });
-        }
+        const sortSelect = document.createElement('select');
+        sortSelect.className = 'sort-filter';
+        sortSelect.style.cssText = selectStyle;
+        sortSelect.innerHTML = `
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="size-asc">Size (Small to Large)</option>
+            <option value="size-desc">Size (Large to Small)</option>
+            <option value="date-asc">Date (Old to New)</option>
+            <option value="date-desc">Date (New to Old)</option>
+        `;
+        sortSelect.addEventListener('change', (e) => {
+            this.sortOrder = e.target.value;
+            this.filterAndDisplayItems();
+        });
+        filterContainer.appendChild(sortSelect);
 
         // Tag filter
-        const tagFilter = document.querySelector('#tag-filter');
-        if (tagFilter) {
-            tagFilter.addEventListener('change', (e) => {
-                this.selectedTags.clear();
-                if (e.target.value) {
-                    this.selectedTags.add(e.target.value);
-                }
-                this.filterAndDisplayItems();
-            });
-        }
-    }
-
-    async filterAndDisplayItems() {
-        console.log('[Gallery] Starting filter with', this.items.length, 'items');
-        
-        if (this.isLoading) {
-            console.log('[Gallery] Data still loading, storing filter as pending operation');
-            this.pendingOperation = { type: 'filter' };
-            return;
-        }
-
-        let filteredItems = [...this.items];
-
-        // Apply search filter
-        if (this.searchTerm) {
-            const searchLower = this.searchTerm.toLowerCase();
-            filteredItems = filteredItems.filter(item => {
-                const nameMatch = item.content_name.toLowerCase().includes(searchLower);
-                const tagMatch = item.content_tags?.some(tag => tag.toLowerCase().includes(searchLower)) || false;
-                return nameMatch || tagMatch;
-            });
-        }
-
-        // Apply type filter
-        if (this.selectedType) {
-            filteredItems = filteredItems.filter(item => this.getItemType(item) === this.selectedType);
-        }
-
-        // Apply tag filter
-        if (this.selectedTags.size > 0) {
-            filteredItems = filteredItems.filter(item =>
-                item.content_tags?.some(tag => this.selectedTags.has(tag))
-            );
-        }
-
-        // Apply sort
-        this.sortItems(filteredItems);
-
-        // Update pagination for filtered results
-        const totalFilteredItems = filteredItems.length;
-        const totalFilteredPages = Math.ceil(totalFilteredItems / this.pageSize);
-        
-        console.log('[Gallery] After filtering:', totalFilteredItems, 'items,', totalFilteredPages, 'pages');
-        
-        // Reset to page 1 if current page is beyond total pages
-        if (this.currentPage > totalFilteredPages) {
-            this.currentPage = 1;
-        }
-
-        // Display the current page of filtered items
-        const startIndex = (this.currentPage - 1) * this.pageSize;
-        const endIndex = startIndex + this.pageSize;
-        const itemsToDisplay = filteredItems.slice(startIndex, endIndex);
-
-        console.log('[Gallery] Displaying page', this.currentPage, 'items', startIndex, 'to', endIndex);
-        
-        this.displayItems(itemsToDisplay);
-        
-        // Update pagination controls with filtered totals
-        this.totalItems = totalFilteredItems;
-        this.totalPages = totalFilteredPages;
-        this.updatePaginationControls();
-    }
-
-    updateTagFilter(items) {
-        const tagFilter = document.querySelector('#tag-filter');
-        if (!tagFilter) return;
-
-        // Get unique tags - preserve original case
-        const tags = new Set();
-        items.forEach(item => {
-            if (item.content_tags) {
-                item.content_tags.forEach(tag => tags.add(tag));
+        const tagFilter = document.createElement('select');
+        tagFilter.className = 'tag-filter';
+        tagFilter.style.cssText = selectStyle;
+        tagFilter.innerHTML = `
+            <option value="">All Tags</option>
+            <option value="Red">Red</option>
+            <option value="Blue">Blue</option>
+            <option value="Green">Green</option>
+            <option value="Yellow">Yellow</option>
+            <option value="Orange">Orange</option>
+            <option value="Grey">Grey</option>
+            <option value="Purple">Purple</option>
+        `;
+        tagFilter.addEventListener('change', (e) => {
+            this.selectedTags.clear();
+            if (e.target.value) {
+                this.selectedTags.add(e.target.value);
             }
+            this.currentPage = 1; // Reset to first page on tag change
+            this.filterAndDisplayItems();
         });
+        filterContainer.appendChild(tagFilter);
 
-        // Sort tags alphabetically
-        const sortedTags = Array.from(tags).sort();
-
-        // Update dropdown
-        const currentValue = tagFilter.value;
-        tagFilter.innerHTML = '<option value="">All Tags</option>';
-        sortedTags.forEach(tag => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            tagFilter.appendChild(option);
-        });
-        tagFilter.value = currentValue;
+        // Add filter container to DOM before the gallery container
+        if (this.container && this.container.parentNode) {
+            this.container.parentNode.insertBefore(filterContainer, this.container);
+        }
     }
 
     async setupMediaPreview(item, mediaContainer) {
@@ -545,50 +700,50 @@ class ContentGallery {
         }
     }
 
-    showModal(imageSrc, caption) {
+    showModal(src, caption, isVideo = false) {
         const modal = document.getElementById('contentModal');
-        const modalImg = modal.querySelector('.modal-image');
+        const modalImg = modal.querySelector('img.content-player');
+        const modalVideo = modal.querySelector('video.content-player');
         const modalCaption = document.getElementById('modalCaption');
-        const closeBtn = modal.querySelector('.close-button');
-        
-        // Set image source and show loading state
-        modalImg.style.opacity = '0';
-        modalImg.src = imageSrc;
-        
-        // Once image is loaded, show it with a fade
-        modalImg.onload = () => {
-            modalImg.style.opacity = '1';
-        };
-        
-        // Set caption if provided
-        modalCaption.textContent = caption || '';
-        
-        // Show modal
+        const closeBtn = modal.querySelector('.modal__close');
+
+        // Reset both players
+        modalImg.style.display = 'none';
+        modalVideo.style.display = 'none';
+        modalVideo.pause();
+        modalVideo.removeAttribute('src');
+        modalVideo.load();
+
+        if (isVideo) {
+            modalVideo.style.display = 'block';
+            modalVideo.src = src;
+        } else {
+            modalImg.style.display = 'block';
+            modalImg.src = src;
+        }
+
+        modalCaption.textContent = caption;
         modal.style.display = 'block';
-        
-        // Handle close events
+
         const closeModal = () => {
             modal.style.display = 'none';
-            modalImg.src = '';
-            document.removeEventListener('keydown', handleKeyPress);
-        };
-        
-        const handleKeyPress = (e) => {
-            if (e.key === 'Escape' || e.key === 'Backspace') {
-                closeModal();
+            if (isVideo) {
+                modalVideo.pause();
             }
         };
-        
-        // Add event listeners
+
         closeBtn.onclick = closeModal;
         modal.onclick = (e) => {
             if (e.target === modal) {
                 closeModal();
             }
         };
-        modalImg.onclick = (e) => {
-            e.stopPropagation();
-            closeModal();
+
+        const handleKeyPress = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', handleKeyPress);
+            }
         };
         document.addEventListener('keydown', handleKeyPress);
     }
@@ -602,21 +757,38 @@ class ContentGallery {
     }
 
     getItemType(item) {
+        // VR content
         if (item.content_tags?.includes('Yellow') || 
             item.content_name.toLowerCase().includes('vr') ||
             item.content_name.toLowerCase().includes('180x180')) {
-            return 'vr';
+            return 'VR';
         }
-        if (item.content_type === 'mp4' || item.content_type === 'webm') {
-            return 'video';
+
+        // Check file extension
+        const ext = item.content_type?.toLowerCase() || '';
+        
+        // Video files
+        if (ext === 'mp4' || ext === 'webm' || ext === 'mov') {
+            return 'Video';
         }
-        if (item.content_type === 'zip') {
-            return 'zip';
+
+        // Image files
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+            return 'Images';
         }
-        if (!item.content_type || item.content_type === '') {
-            return 'folder';
+
+        // Archive files
+        if (ext === 'zip' || ext === 'rar' || ext === '7z') {
+            return 'Archive';
         }
-        return 'other';
+
+        // Folders (no content type)
+        if (!ext || ext === '') {
+            return 'Folder';
+        }
+
+        // Everything else
+        return 'Other';
     }
 
     async generateVideoThumbnail(videoUrl) {
@@ -767,18 +939,13 @@ class ContentGallery {
                 break;
         }
     }
-
-    handleItemClick(item) {
-        // Open modal with image preview
-        if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
-            const imageSrc = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
-            this.showModal(imageSrc, item.content_name);
-        }
-    }
 }
 
 // Initialize gallery when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    // Remove any existing controls first
+    document.querySelectorAll('.filter-container, .pagination-controls').forEach(el => el.remove());
+    
     const gallery = new ContentGallery('gallery-grid');
     const urlParams = new URLSearchParams(window.location.search);
     const imageName = urlParams.get('image-name') || urlParams.get('image_name');

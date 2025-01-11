@@ -199,53 +199,24 @@
 
     <div class="container">
         <main>
-            <div class="m-controls-group">
-                <!-- Search -->
-                <div class="m-search-container">
-                    <i class="fas fa-search a-search-icon"></i>
-                    <input type="text" class="a-search-input" placeholder="Search by name or tag...">
-                </div>
-
-                <!-- Sort Order -->
-                <select id="sort-order" class="a-select">
-                    <option value="name-asc">Name (A-Z)</option>
-                    <option value="name-desc">Name (Z-A)</option>
-                    <option value="size-asc">Size (Small to Large)</option>
-                    <option value="size-desc">Size (Large to Small)</option>
-                    <option value="date-asc">Date (Oldest First)</option>
-                    <option value="date-desc">Date (Newest First)</option>
-                </select>
-
-                <!-- Type Filter -->
-                <select id="type-filter" class="a-select">
-                    <option value="">All Types</option>
-                    <option value="vr">VR</option>
-                    <option value="video">Video</option>
-                    <option value="zip">Archive</option>
-                    <option value="folder">Folder</option>
-                    <option value="other">Other</option>
-                </select>
-
-                <!-- Tag Filter -->
-                <select id="tag-filter" class="a-select">
-                    <option value="">All Tags</option>
-                </select>
-            </div>
-
             <!-- Gallery Grid -->
             <div id="gallery-grid" class="o-gallery__grid"></div>
         </main>
+    </div>
 
-        <footer>
-            <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
-        </footer>
+    <footer>
+        <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
+    </footer>
     </div>
 
     <!-- Content Modal -->
     <div id="contentModal" class="modal">
         <button class="modal__close close-button">&times;</button>
-        <img class="modal-image content-player">
-        <div id="modalCaption" class="modal__caption"></div>
+        <div class="modal__content">
+            <img class="content-player">
+            <video class="content-player" controls style="display: none;"></video>
+            <div id="modalCaption" class="modal__caption"></div>
+        </div>
     </div>
 
     <template id="gallery-item-template">
@@ -253,20 +224,15 @@
             <div class="m-card__media">
                 <!-- Media content will be inserted here -->
             </div>
-            <div class="a-card__metadata">
+            <div class="m-card__content">
                 <h3 class="a-card__title"></h3>
-                <div class="a-content-size"></div>
-                <div class="a-content-tags"></div>
             </div>
         </div>
     </template>
 
     <script src="/js/content-gallery.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const gallery = new ContentGallery('gallery-grid', '/api/content');
-            gallery.loadContent();
-        });
+        // Gallery initialization is handled in content-gallery.js
     </script>
 </body>
 </html>
