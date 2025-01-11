@@ -245,19 +245,24 @@ video.content-player {
     font-size: 14px;
     font-weight: normal;
     color: #333;
+    margin-bottom: 4px;
+}
+
+.metadata-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .a-content-size {
     font-size: 14px;
     color: #666;
-    margin-top: 4px;
-    text-align: right;
+    text-align: left;
 }
 
 .a-content-tags {
     display: flex;
     gap: 6px;
-    margin-top: 8px;
     flex-wrap: wrap;
 }
 
@@ -266,7 +271,6 @@ video.content-player {
     height: 12px;
     border-radius: 50%;
     display: inline-block;
-    margin-right: 4px;
 }
 
 .tag-purple { background-color: #9c27b0; }
@@ -443,45 +447,36 @@ video.content-player {
 
 /* Pagination controls */
 .pagination-controls {
-    display: flex !important;
+    display: flex;
     justify-content: center;
     align-items: center;
-    margin: 20px auto;
-    padding: 20px;
-    width: 100%;
-    max-width: var(--max-width);
-    gap: 10px;
+    gap: 8px;
+    margin: 20px 0;
+    padding: 10px;
 }
 
-.page-button {
+.pagination-button {
     padding: 8px 16px;
     border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: white;
+    background: white;
+    color: #333;
     cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s;
-    min-width: 40px;
-    text-align: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
 }
 
-.page-button:hover {
-    background-color: #f0f0f0;
+.pagination-button:hover {
+    background: #f5f5f5;
     border-color: #999;
 }
 
-.page-button.active {
-    background-color: var(--primary-color, #007bff);
+.pagination-button.active {
+    background: #009688;
     color: white;
-    border-color: var(--primary-color, #007bff);
+    border-color: #009688;
 }
 
-.page-button.prev,
-.page-button.next {
-    font-weight: bold;
-}
-
-.m-card__overlay {
-    padding: 8px;
-    background: white;
+.pagination-ellipsis {
+    color: #666;
+    padding: 0 4px;
 }

@@ -143,26 +143,190 @@ class ContentGallery {
         this.items = [];
         this.selectedTags = new Set();
         this.thumbnailCache = new Map(); // Cache for video thumbnails
+        this.templateCache = null; // Cache for cloned template
+        this.mediaPreviewCache = new Map(); // Cache for media previews
         this.searchTerm = '';
-        this.sortOrder = 'name-asc'; // Default sort order
-        this.selectedType = ''; // Add type filter
+        this.sortOrder = 'name-asc';
+        this.selectedType = '';
         this.currentPage = 1;
         this.pageSize = 16;
         this.totalItems = 0;
         this.totalPages = 0;
         this.lastImageName = '';
-        this.isFiltered = false; // Track if filters are active
+        this.isFiltered = false;
         this.isLoading = false;
         this.pendingOperation = null;
+        this.nextPageData = null; // Cache for next page data
         
-        // Create pagination container
+        // Create pagination container after the gallery container
         const paginationContainer = document.createElement('div');
         paginationContainer.className = 'pagination-controls';
-        // Insert after gallery grid
         this.container.parentNode.insertBefore(paginationContainer, this.container.nextSibling);
         
-        // Initialize event listeners
         this.initializeFilters();
+        this.initIntersectionObserver();
+    }
+
+    initIntersectionObserver() {
+        this.observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const mediaContainer = entry.target;
+                    const itemId = mediaContainer.dataset.itemId;
+                    if (itemId && this.mediaPreviewCache.has(itemId)) {
+                        this.loadMediaPreview(mediaContainer, this.mediaPreviewCache.get(itemId));
+                    }
+                }
+            });
+        }, {
+            rootMargin: '50px 0px',
+            threshold: 0.1
+        });
+    }
+
+    async loadMediaPreview(mediaContainer, item) {
+        if (!mediaContainer.dataset.loaded) {
+            await this.setupMediaPreview(item, mediaContainer);
+            mediaContainer.dataset.loaded = 'true';
+        }
+    }
+
+    getTemplateClone() {
+        if (!this.templateCache) {
+            const template = document.getElementById('gallery-item-template');
+            if (!template) {
+                console.error('[Gallery] Template not found');
+                return null;
+            }
+            this.templateCache = template;
+        }
+        return this.templateCache.content.cloneNode(true);
+    }
+
+    async loadContent(imageName) {
+        if (!imageName) {
+            console.error('[Gallery] No image name provided');
+            return;
+        }
+
+        if (this.isLoading) {
+            console.log('[Gallery] Already loading content');
+            return;
+        }
+
+        this.isLoading = true;
+        this.lastImageName = imageName;
+        console.log('[Gallery] Loading content with page size:', this.pageSize);
+
+        try {
+            // Pre-fetch next page while loading current page
+            const currentPagePromise = fetch(`http://192.168.86.242:8081/image-content?image_name=${imageName}&page=${this.currentPage}&page_size=${this.pageSize}`);
+            const nextPagePromise = fetch(`http://192.168.86.242:8081/image-content?image_name=${imageName}&page=${this.currentPage + 1}&page_size=${this.pageSize}`);
+
+            const [currentResponse, nextResponse] = await Promise.all([currentPagePromise, nextPagePromise]);
+            const [currentData, nextData] = await Promise.all([currentResponse.json(), nextResponse.json()]);
+
+            console.log('[Gallery] Current page response:', currentData);
+            console.log('[Gallery] Next page response:', nextData);
+
+            // Update pagination data
+            this.nextPageData = nextData;
+            this.totalItems = currentData.total || currentData.total_items || 0;
+            this.totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize));
+            
+            console.log('[Gallery] Loaded items:', currentData.items?.length);
+            console.log('[Gallery] Total items:', this.totalItems);
+            console.log('[Gallery] Current page:', this.currentPage);
+            console.log('[Gallery] Total pages:', this.totalPages);
+
+            // Display items and update pagination
+            if (currentData.items && currentData.items.length > 0) {
+                await this.displayItems(currentData.items);
+                this.updatePaginationControls();
+            } else {
+                console.error('[Gallery] No items found in response');
+                this.container.innerHTML = '<div class="error-message">No items found</div>';
+            }
+        } catch (error) {
+            console.error('Error loading content:', error);
+            this.container.innerHTML = `<div class="error-message">Error loading gallery content: ${error.message}</div>`;
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    async displayItems(items) {
+        if (!items || !items.length) {
+            console.log('[Gallery] No items to display');
+            return;
+        }
+
+        this.container.innerHTML = '';
+        console.log('[Gallery] Displaying', items.length, 'items');
+
+        const fragment = document.createDocumentFragment();
+        
+        for (const item of items) {
+            const clone = this.getTemplateClone();
+            if (!clone) return;
+
+            const galleryItem = clone.querySelector('.o-gallery__item');
+            
+            // Set up lazy media preview
+            const mediaContainer = clone.querySelector('.m-card__media');
+            mediaContainer.dataset.itemId = item.content_url;
+            this.mediaPreviewCache.set(item.content_url, item);
+            this.observer.observe(mediaContainer);
+            
+            // Set up title and metadata
+            const title = clone.querySelector('.a-card__title');
+            title.textContent = item.content_name;
+            
+            const metadataRow = document.createElement('div');
+            metadataRow.className = 'metadata-row';
+            
+            const size = document.createElement('div');
+            size.className = 'a-content-size';
+            size.textContent = this.formatBytes(item.content_size);
+            metadataRow.appendChild(size);
+            
+            const tags = document.createElement('div');
+            tags.className = 'a-content-tags';
+            if (item.content_tags && item.content_tags.length > 0) {
+                item.content_tags.forEach(tag => {
+                    const circle = document.createElement('span');
+                    circle.className = `tag-circle tag-${tag.toLowerCase()}`;
+                    tags.appendChild(circle);
+                });
+            }
+            metadataRow.appendChild(tags);
+            
+            const metadata = clone.querySelector('.a-card__metadata');
+            metadata.appendChild(metadataRow);
+            
+            galleryItem.addEventListener('click', () => this.handleItemClick(item));
+            fragment.appendChild(clone);
+        }
+
+        this.container.appendChild(fragment);
+        console.log('[Gallery] Rendered', items.length, 'items');
+    }
+
+    async handlePageClick(page) {
+        console.log('[Gallery] Handling page click:', page);
+        if (page === this.currentPage || this.isLoading) return;
+        
+        this.currentPage = page;
+        
+        // If we have pre-fetched data for this page, use it
+        if (this.nextPageData && page === this.currentPage) {
+            this.displayItems(this.nextPageData.items);
+            this.nextPageData = null;
+        } else {
+            await this.loadContent(this.lastImageName);
+        }
+        
+        this.updatePaginationControls();
     }
 
     initializeFilters() {
@@ -206,114 +370,7 @@ class ContentGallery {
         }
     }
 
-    async loadContent(imageName) {
-        if (!imageName) {
-            console.error('[Gallery] No image name provided');
-            return;
-        }
-
-        if (this.isLoading) {
-            console.log('[Gallery] Already loading, storing as pending operation');
-            this.pendingOperation = { type: 'load', imageName };
-            return;
-        }
-        
-        console.log('[Gallery] Loading content with page size:', this.pageSize);
-        this.isLoading = true;
-        this.lastImageName = imageName;
-        
-        try {
-            const response = await fetch(`http://192.168.86.242:8081/image-content?image_name=${imageName}&page=${this.currentPage}&page_size=${this.pageSize}`);
-            if (!response.ok) {
-                throw new Error(`Network response was not ok: ${response.statusText}`);
-            }
-            const data = await response.json();
-            
-            if (data) {
-                let items, total, page, totalPages;
-                
-                if (Array.isArray(data)) {
-                    items = data;
-                    total = data.length;
-                    page = 1;
-                    totalPages = Math.ceil(total / this.pageSize);
-                } else if (data.items && Array.isArray(data.items)) {
-                    items = data.items;
-                    total = data.total;
-                    page = data.page;
-                    totalPages = Math.ceil(total / this.pageSize);
-                } else {
-                    throw new Error('Invalid data format received');
-                }
-                
-                console.log('[Gallery] Loaded items:', items.length);
-                console.log('[Gallery] Total items:', total);
-                console.log('[Gallery] Current page:', page);
-                console.log('[Gallery] Total pages:', totalPages);
-                
-                this.items = items;
-                this.totalItems = total;
-                this.totalPages = totalPages;
-                this.currentPage = page;
-                
-                this.updateTagFilter(items);
-                await this.displayItems(items);
-                this.updatePaginationControls();
-            }
-        } catch (error) {
-            console.error('Error loading content:', error);
-            this.container.innerHTML = `<div class="error-message">Error loading gallery content: ${error.message}</div>`;
-        } finally {
-            this.isLoading = false;
-            
-            if (this.pendingOperation) {
-                const operation = this.pendingOperation;
-                this.pendingOperation = null;
-                
-                switch (operation.type) {
-                    case 'load':
-                        await this.loadContent(operation.imageName);
-                        break;
-                    case 'filter':
-                        this.filterAndDisplayItems();
-                        break;
-                    case 'page':
-                        this.currentPage = operation.page;
-                        await this.loadContent(this.lastImageName);
-                        break;
-                }
-            }
-        }
-    }
-
-    updateTagFilter(items) {
-        const tagFilter = document.querySelector('#tag-filter');
-        if (!tagFilter) return;
-
-        // Get unique tags - preserve original case
-        const tags = new Set();
-        items.forEach(item => {
-            if (item.content_tags) {
-                item.content_tags.forEach(tag => tags.add(tag));
-            }
-        });
-
-        // Sort tags alphabetically
-        const sortedTags = Array.from(tags).sort();
-
-        // Update dropdown
-        const currentValue = tagFilter.value;
-        tagFilter.innerHTML = '<option value="">All Tags</option>';
-        sortedTags.forEach(tag => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            tagFilter.appendChild(option);
-        });
-        tagFilter.value = currentValue;
-    }
-
-    filterAndDisplayItems() {
+    async filterAndDisplayItems() {
         console.log('[Gallery] Starting filter with', this.items.length, 'items');
         
         if (this.isLoading) {
@@ -375,56 +432,31 @@ class ContentGallery {
         this.updatePaginationControls();
     }
 
-    async displayItems(items) {
-        if (!this.container) {
-            console.error('[Gallery] Container not found');
-            return;
-        }
+    updateTagFilter(items) {
+        const tagFilter = document.querySelector('#tag-filter');
+        if (!tagFilter) return;
 
-        this.container.innerHTML = '';
-        console.log('[Gallery] Displaying', items.length, 'items');
-
-        const template = document.getElementById('gallery-item-template');
-        if (!template) {
-            console.error('[Gallery] Template not found');
-            return;
-        }
-
-        const fragment = document.createDocumentFragment();
-        
-        for (const item of items) {
-            const clone = template.content.cloneNode(true);
-            const galleryItem = clone.querySelector('.o-gallery__item');
-            
-            // Set up media preview
-            const mediaContainer = clone.querySelector('.m-card__media');
-            await this.setupMediaPreview(item, mediaContainer);
-            
-            // Set up title and metadata
-            const title = clone.querySelector('.a-card__title');
-            title.textContent = item.content_name;
-            
-            const size = clone.querySelector('.a-content-size');
-            size.textContent = this.formatBytes(item.content_size);
-            
-            const tags = clone.querySelector('.a-content-tags');
-            if (item.content_tags && item.content_tags.length > 0) {
-                tags.innerHTML = '';
-                item.content_tags.forEach(tag => {
-                    const circle = document.createElement('span');
-                    circle.className = `tag-circle tag-${tag.toLowerCase()}`;
-                    tags.appendChild(circle);
-                });
+        // Get unique tags - preserve original case
+        const tags = new Set();
+        items.forEach(item => {
+            if (item.content_tags) {
+                item.content_tags.forEach(tag => tags.add(tag));
             }
-            
-            // Add click handler
-            galleryItem.addEventListener('click', () => this.handleItemClick(item));
-            
-            fragment.appendChild(clone);
-        }
+        });
 
-        this.container.appendChild(fragment);
-        console.log('[Gallery] Rendered', items.length, 'items');
+        // Sort tags alphabetically
+        const sortedTags = Array.from(tags).sort();
+
+        // Update dropdown
+        const currentValue = tagFilter.value;
+        tagFilter.innerHTML = '<option value="">All Tags</option>';
+        sortedTags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            tagFilter.appendChild(option);
+        });
+        tagFilter.value = currentValue;
     }
 
     async setupMediaPreview(item, mediaContainer) {
@@ -638,65 +670,60 @@ class ContentGallery {
         console.log('[Gallery] Current page:', this.currentPage);
         console.log('[Gallery] Total pages:', this.totalPages);
 
-        const paginationContainer = this.container.parentNode.querySelector('.pagination-controls');
-        if (!paginationContainer) {
-            console.error('[Gallery] Pagination container not found');
-            return;
-        }
+        const paginationContainer = document.querySelector('.pagination-controls');
+        if (!paginationContainer) return;
 
-        // Clear existing buttons
         paginationContainer.innerHTML = '';
         
-        // Calculate total pages
-        const calculatedTotalPages = Math.ceil(this.totalItems / this.pageSize);
-        this.totalPages = calculatedTotalPages;
-        
-        console.log('[Gallery] Calculated total pages:', calculatedTotalPages);
-        
-        if (this.totalPages <= 1) {
-            console.log('[Gallery] No pagination needed (total pages ≤ 1)');
-            paginationContainer.style.display = 'none';
+        if (!this.totalItems || this.totalPages <= 1) {
+            console.log('[Gallery] No pagination needed');
             return;
         }
 
-        paginationContainer.style.display = 'flex';
+        // Create pagination buttons
+        const createPageButton = (page, text, isActive = false) => {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = `pagination-button${isActive ? ' active' : ''}`;
+            button.addEventListener('click', () => this.handlePageClick(page));
+            return button;
+        };
 
         // Previous button
         if (this.currentPage > 1) {
-            const prevButton = document.createElement('button');
-            prevButton.className = 'page-button prev';
-            prevButton.dataset.page = (this.currentPage - 1).toString();
-            prevButton.textContent = '←';
-            prevButton.onclick = () => this.handlePageClick(this.currentPage - 1);
-            paginationContainer.appendChild(prevButton);
+            paginationContainer.appendChild(createPageButton(this.currentPage - 1, '←'));
         }
 
-        // Page numbers
-        let startPage = Math.max(1, this.currentPage - 2);
-        let endPage = Math.min(this.totalPages, startPage + 4);
-        
-        // Adjust start if we're near the end
-        if (endPage - startPage < 4) {
-            startPage = Math.max(1, endPage - 4);
+        // First page
+        if (this.currentPage > 2) {
+            paginationContainer.appendChild(createPageButton(1, '1'));
+            if (this.currentPage > 3) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'pagination-ellipsis';
+                paginationContainer.appendChild(ellipsis);
+            }
         }
 
-        for (let i = startPage; i <= endPage; i++) {
-            const pageButton = document.createElement('button');
-            pageButton.className = 'page-button' + (i === this.currentPage ? ' active' : '');
-            pageButton.dataset.page = i.toString();
-            pageButton.textContent = i.toString();
-            pageButton.onclick = () => this.handlePageClick(i);
-            paginationContainer.appendChild(pageButton);
+        // Current page and surrounding pages
+        for (let i = Math.max(1, this.currentPage - 1); i <= Math.min(this.totalPages, this.currentPage + 1); i++) {
+            paginationContainer.appendChild(createPageButton(i, i.toString(), i === this.currentPage));
+        }
+
+        // Last page
+        if (this.currentPage < this.totalPages - 1) {
+            if (this.currentPage < this.totalPages - 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.textContent = '...';
+                ellipsis.className = 'pagination-ellipsis';
+                paginationContainer.appendChild(ellipsis);
+            }
+            paginationContainer.appendChild(createPageButton(this.totalPages, this.totalPages.toString()));
         }
 
         // Next button
         if (this.currentPage < this.totalPages) {
-            const nextButton = document.createElement('button');
-            nextButton.className = 'page-button next';
-            nextButton.dataset.page = (this.currentPage + 1).toString();
-            nextButton.textContent = '→';
-            nextButton.onclick = () => this.handlePageClick(this.currentPage + 1);
-            paginationContainer.appendChild(nextButton);
+            paginationContainer.appendChild(createPageButton(this.currentPage + 1, '→'));
         }
 
         console.log('[Gallery] Added', paginationContainer.children.length, 'pagination buttons');
