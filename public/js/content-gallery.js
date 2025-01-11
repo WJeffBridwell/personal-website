@@ -422,40 +422,140 @@ class ContentGallery {
         console.log('[Gallery] Rendered', items.length, 'items');
     }
 
-    showModal(imageSrc) {
-        // Push state to enable back button
-        history.pushState({ modal: true }, '', window.location.pathname);
+    async setupMediaPreview(item, mediaContainer) {
+        // Clear any existing content
+        mediaContainer.innerHTML = '';
+        mediaContainer.className = 'm-card__media';
 
-        const modal = document.createElement('div');
-        modal.className = 'image-modal';
+        if (item.content_type === 'mp4' || item.content_type === 'webm') {
+            const video = document.createElement('video');
+            video.className = 'content-player';
+            video.controls = true;
+            video.preload = 'metadata';
+            video.playsinline = true;
+            video.disablePictureInPicture = true;
+            video.controlsList = 'nodownload noplaybackrate';
+            
+            const source = document.createElement('source');
+            source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
+            source.type = `video/${item.content_type}`;
+            video.appendChild(source);
+            
+            // Check if it's a VR video based on filename
+            const isVRVideo = item.content_name.toLowerCase().includes('vr') || 
+                            item.content_name.toLowerCase().includes('360') ||
+                            item.content_name.toLowerCase().includes('pov');
+            
+            const handleError = () => {
+                console.log('Video error detected for:', item.content_name);
+                video.remove();
+                
+                if (isVRVideo) {
+                    console.log('Showing VR icon for:', item.content_name);
+                    const vrContainer = document.createElement('div');
+                    vrContainer.className = 'vr-container';
+                    vrContainer.style.backgroundColor = '#f5f5f5';
+                    
+                    const vrIcon = document.createElement('i');
+                    vrIcon.className = 'fas fa-vr-cardboard';
+                    vrContainer.appendChild(vrIcon);
+                    mediaContainer.appendChild(vrContainer);
+                } else {
+                    console.log('Showing error icon for:', item.content_name);
+                    const errorContainer = document.createElement('div');
+                    errorContainer.className = 'error-container';
+                    const errorIcon = document.createElement('i');
+                    errorIcon.className = 'fas fa-exclamation-triangle';
+                    errorContainer.appendChild(errorIcon);
+                    mediaContainer.appendChild(errorContainer);
+                }
+            };
+            
+            video.onerror = handleError;
+            source.onerror = handleError;
+            
+            mediaContainer.appendChild(video);
+            
+            // Try to load video metadata
+            try {
+                await video.load();
+            } catch (error) {
+                console.error('Video load error:', error);
+                handleError();
+            }
+        } else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
+            const img = document.createElement('img');
+            img.className = 'content-player';
+            img.alt = item.content_name;
+            img.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
+            mediaContainer.appendChild(img);
+            
+            img.addEventListener('click', () => {
+                this.showModal(img.src, item.content_name);
+            });
+        } else if (item.content_type === 'zip') {
+            const zipContainer = document.createElement('div');
+            zipContainer.className = 'zip-container';
+            const zipIcon = document.createElement('i');
+            zipIcon.className = 'fas fa-file-archive';
+            zipContainer.appendChild(zipIcon);
+            mediaContainer.appendChild(zipContainer);
+        } else {
+            const folderContainer = document.createElement('div');
+            folderContainer.className = 'folder-container';
+            const folderIcon = document.createElement('i');
+            folderIcon.className = 'fas fa-folder';
+            folderContainer.appendChild(folderIcon);
+            mediaContainer.appendChild(folderContainer);
+        }
+    }
+
+    showModal(imageSrc, caption) {
+        const modal = document.getElementById('contentModal');
+        const modalImg = modal.querySelector('.modal-image');
+        const modalCaption = document.getElementById('modalCaption');
+        const closeBtn = modal.querySelector('.close-button');
         
-        const modalImg = document.createElement('img');
+        // Set image source and show loading state
+        modalImg.style.opacity = '0';
         modalImg.src = imageSrc;
-        modal.appendChild(modalImg);
-
-        const closeModal = () => {
-            document.body.removeChild(modal);
-            document.removeEventListener('keydown', handleKeyPress);
-            document.removeEventListener('popstate', handlePopState);
+        
+        // Once image is loaded, show it with a fade
+        modalImg.onload = () => {
+            modalImg.style.opacity = '1';
         };
-
+        
+        // Set caption if provided
+        modalCaption.textContent = caption || '';
+        
+        // Show modal
+        modal.style.display = 'block';
+        
+        // Handle close events
+        const closeModal = () => {
+            modal.style.display = 'none';
+            modalImg.src = '';
+            document.removeEventListener('keydown', handleKeyPress);
+        };
+        
         const handleKeyPress = (e) => {
             if (e.key === 'Escape' || e.key === 'Backspace') {
-                history.back();
+                closeModal();
             }
         };
-
-        const handlePopState = () => {
+        
+        // Add event listeners
+        closeBtn.onclick = closeModal;
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        };
+        modalImg.onclick = (e) => {
+            e.stopPropagation();
             closeModal();
         };
-
-        modal.addEventListener('click', () => {
-            history.back();
-        });
-        
         document.addEventListener('keydown', handleKeyPress);
-        document.addEventListener('popstate', handlePopState);
-        document.body.appendChild(modal);
     }
 
     formatBytes(bytes) {
@@ -638,68 +738,11 @@ class ContentGallery {
         }
     }
 
-    async setupMediaPreview(item, mediaContainer) {
-        if (item.content_type === 'mp4' || item.content_type === 'webm') {
-            // Create video element for playback
-            const video = document.createElement('video');
-            video.className = 'content-player';
-            video.controls = true;
-            video.preload = 'metadata';
-            
-            // Add source
-            const source = document.createElement('source');
-            source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
-            source.type = `video/${item.content_type}`;
-            video.appendChild(source);
-            
-            // Error handling for unsupported format
-            video.onerror = () => {
-                console.error('Video error for:', item.content_name, video.error);
-                video.remove();
-                mediaContainer.classList.remove('media-container');
-                mediaContainer.classList.add('error-container');
-                const errorIcon = document.createElement('i');
-                errorIcon.className = 'fas fa-exclamation-triangle fa-4x';
-                mediaContainer.appendChild(errorIcon);
-            };
-            
-            mediaContainer.appendChild(video);
-            
-            // Generate thumbnail asynchronously
-            this.generateVideoThumbnail(source.src)
-                .then(thumbnailUrl => {
-                    if (thumbnailUrl) {
-                        video.poster = thumbnailUrl;
-                    }
-                })
-                .catch(error => {
-                    console.error('Thumbnail error for:', item.content_name, error);
-                });
-        } else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
-            const img = document.createElement('img');
-            img.className = 'content-player';
-            img.alt = item.content_name;
-            img.dataset.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
-            mediaContainer.appendChild(img);
-            // We'll observe the container after it's added to the DOM
-        } else if (item.content_type === 'zip') {
-            mediaContainer.classList.add('zip-container');
-            const zipIcon = document.createElement('i');
-            zipIcon.className = 'fas fa-file-archive fa-4x';
-            mediaContainer.appendChild(zipIcon);
-        } else {
-            mediaContainer.classList.add('folder-container');
-            const folderIcon = document.createElement('i');
-            folderIcon.className = 'fas fa-folder fa-4x';
-            mediaContainer.appendChild(folderIcon);
-        }
-    }
-
     handleItemClick(item) {
         // Open modal with image preview
         if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
             const imageSrc = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
-            this.showModal(imageSrc);
+            this.showModal(imageSrc, item.content_name);
         }
     }
 }
