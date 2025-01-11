@@ -348,21 +348,53 @@ app.get('/proxy/image/direct', async (req, res) => {
 
 // Add proxy route for content listing
 app.get('/proxy/image/content', async (req, res) => {
+    console.log('\n[Proxy] ========== Content Request Start ==========');
     console.log('[Proxy] Content request received:', req.query);
+    
     try {
         const imageName = req.query.image_name;
         if (!imageName) {
             return res.status(400).json({ error: 'Missing image_name parameter' });
         }
 
-        // Forward to content service
-        const contentResponse = await fetch(`http://192.168.86.242:8081/image-content?image_name=${encodeURIComponent(imageName)}`);
-        if (!contentResponse.ok) {
-            throw new Error(`Content service error: ${contentResponse.statusText}`);
-        }
+        // Forward to content service with page size parameter
+        const contentUrl = `http://192.168.86.242:8081/image-content?image_name=${encodeURIComponent(imageName)}&page_size=1000`;
+        console.log('[Proxy] Forwarding to:', contentUrl);
 
-        const data = await contentResponse.json();
-        res.json(data);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            controller.abort();
+        }, 30000); // 30 second timeout
+
+        try {
+            const contentResponse = await fetch(contentUrl, {
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            clearTimeout(timeout);
+
+            if (!contentResponse.ok) {
+                throw new Error(`Content service error: ${contentResponse.statusText}`);
+            }
+
+            const data = await contentResponse.json();
+            console.log('[Proxy] Received response with', data.items?.length || 0, 'items');
+
+            // Send response
+            res.json(data);
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.error('[Proxy] Request timed out');
+                res.status(504).json({ error: 'Request timed out after 30 seconds' });
+            } else {
+                throw error;
+            }
+        } finally {
+            clearTimeout(timeout);
+        }
     } catch (error) {
         console.error('[Proxy] Content error:', error);
         res.status(500).json({ error: error.message });

@@ -269,15 +269,6 @@ class ContentGallery {
     async loadContent(imageName) {
         if (!imageName) {
             console.error('[Gallery] No image name provided');
-            this.container.innerHTML = '<div class="error-message">No image name provided</div>';
-            return;
-        }
-
-        // Decode the image name
-        imageName = decodeURIComponent(imageName);
-
-        if (this.isLoading) {
-            console.log('[Gallery] Already loading content');
             return;
         }
 
@@ -285,34 +276,57 @@ class ContentGallery {
         this.lastImageName = imageName;
         console.log('[Gallery] Loading content for:', imageName);
 
-        try {
-            // Load all items at once using proxy endpoint
-            const response = await fetch(`/proxy/image/content?image_name=${encodeURIComponent(imageName)}&page=1&page_size=1000`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
+        const maxRetries = 3;
+        let retryCount = 0;
 
-            console.log('[Gallery] Response:', data);
-
-            if (data.items && data.items.length > 0) {
-                // Store all items from all pages
-                this.items = data.items;
-                this.totalItems = data.total || data.items.length;
-                console.log('[Gallery] Loaded', this.items.length, 'total items');
+        while (retryCount < maxRetries) {
+            try {
+                // Load all items at once using proxy endpoint
+                const response = await fetch(`/proxy/image/content?image_name=${encodeURIComponent(imageName)}&page=1&page_size=1000`, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
                 
-                // Apply filters and display first page
-                await this.filterAndDisplayItems();
-            } else {
-                console.error('[Gallery] No items found in response');
-                this.container.innerHTML = '<div class="error-message">No items found</div>';
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('[Gallery] Response:', data);
+
+                if (data.items && data.items.length > 0) {
+                    // Store all items from all pages
+                    this.items = data.items;
+                    this.totalItems = data.total || data.items.length;
+                    console.log('[Gallery] Loaded', this.items.length, 'total items');
+                    
+                    // Apply filters and display first page
+                    await this.filterAndDisplayItems();
+                    return; // Success, exit the retry loop
+                } else {
+                    console.error('[Gallery] No items found in response');
+                    this.container.innerHTML = '<div class="error-message">No items found</div>';
+                    return;
+                }
+            } catch (error) {
+                console.error(`[Gallery] Error loading content (attempt ${retryCount + 1}/${maxRetries}):`, error);
+                retryCount++;
+                
+                if (retryCount === maxRetries) {
+                    this.container.innerHTML = `<div class="error-message">
+                        Failed to load gallery content after ${maxRetries} attempts.<br>
+                        Error: ${error.message}<br>
+                        Please try refreshing the page.
+                    </div>`;
+                } else {
+                    // Wait before retrying (exponential backoff)
+                    await new Promise(resolve => setTimeout(resolve, Math.min(1000 * Math.pow(2, retryCount), 5000)));
+                }
             }
-        } catch (error) {
-            console.error('Error loading content:', error);
-            this.container.innerHTML = `<div class="error-message">Error loading gallery content: ${error.message}</div>`;
-        } finally {
-            this.isLoading = false;
         }
+        
+        this.isLoading = false;
     }
 
     async filterAndDisplayItems() {
@@ -474,7 +488,7 @@ class ContentGallery {
 
     async handlePageClick(page) {
         console.log('[Gallery] Handling page click:', page);
-        if (page === this.currentPage || this.isLoading) return;
+        if (page === this.currentPage) return;
         
         if (this.isLoading) {
             console.log('[Gallery] Data still loading, storing page change as pending operation');
@@ -483,14 +497,7 @@ class ContentGallery {
         }
 
         this.currentPage = page;
-        
-        // If we have pre-fetched data for this page, use it
-        if (this.nextPageData && page === this.currentPage) {
-            this.displayItems(this.nextPageData.items);
-            this.nextPageData = null;
-        } else {
-            await this.loadContent(this.lastImageName);
-        }
+        await this.filterAndDisplayItems();
         
         this.updatePaginationControls();
     }
@@ -912,7 +919,7 @@ class ContentGallery {
         }
 
         this.currentPage = page;
-        await this.loadContent(this.lastImageName);
+        await this.filterAndDisplayItems();
     }
 
     sortItems(items) {
@@ -951,6 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageName = urlParams.get('image-name') || urlParams.get('image_name');
     
     if (imageName) {
+        // Keep original format
         gallery.loadContent(imageName);
     } else {
         console.error('[Gallery] No image name provided in URL parameters');
