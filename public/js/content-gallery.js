@@ -21,9 +21,24 @@ class ContentGallery {
         
         this.initializeEventListeners();
         this.loadContent();
+
+        // Expose instance to window for event handlers
+        window.contentGallery = this;
     }
 
     initializeEventListeners() {
+        // Add click handler for all media images
+        document.addEventListener('click', (e) => {
+            const img = e.target.closest('.media-image');
+            if (img) {
+                const fullSrc = img.dataset.fullSrc;
+                const name = img.dataset.name;
+                if (fullSrc && name) {
+                    this.openImageModal(fullSrc, name);
+                }
+            }
+        });
+
         // Search and filter events
         this.searchInput?.addEventListener('input', () => this.filterAndRenderItems());
         this.typeFilter?.addEventListener('change', () => this.filterAndRenderItems());
@@ -31,9 +46,14 @@ class ContentGallery {
 
         // Modal events
         this.modal?.querySelector('.modal__close')?.addEventListener('click', () => this.closeModal());
+        
+        // Close modal on Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') this.closeModal();
         });
+
+        // Close modal on browser back button
+        window.addEventListener('popstate', () => this.closeModal());
     }
 
     async loadContent() {
@@ -137,10 +157,23 @@ class ContentGallery {
         
         // Add click listeners to new items
         this.galleryGrid.querySelectorAll('.gallery-item').forEach(item => {
-            item.addEventListener('click', () => {
-                const itemData = JSON.parse(item.dataset.item);
-                this.openModal(itemData);
-            });
+            const itemData = JSON.parse(item.dataset.item);
+            const isImage = ['jpg', 'jpeg', 'png', 'webp', 'image'].includes(itemData.content_type.toLowerCase());
+            
+            if (isImage) {
+                // For images, add click listener to open modal with full-size image
+                const img = item.querySelector('.media-image');
+                if (img) {
+                    // item.addEventListener('click', () => {
+                    //     this.openImageModal(img.dataset.fullSrc, itemData.content_name);
+                    // });
+                }
+            } else {
+                // For non-images, use regular modal
+                item.addEventListener('click', () => {
+                    this.openModal(itemData);
+                });
+            }
         });
     }
 
@@ -165,10 +198,28 @@ class ContentGallery {
     }
 
     getMediaContent(item) {
+        const buildVideoUrl = (path) => {
+            // Replace /Volumes/VideosNew with the correct base path but preserve all other path components
+            const adjusted = path.replace('/Volumes/VideosNew/', '/Users/jeffbridwell/VideosAa-Abella/');
+            
+            // Properly encode the entire path while preserving slashes and special characters
+            const encodedPath = adjusted.split('/')
+                .map(component => encodeURIComponent(component))
+                .join('/');
+            
+            return `http://192.168.86.242:8082/videos/direct?path=${encodedPath}`;
+        };
+
+        const buildImageUrl = (imageName) => {
+            // Remove any file extension from the image name
+            const baseName = imageName.replace(/\.[^/.]+$/, "");
+            const cachePath = `/Users/jeffbridwell/CascadeProjects/personal-website/cache/${baseName}.webp`;
+            return `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(cachePath)}`;
+        };
+
         switch (item.content_type.toLowerCase()) {
             case 'mp4':
             case 'video':
-                // Check if it's a VR video by looking for common VR indicators in the filename
                 const isVR = item.content_name.toLowerCase().includes('vr') || 
                            item.content_name.toLowerCase().includes('180x180') ||
                            item.content_name.toLowerCase().includes('360');
@@ -177,8 +228,9 @@ class ContentGallery {
                     return `<div class="media-container-vr"><i class="media-icon fas fa-vr-cardboard"></i></div>`;
                 }
                 
+                const videoUrl = buildVideoUrl(item.content_url);
                 return `<video class="media-video" controls 
-                    src="http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" 
+                    src="${videoUrl}" 
                     preload="metadata" 
                     onclick="event.stopPropagation()"
                     onerror="this.outerHTML = '<div class=\'media-container-vr\'><i class=\'media-icon fas fa-vr-cardboard\'></i></div>'"></video>`;
@@ -187,7 +239,14 @@ class ContentGallery {
             case 'png':
             case 'webp':
             case 'image':
-                return `<img class="media-image" src="/proxy/image/direct?path=${encodeURIComponent(item.content_url)}" alt="${item.content_name}">`;
+                const imageUrl = buildImageUrl(item.content_name);
+                return `<img class="media-image" 
+                    src="${imageUrl}" 
+                    data-full-src="${imageUrl}"
+                    data-name="${item.content_name}"
+                    alt="${item.content_name}"
+                    loading="lazy"
+                    onerror="this.outerHTML = '<div class=\'media-container-image\'><i class=\'media-icon fas fa-image\'></i></div>'">`; 
             case 'directory':
             case 'folder':
                 return `<div class="media-container-folder"><i class="media-icon fas fa-folder"></i></div>`;
@@ -281,6 +340,81 @@ class ContentGallery {
             <button class="modal__close">&times;</button>
             <div class="modal__caption">${item.content_name}</div>
         `;
+    }
+
+    openImageModal(imageSrc, caption) {
+        if (!this.modal) {
+            console.error('Modal element not found');
+            return;
+        }
+        
+        console.log('Opening modal with image:', imageSrc);
+        
+        const modalContent = this.modal.querySelector('.modal__content');
+        if (!modalContent) {
+            console.error('Modal content element not found');
+            return;
+        }
+
+        // Create wrapper div for image
+        const imageWrapper = document.createElement('div');
+        imageWrapper.style.position = 'relative';
+        imageWrapper.style.zIndex = '1002';
+        
+        // Create and configure the image element
+        const img = document.createElement('img');
+        img.className = 'modal-image';
+        img.src = imageSrc;
+        img.alt = caption;
+        img.style.zIndex = '1002';
+        
+        // Log image dimensions when loaded
+        img.onload = () => {
+            console.log('Modal image loaded successfully');
+            console.log('Image natural dimensions:', img.naturalWidth, 'x', img.naturalHeight);
+            console.log('Image display dimensions:', img.offsetWidth, 'x', img.offsetHeight);
+            console.log('Image computed style:', window.getComputedStyle(img).width, window.getComputedStyle(img).height);
+            console.log('Image z-index:', window.getComputedStyle(img).zIndex);
+        };
+        
+        img.onerror = (e) => {
+            console.error('Failed to load modal image:', imageSrc, e);
+            imageWrapper.innerHTML = '<div class="media-container-image"><i class="media-icon fas fa-image"></i></div>';
+        };
+        
+        // Add image to wrapper
+        imageWrapper.appendChild(img);
+        
+        // Create close button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'modal__close';
+        closeBtn.innerHTML = '&times;';
+        closeBtn.onclick = () => this.closeModal();
+        
+        // Create caption
+        const captionDiv = document.createElement('div');
+        captionDiv.className = 'modal__caption';
+        captionDiv.textContent = caption;
+        
+        // Clear previous content and add new elements
+        modalContent.innerHTML = '';
+        modalContent.appendChild(imageWrapper);
+        modalContent.appendChild(closeBtn);
+        modalContent.appendChild(captionDiv);
+        
+        // Show modal
+        this.modal.style.display = 'block';
+        
+        // Add click handler to close modal when clicking outside the image
+        this.modal.onclick = (e) => {
+            if (e.target === this.modal) {
+                this.closeModal();
+            }
+        };
+
+        // Log modal and content dimensions
+        console.log('Modal dimensions:', this.modal.offsetWidth, 'x', this.modal.offsetHeight);
+        console.log('Modal content dimensions:', modalContent.offsetWidth, 'x', modalContent.offsetHeight);
     }
 
     closeModal() {
