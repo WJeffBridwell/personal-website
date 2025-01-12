@@ -2,10 +2,11 @@ class ContentGallery {
     constructor() {
         // UI Elements
         this.galleryGrid = document.querySelector('.gallery-grid');
-        this.modal = document.querySelector('.modal');
+        this.modal = document.querySelector('#contentModal');
         this.searchInput = document.querySelector('.gallery-search');
         this.typeFilter = document.querySelector('#type-filter');
         this.sortFilter = document.querySelector('#sort-filter');
+        this.loadingSpinner = document.querySelector('.gallery-loading');
         
         // Pagination settings
         this.itemsPerPage = 20;
@@ -31,6 +32,12 @@ class ContentGallery {
     }
 
     initializeEventListeners() {
+        // Search and filter events
+        this.searchInput?.addEventListener('input', () => this.filterAndRenderItems());
+        this.typeFilter?.addEventListener('change', () => this.filterAndRenderItems());
+        this.sortFilter?.addEventListener('change', () => this.filterAndRenderItems());
+        document.querySelector('#tags-filter')?.addEventListener('change', () => this.filterAndRenderItems());
+        
         // Add click handler for all media images
         document.addEventListener('click', (e) => {
             const img = e.target.closest('.media-image');
@@ -42,11 +49,6 @@ class ContentGallery {
                 }
             }
         });
-
-        // Search and filter events
-        this.searchInput?.addEventListener('input', () => this.filterAndRenderItems());
-        this.typeFilter?.addEventListener('change', () => this.filterAndRenderItems());
-        this.sortFilter?.addEventListener('change', () => this.filterAndRenderItems());
 
         // Modal events
         this.modal?.querySelector('.modal__close')?.addEventListener('click', () => this.closeModal());
@@ -60,6 +62,15 @@ class ContentGallery {
         window.addEventListener('popstate', () => this.closeModal());
     }
 
+    setLoading(isLoading) {
+        if (this.loadingSpinner) {
+            this.loadingSpinner.classList.toggle('active', isLoading);
+        }
+        if (this.galleryGrid) {
+            this.galleryGrid.classList.toggle('loading', isLoading);
+        }
+    }
+
     async loadContent() {
         // Check for image-name parameter
         const urlParams = new URLSearchParams(window.location.search);
@@ -71,6 +82,7 @@ class ContentGallery {
             return;
         }
 
+        this.setLoading(true);
         this.isLoading = true;
         this.lastImageName = imageName;
         console.log('[Gallery] Loading content for:', imageName);
@@ -108,6 +120,7 @@ class ContentGallery {
         }
 
         this.isLoading = false;
+        this.setLoading(false);
     }
 
     filterAndRenderItems() {
@@ -126,9 +139,40 @@ class ContentGallery {
         // Apply type filter
         const filterValue = this.typeFilter?.value;
         if (filterValue && filterValue !== '') {
-            filtered = filtered.filter(item => 
-                item.content_type && item.content_type.toLowerCase() === filterValue.toLowerCase()
-            );
+            filtered = filtered.filter(item => {
+                const type = item.content_type.toLowerCase();
+                const name = item.content_name.toLowerCase();
+                
+                switch (filterValue) {
+                    case 'VR':
+                        return (type === 'mp4' || type === 'video') &&
+                               (name.includes('vr') || 
+                                name.includes('180x180') || 
+                                name.includes('360'));
+                    case 'Video':
+                        return (type === 'mp4' || type === 'video') &&
+                               !name.includes('vr') && 
+                               !name.includes('180x180') && 
+                               !name.includes('360');
+                    case 'Images':
+                        return ['jpg', 'jpeg', 'png', 'webp', 'image'].includes(type);
+                    case 'Archive':
+                        return ['zip', 'rar', '7z'].includes(type);
+                    case 'Folder':
+                        return type === 'directory' || type === 'folder';
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        // Apply tags filter
+        const tagFilter = document.querySelector('#tags-filter')?.value;
+        if (tagFilter && tagFilter !== '') {
+            filtered = filtered.filter(item => {
+                const tags = item.content_tags || [];
+                return tags.map(tag => tag.toLowerCase()).includes(tagFilter.toLowerCase());
+            });
         }
 
         // Apply sort
@@ -197,7 +241,13 @@ class ContentGallery {
 
     createItemHTML(item) {
         const mediaContent = this.getMediaContent(item);
-        const tags = item.content_tags?.join(', ') || '';
+        const tags = item.content_tags || [];
+        const tagCircles = tags.slice(0, 8).map(tag => `
+            <div class="tag-circle" 
+                 style="background-color: ${tag.toLowerCase()}" 
+                 title="${tag}">
+            </div>
+        `).join('');
         
         return `
             <div class="gallery-item" data-item='${JSON.stringify(item)}'>
@@ -208,7 +258,7 @@ class ContentGallery {
                     <h3 class="item-title">${item.content_name}</h3>
                     <div class="item-details">
                         <span class="item-size">${this.formatBytes(item.content_size)}</span>
-                        <div class="item-tags">${tags}</div>
+                        <div class="item-tags">${tagCircles}</div>
                     </div>
                 </div>
             </div>
@@ -228,11 +278,18 @@ class ContentGallery {
             return `http://192.168.86.242:8082/videos/direct?path=${encodedPath}`;
         };
 
-        const buildImageUrl = (imageName) => {
-            // Remove any file extension from the image name
-            const baseName = imageName.replace(/\.[^/.]+$/, "");
-            const cachePath = `/Users/jeffbridwell/CascadeProjects/personal-website/cache/${baseName}.webp`;
-            return `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(cachePath)}`;
+        const buildThumbnailUrl = (imageName, fullPath) => {
+            // Use the full path if available, otherwise construct it
+            const path = fullPath || `/Volumes/VideosNew/Photo Sets - Red/A/${imageName}`;
+            const url = `/proxy/image/direct?path=${encodeURIComponent(path)}&width=300`;
+            console.log('[Gallery] Building thumbnail URL:', url);
+            return url;
+        };
+
+        const buildFullSizeImageUrl = (path) => {
+            const url = `/proxy/image/direct?path=${encodeURIComponent(path)}`;
+            console.log('[Gallery] Building full-size URL:', url);
+            return url;
         };
 
         switch (item.content_type.toLowerCase()) {
@@ -257,14 +314,17 @@ class ContentGallery {
             case 'png':
             case 'webp':
             case 'image':
-                const imageUrl = buildImageUrl(item.content_name);
+                const thumbnailUrl = buildThumbnailUrl(item.content_name, item.content_url);
+                const fullSizeUrl = buildFullSizeImageUrl(item.content_url);
                 return `<img class="media-image" 
-                    src="${imageUrl}" 
-                    data-full-src="${imageUrl}"
+                    src="${thumbnailUrl}" 
+                    data-full-src="${fullSizeUrl}"
                     data-name="${item.content_name}"
                     alt="${item.content_name}"
                     loading="lazy"
-                    onerror="this.outerHTML = '<div class=\'media-container-image\'><i class=\'media-icon fas fa-image\'></i></div>'">`; 
+                    decoding="async"
+                    onload="console.log('[Gallery] Thumbnail loaded:', this.src)"
+                    onerror="console.error('[Gallery] Thumbnail failed:', this.src); this.outerHTML = '<div class=\'media-container-image\'><i class=\'media-icon fas fa-image\'></i><div class=\'error-message\'>Failed to load preview</div></div>'">`;
             case 'directory':
             case 'folder':
                 return `<div class="media-container-folder"><i class="media-icon fas fa-folder"></i></div>`;
@@ -423,7 +483,7 @@ class ContentGallery {
             return;
         }
         
-        console.log('Opening modal with image:', imageSrc);
+        console.log('[Gallery] Opening modal with image:', imageSrc);
         
         const modalContent = this.modal.querySelector('.modal__content');
         if (!modalContent) {
@@ -431,51 +491,68 @@ class ContentGallery {
             return;
         }
 
-        // Create wrapper div for image
-        const imageWrapper = document.createElement('div');
-        imageWrapper.style.position = 'relative';
-        imageWrapper.style.zIndex = '1002';
+        // Get existing image and video elements
+        const img = modalContent.querySelector('img.content-player');
+        const video = modalContent.querySelector('video.content-player');
+        const captionDiv = modalContent.querySelector('.modal__caption');
         
-        // Create and configure the image element
-        const img = document.createElement('img');
-        img.className = 'modal-image';
+        console.log('[Gallery] Modal elements:', {
+            img: img ? 'found' : 'not found',
+            video: video ? 'found' : 'not found',
+            caption: captionDiv ? 'found' : 'not found'
+        });
+
+        if (!img || !video || !captionDiv) {
+            console.error('Required modal elements not found');
+            return;
+        }
+
+        // Hide video, show image
+        video.style.display = 'none';
+        img.style.display = 'block';
+        
+        console.log('[Gallery] Image display style:', img.style.display);
+        console.log('[Gallery] Image current dimensions:', {
+            width: img.offsetWidth,
+            height: img.offsetHeight,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight,
+            style: {
+                width: img.style.width,
+                height: img.style.height,
+                display: img.style.display,
+                visibility: img.style.visibility,
+                opacity: img.style.opacity
+            }
+        });
+        
+        // Set image source and caption
         img.src = imageSrc;
         img.alt = caption;
-        img.style.zIndex = '1002';
-        
-        // Log image dimensions when loaded
-        img.onload = () => {
-            console.log('Modal image loaded successfully');
-            console.log('Image natural dimensions:', img.naturalWidth, 'x', img.naturalHeight);
-            console.log('Image display dimensions:', img.offsetWidth, 'x', img.offsetHeight);
-            console.log('Image computed style:', window.getComputedStyle(img).width, window.getComputedStyle(img).height);
-            console.log('Image z-index:', window.getComputedStyle(img).zIndex);
-        };
-        
-        img.onerror = (e) => {
-            console.error('Failed to load modal image:', imageSrc, e);
-            imageWrapper.innerHTML = '<div class="media-container-image"><i class="media-icon fas fa-image"></i></div>';
-        };
-        
-        // Add image to wrapper
-        imageWrapper.appendChild(img);
-        
-        // Create close button
-        const closeBtn = document.createElement('button');
-        closeBtn.className = 'modal__close';
-        closeBtn.innerHTML = '&times;';
-        closeBtn.onclick = () => this.closeModal();
-        
-        // Create caption
-        const captionDiv = document.createElement('div');
-        captionDiv.className = 'modal__caption';
         captionDiv.textContent = caption;
-        
-        // Clear previous content and add new elements
-        modalContent.innerHTML = '';
-        modalContent.appendChild(imageWrapper);
-        modalContent.appendChild(closeBtn);
-        modalContent.appendChild(captionDiv);
+
+        // Add load and error handlers
+        img.onload = () => {
+            console.log('[Gallery] Modal image loaded:', imageSrc, 
+                       'Dimensions:', img.naturalWidth, 'x', img.naturalHeight);
+            console.log('[Gallery] Image dimensions after load:', {
+                width: img.offsetWidth,
+                height: img.offsetHeight,
+                naturalWidth: img.naturalWidth,
+                naturalHeight: img.naturalHeight,
+                style: {
+                    width: img.style.width,
+                    height: img.style.height,
+                    display: img.style.display,
+                    visibility: img.style.visibility,
+                    opacity: img.style.opacity
+                }
+            });
+        };
+        img.onerror = (e) => {
+            console.error('[Gallery] Modal image failed to load:', imageSrc, e);
+            modalContent.innerHTML = '<div class="modal__error"><i class="fas fa-exclamation-circle"></i><p>Failed to load full-size image</p></div>';
+        };
         
         // Show modal
         this.modal.style.display = 'block';
