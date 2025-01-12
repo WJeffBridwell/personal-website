@@ -10,7 +10,11 @@ class ContentGallery {
         // Pagination settings
         this.itemsPerPage = 20;
         this.currentPage = 1;
-        this.items = [];
+        
+        // Data storage
+        this.allItems = [];  // Store all items
+        this.filteredItems = []; // Store filtered items
+        this.displayedItems = []; // Store current page items
         this.totalItems = 0;
         this.totalPages = 0;
         
@@ -74,8 +78,9 @@ class ContentGallery {
         let retryCount = 0;
         while (retryCount < this.maxRetries) {
             try {
+                // Load all items at once (no pagination in initial load)
                 const response = await fetch(
-                    `${this.apiEndpoint}?image_name=${encodeURIComponent(imageName)}&page=${this.currentPage}&page_size=${this.itemsPerPage}`
+                    `${this.apiEndpoint}?image_name=${encodeURIComponent(imageName)}&page_size=1000`
                 );
 
                 if (!response.ok) {
@@ -83,11 +88,10 @@ class ContentGallery {
                 }
 
                 const data = await response.json();
-                this.items = data.items;
+                this.allItems = data.items;
                 this.totalItems = data.total;
-                this.totalPages = data.total_pages;
-                this.currentPage = data.page;
                 
+                // Initial filter and render
                 this.filterAndRenderItems();
 
                 break; // Success, exit retry loop
@@ -98,7 +102,6 @@ class ContentGallery {
                 if (retryCount === this.maxRetries) {
                     this.showError('Failed to load content after multiple attempts. Please try again later.');
                 } else {
-                    // Exponential backoff
                     await new Promise(resolve => setTimeout(resolve, this.retryDelay * Math.pow(2, retryCount - 1)));
                 }
             }
@@ -108,12 +111,13 @@ class ContentGallery {
     }
 
     filterAndRenderItems() {
-        let filteredItems = [...this.items];
+        // Start with all items
+        let filtered = [...this.allItems];
         
         // Apply search filter
         const searchTerm = this.searchInput?.value.toLowerCase() || '';
         if (searchTerm) {
-            filteredItems = filteredItems.filter(item => 
+            filtered = filtered.filter(item => 
                 item.content_name.toLowerCase().includes(searchTerm) ||
                 (item.content_tags && item.content_tags.some(tag => tag.toLowerCase().includes(searchTerm)))
             );
@@ -122,7 +126,7 @@ class ContentGallery {
         // Apply type filter
         const filterValue = this.typeFilter?.value;
         if (filterValue && filterValue !== '') {
-            filteredItems = filteredItems.filter(item => 
+            filtered = filtered.filter(item => 
                 item.content_type && item.content_type.toLowerCase() === filterValue.toLowerCase()
             );
         }
@@ -130,7 +134,7 @@ class ContentGallery {
         // Apply sort
         const sortValue = this.sortFilter?.value;
         if (sortValue) {
-            filteredItems.sort((a, b) => {
+            filtered.sort((a, b) => {
                 switch (sortValue) {
                     case 'name-asc':
                         return a.content_name.localeCompare(b.content_name);
@@ -146,7 +150,21 @@ class ContentGallery {
             });
         }
 
-        this.renderItems(filteredItems);
+        // Store filtered results
+        this.filteredItems = filtered;
+        this.totalItems = filtered.length;
+        this.totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
+        
+        // Reset to first page when filter changes
+        this.currentPage = 1;
+        
+        // Get current page items
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        this.displayedItems = this.filteredItems.slice(startIndex, endIndex);
+
+        // Render current page
+        this.renderItems(this.displayedItems);
         this.renderPagination();
     }
 
@@ -261,48 +279,105 @@ class ContentGallery {
 
     renderPagination() {
         const paginationContainer = document.querySelector('.gallery-pagination');
-        if (!paginationContainer || this.totalPages <= 1) {
-            if (paginationContainer) paginationContainer.innerHTML = '';
-            return;
-        }
+        if (!paginationContainer) return;
 
         let paginationHTML = '';
         
-        // Previous button
-        paginationHTML += `
-            <button class="page-button ${this.currentPage === 1 ? 'disabled' : ''}"
-                    onclick="gallery.changePage(${this.currentPage - 1})"
-                    ${this.currentPage === 1 ? 'disabled' : ''}>
-                Previous
-            </button>
-        `;
+        // Always show results summary
+        if (this.filteredItems.length === 0) {
+            paginationHTML = `
+                <div class="pagination-summary">
+                    No items found matching your search
+                </div>
+            `;
+        } else if (this.totalPages <= 1) {
+            paginationHTML = `
+                <div class="pagination-summary">
+                    Showing all ${this.filteredItems.length} items
+                </div>
+            `;
+        } else {
+            // Multiple pages - show full pagination
+            paginationHTML = `
+                <div class="pagination-summary">
+                    Showing ${(this.currentPage - 1) * this.itemsPerPage + 1} - 
+                    ${Math.min(this.currentPage * this.itemsPerPage, this.filteredItems.length)} 
+                    of ${this.filteredItems.length} items
+                </div>
+            `;
 
-        // Page numbers
-        for (let i = 1; i <= this.totalPages; i++) {
+            // Previous button
             paginationHTML += `
-                <button class="page-button ${i === this.currentPage ? 'active' : ''}"
-                        onclick="gallery.changePage(${i})">
-                    ${i}
+                <button class="page-button ${this.currentPage === 1 ? 'disabled' : ''}"
+                        onclick="contentGallery.changePage(${this.currentPage - 1})"
+                        ${this.currentPage === 1 ? 'disabled' : ''}>
+                    Previous
+                </button>
+            `;
+
+            // Calculate page range to show
+            let startPage = Math.max(1, this.currentPage - 2);
+            let endPage = Math.min(this.totalPages, startPage + 4);
+            
+            // Adjust start if we're near the end
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            // First page and ellipsis if needed
+            if (startPage > 1) {
+                paginationHTML += `
+                    <button class="page-button" onclick="contentGallery.changePage(1)">1</button>
+                    ${startPage > 2 ? '<span class="page-ellipsis">...</span>' : ''}
+                `;
+            }
+
+            // Page numbers
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHTML += `
+                    <button class="page-button ${i === this.currentPage ? 'active' : ''}"
+                            onclick="contentGallery.changePage(${i})">
+                        ${i}
+                    </button>
+                `;
+            }
+
+            // Last page and ellipsis if needed
+            if (endPage < this.totalPages) {
+                paginationHTML += `
+                    ${endPage < this.totalPages - 1 ? '<span class="page-ellipsis">...</span>' : ''}
+                    <button class="page-button" onclick="contentGallery.changePage(${this.totalPages})">
+                        ${this.totalPages}
+                    </button>
+                `;
+            }
+
+            // Next button
+            paginationHTML += `
+                <button class="page-button ${this.currentPage === this.totalPages ? 'disabled' : ''}"
+                        onclick="contentGallery.changePage(${this.currentPage + 1})"
+                        ${this.currentPage === this.totalPages ? 'disabled' : ''}>
+                    Next
                 </button>
             `;
         }
 
-        // Next button
-        paginationHTML += `
-            <button class="page-button ${this.currentPage === this.totalPages ? 'disabled' : ''}"
-                    onclick="gallery.changePage(${this.currentPage + 1})"
-                    ${this.currentPage === this.totalPages ? 'disabled' : ''}>
-                Next
-            </button>
-        `;
-
         paginationContainer.innerHTML = paginationHTML;
     }
 
-    async changePage(newPage) {
+    changePage(newPage) {
         if (newPage < 1 || newPage > this.totalPages) return;
+        
         this.currentPage = newPage;
-        await this.loadContent();
+        
+        // Get items for the new page
+        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+        const endIndex = startIndex + this.itemsPerPage;
+        this.displayedItems = this.filteredItems.slice(startIndex, endIndex);
+        
+        // Render new page
+        this.renderItems(this.displayedItems);
+        this.renderPagination();
     }
 
     openModal(item) {
