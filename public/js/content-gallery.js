@@ -185,59 +185,71 @@ class ContentGallery {
     }
 
     async loadMediaPreview(mediaContainer, item) {
-        if (!mediaContainer || !item) return;
+        if (!item || !mediaContainer) return;
 
-        try {
-            const itemType = this.getItemType(item);
+        const itemType = this.getItemType(item);
+        
+        if (itemType === 'Video') {
+            const video = document.createElement('video');
+            video.className = 'preview-video';
+            video.controls = true;
+            video.preload = 'metadata';
+            video.poster = `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}&time=1`; // Try to get first frame
+            
+            const source = document.createElement('source');
+            source.src = `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
+            source.type = 'video/mp4';
+            video.appendChild(source);
+            
             mediaContainer.innerHTML = '';
-
-            switch (itemType) {
-                case 'Images':
-                case 'VR':
-                    const img = document.createElement('img');
-                    img.className = 'preview-image';
-                    img.alt = item.content_name;
-                    img.src = `/proxy/image/preview?image_name=${encodeURIComponent(item.content_url)}`;
-                    mediaContainer.appendChild(img);
-                    break;
-
-                case 'Video':
-                    const video = document.createElement('video');
-                    video.className = 'preview-video';
-                    video.controls = true;
-                    video.preload = 'metadata';
-                    const source = document.createElement('source');
-                    source.src = `/proxy/video/stream?image_name=${encodeURIComponent(item.content_url)}`;
-                    source.type = 'video/mp4';
-                    video.appendChild(source);
-                    mediaContainer.appendChild(video);
-                    break;
-
-                case 'Folder':
-                    const folderIcon = document.createElement('i');
-                    folderIcon.className = 'fas fa-folder fa-3x';
-                    mediaContainer.appendChild(folderIcon);
-                    break;
-
-                case 'Archive':
-                    const archiveIcon = document.createElement('i');
-                    archiveIcon.className = 'fas fa-file-archive fa-3x';
-                    mediaContainer.appendChild(archiveIcon);
-                    break;
-
-                default:
-                    const fileIcon = document.createElement('i');
-                    fileIcon.className = 'fas fa-file fa-3x';
-                    mediaContainer.appendChild(fileIcon);
-            }
-
-            // Add click handler
-            mediaContainer.parentElement.addEventListener('click', () => this.handleItemClick(item));
-
-        } catch (error) {
-            console.error('Error loading media preview:', error);
-            mediaContainer.innerHTML = '<i class="fas fa-exclamation-circle fa-3x"></i>';
+            mediaContainer.appendChild(video);
         }
+
+        else if (itemType === 'Images' || itemType === 'VR') {
+            const img = document.createElement('img');
+            img.className = 'preview-image';
+            img.alt = item.content_name;
+            img.src = `/proxy/image/preview?image_name=${encodeURIComponent(item.content_url)}`;
+            mediaContainer.appendChild(img);
+        }
+
+        else if (itemType === 'Folder') {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-folder folder-icon';
+            mediaContainer.appendChild(icon);
+
+            // Add metadata
+            const metadata = mediaContainer.nextElementSibling;
+            if (metadata && metadata.classList.contains('m-card__content')) {
+                const title = metadata.querySelector('.a-card__title');
+                if (title) {
+                    title.textContent = item.content_name;
+                }
+            }
+        }
+
+        else if (itemType === 'Archive') {
+            const archiveContainer = document.createElement('div');
+            archiveContainer.className = 'archive-container';
+            const archiveIcon = document.createElement('i');
+            archiveIcon.className = 'fas fa-file-archive';
+            archiveContainer.appendChild(archiveIcon);
+            mediaContainer.innerHTML = '';
+            mediaContainer.appendChild(archiveContainer);
+        }
+
+        else {
+            const defaultContainer = document.createElement('div');
+            defaultContainer.className = '';
+            const fileIcon = document.createElement('i');
+            fileIcon.className = 'fas fa-file';
+            defaultContainer.appendChild(fileIcon);
+            mediaContainer.appendChild(defaultContainer);
+        }
+
+        // Add click handler
+        mediaContainer.parentElement.addEventListener('click', () => this.handleItemClick(item));
+
     }
 
     handleItemClick(item) {
@@ -246,10 +258,10 @@ class ContentGallery {
         const itemType = this.getItemType(item);
         
         if (itemType === 'Images' || itemType === 'VR') {
-            const imageSrc = `/proxy/image/direct?image_name=${encodeURIComponent(item.content_url)}`;
+            const imageSrc = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
             this.showModal(imageSrc, item.content_name);
         } else if (itemType === 'Video') {
-            const videoSrc = `/proxy/video/stream?image_name=${encodeURIComponent(item.content_url)}`;
+            const videoSrc = `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
             this.showModal(videoSrc, item.content_name, true);
         }
     }
@@ -622,89 +634,96 @@ class ContentGallery {
     }
 
     async setupMediaPreview(item, mediaContainer) {
+        const itemType = this.getItemType(item);
+        
         // Clear any existing content
         mediaContainer.innerHTML = '';
-        mediaContainer.className = 'm-card__media';
-
-        if (item.content_type === 'mp4' || item.content_type === 'webm') {
+        
+        if (itemType === 'Folder' || item.content_type === 'directory') {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-folder folder-icon';
+            mediaContainer.appendChild(icon);
+        }
+        // Single video handling point
+        else if (itemType === 'Video' || item.content_type === 'mp4' || item.content_type === 'webm') {
             const video = document.createElement('video');
-            video.className = 'content-player';
+            video.className = 'video-preview';
             video.controls = true;
             video.preload = 'metadata';
             video.playsinline = true;
             
             const source = document.createElement('source');
-            source.src = `/proxy/video/direct?path=${encodeURIComponent(item.content_url)}`;
-            source.type = `video/${item.content_type}`;
+            source.src = `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}`;
+            source.type = `video/${item.content_type || 'mp4'}`;
             video.appendChild(source);
+
+            // Set video thumbnail
+            try {
+                video.poster = `http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}&time=1`;
+            } catch (error) {
+                console.error('Error setting thumbnail:', error);
+            }
             
-            // Check if it's a VR video based on filename
-            const isVRVideo = item.content_name.toLowerCase().includes('vr') || 
-                            item.content_name.toLowerCase().includes('360') ||
-                            item.content_name.toLowerCase().includes('pov');
-            
-            const handleError = () => {
-                console.log('Video error detected for:', item.content_name);
-                video.remove();
-                
-                if (isVRVideo) {
-                    console.log('Showing VR icon for:', item.content_name);
-                    const vrContainer = document.createElement('div');
-                    vrContainer.className = 'vr-container';
-                    vrContainer.style.backgroundColor = '#f5f5f5';
-                    
-                    const vrIcon = document.createElement('i');
-                    vrIcon.className = 'fas fa-vr-cardboard';
-                    vrContainer.appendChild(vrIcon);
-                    mediaContainer.appendChild(vrContainer);
-                } else {
-                    console.log('Showing error icon for:', item.content_name);
-                    const errorContainer = document.createElement('div');
-                    errorContainer.className = 'error-container';
-                    const errorIcon = document.createElement('i');
-                    errorIcon.className = 'fas fa-exclamation-triangle';
-                    errorContainer.appendChild(errorIcon);
-                    mediaContainer.appendChild(errorContainer);
-                }
+            // Simple error handling
+            video.onerror = () => {
+                console.error('Video error for:', item.content_name);
+                mediaContainer.innerHTML = '';
+                const errorIcon = document.createElement('i');
+                errorIcon.className = 'fas fa-exclamation-triangle error-icon';
+                mediaContainer.appendChild(errorIcon);
             };
             
-            video.onerror = handleError;
-            source.onerror = handleError;
-            
             mediaContainer.appendChild(video);
-            
-            // Try to load video metadata
-            try {
-                await video.load();
-            } catch (error) {
-                console.error('Video load error:', error);
-                handleError();
-            }
-        } else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
+        }
+        // Archive handling
+        else if (item.content_type === 'zip' || item.content_type === 'rar' || item.content_type === '7z') {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-file-archive';
+            mediaContainer.appendChild(icon);
+        }
+        // Image handling
+        else if (item.content_type === 'jpg' || item.content_type === 'jpeg' || item.content_type === 'png' || item.content_type === 'webp') {
             const img = document.createElement('img');
-            img.className = 'content-player';
+            img.className = 'preview-image';
             img.alt = item.content_name;
             img.src = `/proxy/image/direct?path=${encodeURIComponent(item.content_url)}`;
             mediaContainer.appendChild(img);
-            
-            img.addEventListener('click', () => {
-                this.showModal(img.src, item.content_name);
-            });
-        } else if (item.content_type === 'zip') {
-            const zipContainer = document.createElement('div');
-            zipContainer.className = 'zip-container';
-            const zipIcon = document.createElement('i');
-            zipIcon.className = 'fas fa-file-archive';
-            zipContainer.appendChild(zipIcon);
-            mediaContainer.appendChild(zipContainer);
-        } else {
-            const folderContainer = document.createElement('div');
-            folderContainer.className = 'folder-container';
-            const folderIcon = document.createElement('i');
-            folderIcon.className = 'fas fa-folder';
-            folderContainer.appendChild(folderIcon);
-            mediaContainer.appendChild(folderContainer);
         }
+        // Default file icon
+        else {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-file';
+            mediaContainer.appendChild(icon);
+        }
+
+        // Add metadata container
+        const metadataContainer = document.createElement('div');
+        metadataContainer.className = 'm-card__content';
+        
+        const title = document.createElement('h3');
+        title.className = 'a-card__title';
+        title.textContent = item.content_name;
+        
+        const metadataRow = document.createElement('div');
+        metadataRow.className = 'metadata-row';
+        metadataRow.style.cssText = 'display: flex; justify-content: space-between; margin-top: 5px;';
+        
+        const size = document.createElement('div');
+        size.className = 'a-content-size';
+        size.textContent = this.formatBytes(item.size);
+        
+        const tags = document.createElement('div');
+        tags.className = 'a-content-tags';
+        tags.style.cssText = 'display: flex; gap: 4px;';
+        
+        metadataRow.appendChild(size);
+        metadataRow.appendChild(tags);
+        
+        metadataContainer.appendChild(title);
+        metadataContainer.appendChild(metadataRow);
+        
+        const parent = mediaContainer.parentElement;
+        parent.appendChild(metadataContainer);
     }
 
     showModal(src, caption, isVideo = false) {
@@ -920,6 +939,8 @@ class ContentGallery {
 
         this.currentPage = page;
         await this.filterAndDisplayItems();
+        
+        this.updatePaginationControls();
     }
 
     sortItems(items) {
@@ -937,10 +958,10 @@ class ContentGallery {
                 items.sort((a, b) => b.content_size - a.content_size);
                 break;
             case 'date-asc':
-                items.sort((a, b) => new Date(a.content_created) - new Date(b.content_created));
+                items.sort((a, b) => new Date(a.content_date) - new Date(b.content_date));
                 break;
             case 'date-desc':
-                items.sort((a, b) => new Date(b.content_created) - new Date(a.content_created));
+                items.sort((a, b) => new Date(b.content_date) - new Date(a.content_date));
                 break;
             default:
                 break;

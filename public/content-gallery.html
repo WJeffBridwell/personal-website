@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/content-gallery.css">
     <style>
-        /* Modal styles */
+        /* Modal styles only */
         .modal {
             display: none;
             position: fixed;
@@ -56,124 +56,6 @@
             text-align: center;
             font-size: 1.2em;
         }
-
-        /* Controls Layout */
-        .m-controls-group {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem;
-            width: 100%;
-            max-width: var(--max-width);
-            margin: 0 auto;
-        }
-
-        .m-search-container {
-            position: relative;
-            flex: 1;
-            max-width: 300px;
-        }
-
-        .a-search-icon {
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #666;
-        }
-
-        .a-search-input {
-            width: 100%;
-            padding: 8px 12px 8px 35px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .a-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            background-color: var(--primary-color);
-            color: white;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.2s;
-        }
-
-        .a-button:hover {
-            background-color: var(--primary-color-dark);
-        }
-
-        .a-select {
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            background-color: white;
-            cursor: pointer;
-        }
-
-        /* Gallery Grid */
-        .o-gallery__grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 20px;
-            padding: 20px;
-            max-width: var(--max-width);
-            margin: 0 auto;
-        }
-
-        .o-gallery__item {
-            position: relative;
-            background: white;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s;
-            cursor: pointer;
-        }
-
-        .o-gallery__item:hover {
-            transform: translateY(-5px);
-        }
-
-        .m-card__media {
-            width: 100%;
-            aspect-ratio: 16/9;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #f5f5f5;
-            border-radius: 4px;
-            margin-bottom: 10px;
-            overflow: hidden;
-        }
-
-        .m-folder-preview i {
-            color: #ffd700;
-            transition: transform 0.2s;
-        }
-
-        .m-file-preview i {
-            color: #666;
-            transition: transform 0.2s;
-        }
-
-        .o-gallery__item:hover .m-folder-preview i,
-        .o-gallery__item:hover .m-file-preview i {
-            transform: scale(1.1);
-        }
-
-        .m-image-preview img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .m-item-info {
-            padding: 10px 0;
-        }
     </style>
 </head>
 <body>
@@ -214,7 +96,7 @@
         <button class="modal__close close-button">&times;</button>
         <div class="modal__content">
             <img class="content-player">
-            <video class="content-player" controls style="display: none;"></video>
+            <video class="content-player" controls></video>
             <div id="modalCaption" class="modal__caption"></div>
         </div>
     </div>

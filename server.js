@@ -458,6 +458,32 @@ app.get('/proxy/image/direct', async (req, res) => {
     }
 });
 
+// Add proxy route for video streaming
+app.get('/proxy/video/stream', async (req, res) => {
+    try {
+        const imageName = req.query.image_name;
+        console.log('[Proxy] Video stream request image_name:', imageName);
+        
+        // Forward the request to the video server
+        const videoServerUrl = `http://192.168.86.242:8082/videos/stream?image_name=${encodeURIComponent(imageName)}`;
+        console.log('[Proxy] Forwarding to:', videoServerUrl);
+        
+        const response = await fetch(videoServerUrl);
+        
+        // Copy status and headers
+        res.status(response.status);
+        for (const [key, value] of response.headers.entries()) {
+            res.setHeader(key, value);
+        }
+        
+        // Pipe the response
+        response.body.pipe(res);
+    } catch (error) {
+        console.error('[Proxy] Video stream error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Create proxy server
 const proxy = httpProxy.createProxyServer({
     target: 'http://192.168.86.242:8082',

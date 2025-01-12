@@ -1,115 +1,330 @@
-/* Gallery Grid */
+/* Base grid layout */
 .o-gallery__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 20px;
     padding: 20px;
+    max-width: var(--max-width);
+    margin: 0 auto;
 }
 
 .o-gallery__item {
-    background: #fff;
+    position: relative;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+    cursor: pointer;
 }
 
-.gallery-item {
-    position: relative;
-    border-radius: 8px;
-    overflow: hidden;
-    background: #f5f5f5;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
+.o-gallery__item:hover {
+    transform: translateY(-5px);
 }
 
-.content-container {
-    position: relative;
+/* Media preview - single source of truth */
+.m-card__media {
     width: 100%;
-    min-height: 200px; /* Base height for all containers */
-    background: #f5f5f5;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
 }
 
-/* Special handling for video/image containers */
-.content-container.media-container {
-    padding-top: 56.25%; /* 16:9 Aspect Ratio only for media */
-}
-
-/* Folder icon container */
-.content-container.folder-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    position: absolute;
-    top: 0;
-    left: 0;
+/* Video styling - single source of truth */
+.m-card__media .video-preview {
     width: 100%;
     height: 100%;
-    background-color: #f5f5f5;
+    object-fit: cover;
+    background: transparent !important;
 }
 
-.content-container.folder-container i {
-    font-size: 4rem;
-    color: #666;
-}
-
-/* VR icon container */
-.content-container.vr-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    background-color: #f5f5f5;
-    position: relative;
-    overflow: hidden;
-}
-
-.vr-container i {
+/* Folder icon - single source of truth */
+.folder-icon {
     font-size: 48px;
-    color: #666;
-}
-
-.vr-container::after {
-    content: '';
-    font-size: 14px;
-    color: #666;
-    margin-top: 5px;
-    background-color: #f5f5f5;
-    padding: 5px 10px;
-    border-radius: 4px;
-}
-
-.fa-vr-cardboard {
+    color: #2196F3;
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+}
+
+/* Error icon - single source of truth */
+.error-icon {
+    font-size: 48px;
+    color: #ff0000;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Metadata section */
+.m-card__content {
+    padding: 16px;
+    background: white;
+}
+
+.a-card__title {
+    margin: 0;
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.87);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Remove ALL competing styles */
+.content-preview,
+.content-container,
+.media-container,
+.content-player,
+.preview-container,
+video.content-player,
+.archive-container,
+.error-container {
+    all: unset !important;
+}
+
+/* Controls Layout */
+.m-controls-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    width: 100%;
+    max-width: var(--max-width);
+    margin: 0 auto;
+}
+
+.m-search-container {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+}
+
+.a-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #666;
+}
+
+.a-search-input {
+    width: 100%;
+    padding: 8px 12px 8px 35px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.a-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+/* Base content container */
+.content-container {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 aspect ratio */
+    background: #fff;
+    overflow: hidden;
+    border-radius: 4px;
+}
+
+/* Media content (videos and images) */
+.content-container.media-container {
+    background: #000;
+}
+
+/* Icon containers (folders, archives, errors) */
+.content-container.archive-container,
+.content-container.error-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.content-container.archive-container i,
+.content-container.error-container i {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 3rem;
+}
+
+/* Folder and archive icons share the same style */
+.content-container.archive-container i {
+    color: #4a90e2;
+}
+
+/* Error state */
+.content-container.error-container i {
+    color: #dc3545;
+}
+
+/* Icon containers (folders, archives, errors) */
+.content-container.archive-container,
+.content-container.error-container {
+    background-color: #f5f5f5;
+}
+
+/* Specific icon colors */
+.content-container.archive-container i {
+    color: #4a90e2;
+}
+
+.content-container.error-container i {
+    color: #dc3545;
+}
+
+/* Hover effects */
+.content-container:hover {
+    cursor: pointer;
+}
+
+.content-container:hover i {
+    transform: translate(-50%, -50%) scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+/* Metadata container */
+.metadata-container {
+    padding: 10px;
+    background: #fff;
+}
+
+.metadata-container .title {
+    margin: 0;
+    font-size: 14px;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.metadata-container .size {
+    font-size: 12px;
+    color: #666;
+    margin-top: 4px;
+}
+
+/* Common icon styles */
+.content-container i {
     font-size: 4rem;
     color: #666;
 }
 
-.m-card__media {
+/* Archive and folder container styling */
+.archive-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.archive-container i {
+    font-size: 48px;
+    color: #2196F3; /* Material blue */
+}
+
+/* Remove old folder styles */
+.folder-container {
+    display: none;
+}
+
+/* Video preview container */
+.video-preview-container {
     position: relative;
     width: 100%;
-    padding-top: 56.25%; /* 16:9 aspect ratio */
-    background-color: #f5f5f5;
+    height: 100%;
     overflow: hidden;
 }
 
-.m-card__media > * {
+.thumbnail-container {
     position: absolute;
     top: 0;
     left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #000;
+}
+
+.video-thumbnail {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.content-player {
+.default-video-thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background-color: #1a1a1a;
+    color: #666;
+    font-size: 2em;
+}
+
+.play-button-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    transition: background-color 0.2s;
+}
+
+.play-button-overlay:hover {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.preview-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Video preview container */
+.video-container {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 aspect ratio */
+    background: #000;
+    overflow: hidden;
+}
+
+.video-container video {
     position: absolute;
     top: 0;
     left: 0;
@@ -118,33 +333,106 @@
     object-fit: contain;
 }
 
-/* Video player styles */
-.m-card__media video.content-player {
-    background-color: #000;
-    margin: 0;
-    padding: 0;
+.video-controls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
 }
 
-/* Only hide the big play button overlay */
-.m-card__media video::-webkit-media-controls-overlay-play-button {
-    display: none !important;
+.video-container:hover .video-controls {
+    opacity: 1;
 }
 
-/* Keep all other native controls */
-.m-card__media video::-webkit-media-controls-panel {
-    display: flex !important;
+.video-controls button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 5px;
+    font-size: 16px;
+    transition: color 0.2s ease;
 }
 
-/* Remove play button and custom controls */
-.m-card__media video::-webkit-media-controls-start-playback-button,
-.m-card__media video::-webkit-media-controls-current-time-display,
-.m-card__media video::-webkit-media-controls-time-remaining-display,
-.m-card__media video::-webkit-media-controls-timeline,
-.m-card__media video::-webkit-media-controls-volume-slider,
-.m-card__media video::-webkit-media-controls-mute-button {
-    display: none !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
+.video-controls button:hover {
+    color: #1a73e8;
+}
+
+.time-slider {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.3);
+    position: relative;
+    cursor: pointer;
+    border-radius: 2px;
+}
+
+.time-slider-progress {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: #1a73e8;
+    border-radius: 2px;
+}
+
+.time-display {
+    color: white;
+    font-size: 14px;
+    min-width: 100px;
+    text-align: center;
+}
+
+/* Video thumbnail */
+.video-container video[poster] {
+    object-fit: cover;
+}
+
+/* Fullscreen mode */
+.video-container:fullscreen {
+    padding-top: 0;
+    background: black;
+}
+
+.video-container:fullscreen video {
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Modal player */
+.modal .video-container {
+    padding-top: 0;
+    height: 80vh;
+}
+
+.modal .video-container video {
+    max-height: 80vh;
+}
+
+/* Error state */
+.error-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f5f5f5;
+}
+
+.error-container i {
+    font-size: 2rem;
+    color: #dc3545;
 }
 
 /* Custom video controls */
@@ -205,35 +493,74 @@
 }
 
 /* Container styles */
-.m-card__media .folder-container,
-.m-card__media .zip-container,
-.m-card__media .error-container,
-.m-card__media .vr-container {
+.m-card__media {
+    width: 100%;
+    height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.m-card__media i {
+    font-size: 48px;
+    color: #2196F3;
+}
+
+.m-card__content {
+    padding: 16px;
+    background: white;
+}
+
+.a-card__title {
+    margin: 0;
+    font-size: 14px;
+    color: rgba(0, 0, 0, 0.87);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Media preview section */
+.m-card__media {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 aspect ratio */
+    background-color: #f5f5f5;
+}
+
+.m-card__media .content-container {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    right: 0;
+    bottom: 0;
     display: flex;
-    justify-content: center;
     align-items: center;
-    background-color: #f5f5f5;
+    justify-content: center;
+}
+
+.m-card__media .content-container i {
+    font-size: 48px;
+    color: #2196F3;
 }
 
 /* Video thumbnail styles */
 video.content-player {
     background-size: cover;
     background-position: center;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    background: transparent;
 }
 
 /* Add hover effect for video thumbnails */
 .content-container:hover .content-player {
     opacity: 0.9;
-}
-
-.metadata-container {
-    padding: 10px;
-    background: white;
 }
 
 .a-card__metadata {
@@ -296,7 +623,7 @@ video.content-player {
     background-color: #f5f5f5;
 }
 
-.zip-container i, .folder-container i {
+.zip-container i {
     font-size: 48px;
     color: #666;
 }
@@ -479,4 +806,71 @@ video.content-player {
 .pagination-ellipsis {
     color: #666;
     padding: 0 4px;
+}
+
+.content-container.archive-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f5f5f5;
+    height: 100%;
+}
+
+.content-container.archive-container i {
+    font-size: 48px;
+    color: #2196F3;
+}
+
+/* Simple preview container with fixed height and centered icon */
+.content-preview {
+    height: 200px;
+    background-color: #f5f5f5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.content-preview i {
+    font-size: 48px;
+    color: #2196F3;
+}
+
+/* Clean, specific styling for folder icon */
+.folder-icon {
+    font-size: 48px;
+    color: #2196F3;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Remove any competing styles */
+.content-preview,
+.content-container,
+.media-container {
+    all: unset;
+}
+
+/* Clean, specific styling for video preview */
+.video-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Error icon styling */
+.error-icon {
+    font-size: 48px;
+    color: #ff0000;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Remove ALL competing styles */
+.content-player,
+video.content-player {
+    all: unset;
 }
