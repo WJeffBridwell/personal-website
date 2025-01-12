@@ -8,7 +8,7 @@ class ContentGallery {
         this.sortFilter = document.querySelector('#sort-filter');
         
         // Pagination settings
-        this.itemsPerPage = 50;
+        this.itemsPerPage = 20;
         this.currentPage = 1;
         this.items = [];
         this.totalItems = 0;
@@ -69,11 +69,6 @@ class ContentGallery {
                 this.currentPage = data.page;
                 
                 this.filterAndRenderItems();
-
-                // If we have specific image name parameter, open it in the modal
-                if (imageName && this.items.length > 0) {
-                    this.openModal(this.items[0]);
-                }
 
                 break; // Success, exit retry loop
             } catch (error) {
@@ -173,7 +168,20 @@ class ContentGallery {
         switch (item.content_type.toLowerCase()) {
             case 'mp4':
             case 'video':
-                return `<video class="media-video" src="http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" preload="metadata"></video>`;
+                // Check if it's a VR video by looking for common VR indicators in the filename
+                const isVR = item.content_name.toLowerCase().includes('vr') || 
+                           item.content_name.toLowerCase().includes('180x180') ||
+                           item.content_name.toLowerCase().includes('360');
+                
+                if (isVR) {
+                    return `<div class="media-container-vr"><i class="media-icon fas fa-vr-cardboard"></i></div>`;
+                }
+                
+                return `<video class="media-video" controls 
+                    src="http://192.168.86.242:8082/videos/direct?path=${encodeURIComponent(item.content_url)}" 
+                    preload="metadata" 
+                    onclick="event.stopPropagation()"
+                    onerror="this.outerHTML = '<div class=\'media-container-vr\'><i class=\'media-icon fas fa-vr-cardboard\'></i></div>'"></video>`;
             case 'jpg':
             case 'jpeg':
             case 'png':
@@ -181,13 +189,14 @@ class ContentGallery {
             case 'image':
                 return `<img class="media-image" src="/proxy/image/direct?path=${encodeURIComponent(item.content_url)}" alt="${item.content_name}">`;
             case 'directory':
-                return `<i class="media-icon fas fa-folder"></i>`;
+            case 'folder':
+                return `<div class="media-container-folder"><i class="media-icon fas fa-folder"></i></div>`;
             case 'zip':
             case 'rar':
             case '7z':
-                return `<i class="media-icon fas fa-file-archive"></i>`;
+                return `<div class="media-container-archive"><i class="media-icon fas fa-file-archive"></i></div>`;
             default:
-                return `<i class="media-icon fas fa-file"></i>`;
+                return `<div class="media-container-file"><i class="media-icon fas fa-file"></i></div>`;
         }
     }
 
