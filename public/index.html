@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jeff Bridwell | Personal Website</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="modal.css">
+    <link rel="stylesheet" href="css/index.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="modal.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <style>
         /* Image Gallery Styles */
@@ -158,16 +158,15 @@
                 </div>
             </div>
             <ul>
-                <li><a href="/">Home</a></li>
+                <li><a href="#" class="nav__link--active">Home</a></li>
                 <li><a href="#about">About</a></li>
                 <li><a href="#projects">Projects</a></li>
-                <li><a href="#gallery">Collections</a></li>
-                <li><a href="content-gallery.html">Content</a></li>
+                <li><a href="gallery.html">Collections</a></li>
                 <li><a href="#contact">Contact</a></li>
             </ul>
         </div>
     </nav>
-    
+
     <div class="container">
         <main>
             <section id="about" class="about">
@@ -262,26 +261,12 @@
             </section>
 
             <section id="gallery" class="gallery">
-                <div class="gallery-header">
-                    <div class="search-container">
-                        <input type="text" id="search-input" placeholder="Search images...">
-                        <select id="tag-filter" multiple="multiple">
-                            <!-- Tags will be populated dynamically -->
-                        </select>
-                    </div>
-                    <div class="sort-container">
-                        <button id="sortAZ" class="sort-btn">Sort A-Z</button>
-                        <button id="sortZA" class="sort-btn">Sort Z-A</button>
-                    </div>
+                <div class="header-band">
+                    <h2>Collections</h2>
                 </div>
-                <div class="letter-filter">
-                    <button class="letter-btn active" data-letter="all">All</button>
-                    <div class="letter-buttons"></div>
-                </div>
-                <div id="image-grid"></div>
-                <div class="loading-indicator" style="display: none">
-                    <div class="spinner"></div>
-                    <span>Loading more images...</span>
+                <div class="gallery__preview">
+                    <p>Check out my curated collections in the <a href="gallery.html">gallery</a>.</p>
+                    <a href="gallery.html" class="btn">View Gallery</a>
                 </div>
             </section>
 
@@ -358,6 +343,6 @@
     </script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-    <script src="script.js"></script>
+    <script src="js/index.js"></script>
 </body>
 </html>

@@ -29,6 +29,7 @@ import { Server } from 'socket.io';
 import fs from 'fs';
 import httpProxy from 'http-proxy';
 import fetch from 'node-fetch';
+import sharp from 'sharp';
 
 const execPromise = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
@@ -173,7 +174,7 @@ app.get('/api/search', async (req, res) => {
         const results = files
             .filter(file => {
                 const name = file.replace(/\.[^/.]+$/, '').toLowerCase();
-                return /\.(jpg|jpeg|png|gif)$/i.test(file) && name.includes(query);
+                return /\.(jpg|jpeg|png|gif|svg)$/i.test(file) && name.includes(query);
             })
             .map(async file => {
                 const stats = await fsPromises.stat(path.join(imagesDir, file));
@@ -300,20 +301,44 @@ app.get('/proxy/image/preview', async (req, res) => {
         const imageName = req.query.image_name;
         console.log('[Proxy] Image preview request image_name:', imageName);
         
-        // Forward the request to the image server
-        const imageServerUrl = `http://192.168.86.242:8081/image-preview?image_name=${encodeURIComponent(imageName)}`;
-        console.log('[Proxy] Forwarding to:', imageServerUrl);
+        // Look for image in cache directory
+        const cachePath = path.join(__dirname, 'cache', imageName);
+        console.log('[Proxy] Looking for preview in:', cachePath);
         
-        const response = await fetch(imageServerUrl);
-        
-        // Copy status and headers
-        res.status(response.status);
-        for (const [key, value] of response.headers.entries()) {
-            res.setHeader(key, value);
+        // Check if file exists
+        if (!fs.existsSync(cachePath)) {
+            console.error('[Proxy] Preview not found:', cachePath);
+            return res.status(404).json({ error: 'Preview not found' });
         }
+
+        // Set content type based on file extension
+        const ext = path.extname(cachePath).toLowerCase();
+        const mimeTypes = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml'
+        };
         
-        // Pipe the response
-        response.body.pipe(res);
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        
+        // Stream the file
+        const stream = fs.createReadStream(cachePath);
+        stream.pipe(res);
+        
+        stream.on('end', () => {
+            console.log('[Proxy] Preview sent successfully');
+        });
+        
+        stream.on('error', (error) => {
+            console.error('[Proxy] Stream error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to stream preview' });
+            }
+        });
     } catch (error) {
         console.error('[Proxy] Image preview error:', error);
         res.status(500).json({ error: error.message });
@@ -322,15 +347,97 @@ app.get('/proxy/image/preview', async (req, res) => {
 
 // Add proxy route for direct image access
 app.get('/proxy/image/direct', async (req, res) => {
+    console.log('\n[Proxy] ========== Image Request Start ==========');
+    console.log('[Proxy] Raw URL:', req.url);
+    console.log('[Proxy] Method:', req.method);
+    console.log('[Proxy] Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('[Proxy] Query:', JSON.stringify(req.query, null, 2));
+    
+    try {
+        // Get the image path and width from query
+        const imagePath = decodeURIComponent(req.query.path);
+        const width = parseInt(req.query.width) || null;
+        console.log('[Proxy] Image path:', imagePath);
+        console.log('[Proxy] Requested width:', width);
+        
+        // Check if this is a full path or just a filename
+        const isFullPath = imagePath.startsWith('/');
+        const fullPath = isFullPath ? imagePath : path.join('/Volumes/VideosNew/Photo Sets - Red/A', imagePath);
+        console.log('[Proxy] Full resolved path:', fullPath);
+        
+        // Check if file exists
+        if (!fs.existsSync(fullPath)) {
+            console.error('[Proxy] Image not found:', fullPath);
+            return res.status(404).json({ error: 'Image not found' });
+        }
+
+        // Set content type based on file extension
+        const ext = path.extname(fullPath).toLowerCase();
+        const mimeTypes = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml'
+        };
+        
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        res.setHeader('Content-Type', contentType);
+        
+        // Create Sharp transform stream
+        let transform = sharp();
+        
+        // If width is specified, resize the image
+        if (width) {
+            transform = transform.resize(width, null, {
+                withoutEnlargement: true,
+                fit: 'inside'
+            });
+        }
+
+        // Convert output to WebP for better compression
+        transform = transform.webp({ quality: 80 });
+        res.setHeader('Content-Type', 'image/webp');
+        
+        // Stream the file through Sharp
+        const stream = fs.createReadStream(fullPath);
+        stream
+            .pipe(transform)
+            .pipe(res);
+        
+        stream.on('end', () => {
+            console.log('[Proxy] Image sent successfully');
+            console.log('[Proxy] ========== Image Request End ==========\n');
+        });
+        
+        stream.on('error', (error) => {
+            console.error('[Proxy] Stream error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Failed to stream image' });
+            }
+            console.log('[Proxy] ========== Image Request End (Error) ==========\n');
+        });
+    } catch (error) {
+        console.error('[Proxy] Error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: 'Proxy error', message: error.message });
+        }
+        console.log('[Proxy] ========== Image Request End (Error) ==========\n');
+    }
+});
+
+// Add proxy route for video streaming
+app.get('/proxy/video/stream', async (req, res) => {
     try {
         const imageName = req.query.image_name;
-        console.log('[Proxy] Direct image request image_name:', imageName);
+        console.log('[Proxy] Video stream request image_name:', imageName);
         
-        // Forward the request to the image server
-        const imageServerUrl = `http://192.168.86.242:8081/image-direct?image_name=${encodeURIComponent(imageName)}`;
-        console.log('[Proxy] Forwarding to:', imageServerUrl);
+        // Forward the request to the video server
+        const videoServerUrl = `http://192.168.86.242:8082/videos/stream?image_name=${encodeURIComponent(imageName)}`;
+        console.log('[Proxy] Forwarding to:', videoServerUrl);
         
-        const response = await fetch(imageServerUrl);
+        const response = await fetch(videoServerUrl);
         
         // Copy status and headers
         res.status(response.status);
@@ -341,7 +448,7 @@ app.get('/proxy/image/direct', async (req, res) => {
         // Pipe the response
         response.body.pipe(res);
     } catch (error) {
-        console.error('[Proxy] Direct image error:', error);
+        console.error('[Proxy] Video stream error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -401,26 +508,77 @@ app.get('/proxy/image/content', async (req, res) => {
     }
 });
 
-// Add proxy route for image content
-app.get('/proxy/image/direct', async (req, res) => {
-    console.log('\n[Proxy] ========== Image Request Start ==========');
-    console.log('[Proxy] Raw URL:', req.url);
-    console.log('[Proxy] Method:', req.method);
-    console.log('[Proxy] Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('[Proxy] Query:', JSON.stringify(req.query, null, 2));
-    
+// Cache for image listing
+let imageCache = null;
+let lastCacheUpdate = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Gallery API Endpoints
+app.get('/api/gallery/images', async (req, res) => {
+    console.log('\n=== Gallery Images Request ===');
     try {
-        // Get the image path from query
-        const imagePath = decodeURIComponent(req.query.path);
-        console.log('[Proxy] Image path:', imagePath);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 48; // 6 rows × 8 columns
+        const start = (page - 1) * limit;
+
+        // Check cache first
+        const now = Date.now();
+        if (!imageCache || now - lastCacheUpdate > CACHE_TTL) {
+            const imagesDir = '/Volumes/VideosNew/Models';
+            console.log('Cache miss - Reading images from:', imagesDir);
+
+            if (!fs.existsSync(imagesDir)) {
+                console.error('Models directory not found:', imagesDir);
+                return res.status(500).json({ error: 'Models directory not found' });
+            }
+
+            // Read directory in chunks
+            const files = await fsPromises.readdir(imagesDir);
+            console.log(`Found ${files.length} total files`);
+            
+            // Filter image files
+            imageCache = files
+                .filter(file => {
+                    const ext = path.extname(file).toLowerCase();
+                    return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+                })
+                .map(file => ({
+                    name: file,
+                    url: `/api/gallery/image/${encodeURIComponent(file)}`,
+                    path: path.join(imagesDir, file)
+                }));
+
+            lastCacheUpdate = now;
+            console.log(`Cached ${imageCache.length} images`);
+        }
+
+        // Paginate from cache
+        const paginatedImages = imageCache.slice(start, start + limit);
         
-        // Check if file exists
+        console.log(`Sending page ${page} (${paginatedImages.length} images)`);
+        res.json({ 
+            images: paginatedImages,
+            total: imageCache.length,
+            page,
+            pages: Math.ceil(imageCache.length / limit)
+        });
+    } catch (error) {
+        console.error('Error reading images:', error);
+        res.status(500).json({ error: 'Failed to read images' });
+    }
+});
+
+// Serve individual images
+app.get('/api/gallery/image/:name', async (req, res) => {
+    try {
+        const imageName = decodeURIComponent(req.params.name);
+        const imagePath = path.join('/Volumes/VideosNew/Models', imageName);
+        
         if (!fs.existsSync(imagePath)) {
-            console.error('[Proxy] Image not found:', imagePath);
             return res.status(404).json({ error: 'Image not found' });
         }
 
-        // Set content type based on file extension
+        // Get image mime type
         const ext = path.extname(imagePath).toLowerCase();
         const mimeTypes = {
             '.jpg': 'image/jpeg',
@@ -433,54 +591,12 @@ app.get('/proxy/image/direct', async (req, res) => {
         const contentType = mimeTypes[ext] || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
         
-        // Stream the file
+        // Stream the image
         const stream = fs.createReadStream(imagePath);
         stream.pipe(res);
-        
-        stream.on('end', () => {
-            console.log('[Proxy] Image sent successfully');
-            console.log('[Proxy] ========== Image Request End ==========\n');
-        });
-        
-        stream.on('error', (error) => {
-            console.error('[Proxy] Stream error:', error);
-            if (!res.headersSent) {
-                res.status(500).json({ error: 'Failed to stream image' });
-            }
-            console.log('[Proxy] ========== Image Request End (Error) ==========\n');
-        });
     } catch (error) {
-        console.error('[Proxy] Error:', error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: 'Proxy error', message: error.message });
-        }
-        console.log('[Proxy] ========== Image Request End (Error) ==========\n');
-    }
-});
-
-// Add proxy route for video streaming
-app.get('/proxy/video/stream', async (req, res) => {
-    try {
-        const imageName = req.query.image_name;
-        console.log('[Proxy] Video stream request image_name:', imageName);
-        
-        // Forward the request to the video server
-        const videoServerUrl = `http://192.168.86.242:8082/videos/stream?image_name=${encodeURIComponent(imageName)}`;
-        console.log('[Proxy] Forwarding to:', videoServerUrl);
-        
-        const response = await fetch(videoServerUrl);
-        
-        // Copy status and headers
-        res.status(response.status);
-        for (const [key, value] of response.headers.entries()) {
-            res.setHeader(key, value);
-        }
-        
-        // Pipe the response
-        response.body.pipe(res);
-    } catch (error) {
-        console.error('[Proxy] Video stream error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error serving image:', error);
+        res.status(500).json({ error: 'Failed to serve image' });
     }
 });
 

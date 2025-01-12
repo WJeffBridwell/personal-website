@@ -1,79 +1,17 @@
 /**
  * Personal Website Frontend JavaScript
  * 
- * This module handles all client-side functionality including:
- * - Image gallery management and display
- * - Modal interactions and image viewing
- * - Search functionality
- * - Finder integration
- * - Error handling and loading states
- * 
- * Components:
- * - ImageGallery: Manages the display and interaction of image grid
- * - Modal: Handles the image modal display and interactions
- * - Search: Manages search functionality and Finder integration
+ * This module handles client-side functionality for index.html
  */
 
-console.log('=== Script Starting ===');
-console.log('Document readyState:', document.readyState);
-console.log('Full HTML:', document.documentElement.outerHTML);
-
-console.log('Script file loaded and starting execution');
-
-// Initialize gallery functionality
-async function initializeGallery() {
-    console.log('\n=== Initializing Gallery ===');
-    
-    // Check for required elements
-    const gallerySection = document.querySelector('.gallery');
-    const imageGrid = document.getElementById('image-grid');
-    
-    console.log('Gallery elements check:', {
-        gallerySection: !!gallerySection,
-        imageGrid: !!imageGrid
-    });
-    
-    if (!gallerySection || !imageGrid) {
-        console.error('Required gallery elements not found');
-        return;
-    }
-    
-    // Initialize gallery state
-    if (typeof window._galleryState === 'undefined') {
-        window._galleryState = {
-            currentPage: 1,
-            totalPages: 0,
-            isLoading: false,
-            images: [],
-            initialized: false,
-            batchSize: 80,
-            loadedImages: new Set()
-        };
-        
-        console.log('Gallery state initialized:', window._galleryState);
-    }
-    
-    // Load initial images
-    await loadInitialImages();
-    
-    console.log('\n=== Gallery Initialization Complete ===');
-}
-
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeGallery);
-} else {
-    initializeGallery();
-}
-
-// Also try on window load in case DOMContentLoaded was missed
-window.addEventListener('load', () => {
-    console.log('\n=== Window Loaded ===');
-    if (!window._galleryInitialized) {
-        console.log('Gallery not initialized yet, initializing now');
+// Only initialize if we're on index.html
+if (window.location.pathname === '/' || window.location.pathname === '/index.html') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeGallery);
+    } else {
         initializeGallery();
     }
-});
+}
 
 /**
  * Initializes the modal component with all necessary elements and event listeners
@@ -948,15 +886,43 @@ if (typeof module !== 'undefined' && module.exports) {
     });
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        initializeGallery();
-        initializeTagFilter();
+// Initialize gallery functionality
+async function initializeGallery() {
+    console.log('\n=== Initializing Gallery ===');
+    
+    // Check for required elements
+    const gallerySection = document.querySelector('.gallery');
+    const imageGrid = document.getElementById('image-grid');
+    
+    console.log('Gallery elements check:', {
+        gallerySection: !!gallerySection,
+        imageGrid: !!imageGrid
     });
-} else {
-    initializeGallery();
-    initializeTagFilter();
+    
+    if (!gallerySection || !imageGrid) {
+        console.error('Required gallery elements not found');
+        return;
+    }
+    
+    // Initialize gallery state
+    if (typeof window._galleryState === 'undefined') {
+        window._galleryState = {
+            currentPage: 1,
+            totalPages: 0,
+            isLoading: false,
+            images: [],
+            initialized: false,
+            batchSize: 80,
+            loadedImages: new Set()
+        };
+        
+        console.log('Gallery state initialized:', window._galleryState);
+    }
+    
+    // Load initial images
+    await loadInitialImages();
+    
+    console.log('\n=== Gallery Initialization Complete ===');
 }
 
 // Load initial images

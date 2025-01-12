@@ -1,252 +1,207 @@
 /**
- * @fileoverview Gallery module for managing image display, filtering, sorting,
- * and user interactions in a responsive grid layout.
+ * @fileoverview Gallery module for managing image display and pagination
+ * in a responsive grid layout.
  * @module gallery
  */
 
 /**
- * Gallery class that handles all image gallery functionality including
- * loading, displaying, filtering, and sorting images.
+ * Gallery class that handles image loading, display and pagination.
  * 
  * @class
  */
 export class Gallery {
-  constructor(galleryElement) {
-    // DOM Elements
-    this.gallery = galleryElement;
-    this.imageGrid = document.querySelector('#image-grid');
-    this.searchInput = document.querySelector('#search-input');
-    this.tagFilter = document.querySelector('#tag-filter');
-    this.sortNameButton = document.querySelector('#sort-name');
-    this.letterFilter = document.querySelector('.letter-filter');
+    constructor(galleryElement) {
+        // DOM Elements
+        this.gallery = galleryElement;
+        this.imageGrid = document.querySelector('#image-grid');
+        this.prevPageBtn = document.querySelector('#prevPage');
+        this.nextPageBtn = document.querySelector('#nextPage');
+        this.pageNumbers = document.querySelector('#pageNumbers');
+        this.searchInput = document.querySelector('#searchInput');
+        this.sortSelect = document.querySelector('#sortSelect');
 
-    // State management
-    this.state = {
-      images: [],          // All images from server
-      filteredImages: [],  // Images after applying filters
-      filters: {
-        search: '',
-        letter: '',
-        tag: ''
-      },
-      sort: {
-        by: 'name',
-        order: 'asc'
-      },
-      pagination: {
-        currentPage: 1,
-        totalPages: 1,
-        batchSize: 88
-      }
-    };
+        // State
+        this.currentPage = 1;
+        this.itemsPerPage = 48;  // 6 rows × 8 columns
+        this.totalImages = 0;
+        this.totalPages = 0;
 
-    // Initialize
-    this.initializeControls();
-    this.loadCurrentPage();
-  }
+        // Initialize
+        this.loadImages();
+        this.initControls();
+    }
 
-  /**
-   * Initialize all control event listeners
-   */
-  initializeControls() {
-    // Search input with debounce
-    this.searchInput?.addEventListener('input', this.debounce(() => {
-      this.state.filters.search = this.searchInput.value.toLowerCase();
-      this.applyFiltersAndSort();
-    }, 300));
+    initControls() {
+        // Initialize pagination controls
+        this.initPaginationControls();
 
-    // Letter filter
-    this.letterFilter?.addEventListener('click', (e) => {
-      if (e.target.matches('.letter-button')) {
-        const letter = e.target.dataset.letter || '';
-        this.state.filters.letter = letter;
-        
-        // Update active state
-        this.letterFilter.querySelectorAll('.letter-button').forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.letter === letter);
+        // Initialize search
+        this.searchInput?.addEventListener('input', (e) => {
+            this.currentPage = 1; // Reset to first page
+            this.loadImages();
         });
+
+        // Initialize sort
+        this.sortSelect?.addEventListener('change', (e) => {
+            this.currentPage = 1; // Reset to first page
+            this.loadImages();
+        });
+    }
+
+    async loadImages() {
+        try {
+            // Show loading state
+            if (this.imageGrid) {
+                this.imageGrid.innerHTML = '<div class="loading-progress">Loading images...</div>';
+            }
+
+            const response = await fetch(`/api/gallery/images?page=${this.currentPage}&limit=${this.itemsPerPage}&search=${this.searchInput?.value}&sort=${this.sortSelect?.value}`);
+            if (!response.ok) throw new Error('Failed to fetch images');
+            
+            const data = await response.json();
+            this.totalImages = data.total;
+            this.totalPages = data.pages;
+            
+            this.renderImages(data.images);
+            this.updatePaginationUI();
+        } catch (error) {
+            console.error('Error loading images:', error);
+            if (this.imageGrid) {
+                this.imageGrid.innerHTML = '<div class="error-message">Failed to load images</div>';
+            }
+        }
+    }
+
+    initPaginationControls() {
+        // Previous page button
+        this.prevPageBtn?.addEventListener('click', () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.loadImages();
+            }
+        });
+
+        // Next page button
+        this.nextPageBtn?.addEventListener('click', () => {
+            if (this.currentPage < this.totalPages) {
+                this.currentPage++;
+                this.loadImages();
+            }
+        });
+    }
+
+    updatePaginationUI() {
+        // Update prev/next buttons
+        if (this.prevPageBtn) {
+            this.prevPageBtn.disabled = this.currentPage === 1;
+        }
+        if (this.nextPageBtn) {
+            this.nextPageBtn.disabled = this.currentPage === this.totalPages;
+        }
+
+        // Update page numbers
+        if (this.pageNumbers) {
+            this.pageNumbers.innerHTML = '';
+            
+            // Always show first page, last page, current page, and one page before/after current
+            const pagesToShow = new Set([
+                1,
+                this.totalPages,
+                this.currentPage,
+                this.currentPage - 1,
+                this.currentPage + 1
+            ].filter(p => p >= 1 && p <= this.totalPages));
+
+            const sortedPages = Array.from(pagesToShow).sort((a, b) => a - b);
+
+            sortedPages.forEach((pageNum, index) => {
+                // Add ellipsis if there's a gap
+                if (index > 0 && pageNum - sortedPages[index - 1] > 1) {
+                    const ellipsis = document.createElement('span');
+                    ellipsis.className = 'page-ellipsis';
+                    ellipsis.textContent = '...';
+                    this.pageNumbers.appendChild(ellipsis);
+                }
+
+                const button = document.createElement('button');
+                button.className = `page-number ${pageNum === this.currentPage ? 'active' : ''}`;
+                button.textContent = pageNum;
+                button.onclick = () => {
+                    this.currentPage = pageNum;
+                    this.loadImages();
+                };
+                this.pageNumbers.appendChild(button);
+            });
+        }
+    }
+
+    renderImages(images) {
+        if (!this.imageGrid) return;
+
+        // Clear grid
+        this.imageGrid.innerHTML = '';
+
+        // Show no results message if needed
+        if (images.length === 0) {
+            this.imageGrid.innerHTML = '<div class="no-results">No images found</div>';
+            return;
+        }
+
+        // Render images
+        const fragment = document.createDocumentFragment();
+        images.forEach(imageData => {
+            const card = this.createImageCard(imageData);
+            if (card) fragment.appendChild(card);
+        });
+        this.imageGrid.appendChild(fragment);
+    }
+
+    createImageCard(imageData) {
+        const template = document.getElementById('gallery-card-template');
+        if (!template) return null;
+
+        const clone = template.content.cloneNode(true);
+        const card = clone.querySelector('.gallery__item');
         
-        this.applyFiltersAndSort();
-      }
-    });
+        // Set up image
+        const img = clone.querySelector('.item__image');
+        if (img) {
+            img.src = imageData.url;
+            img.alt = imageData.name;
+            
+            // Handle image loading
+            img.onload = () => {
+                img.classList.add('loaded');
+            };
+            img.onerror = () => {
+                img.classList.add('error');
+                console.error('Failed to load image:', imageData.url);
+            };
+        }
 
-    // Tag filter
-    this.tagFilter?.addEventListener('change', () => {
-      this.state.filters.tag = this.tagFilter.value;
-      this.applyFiltersAndSort();
-    });
+        // Set up name
+        const name = clone.querySelector('.item__name');
+        if (name) {
+            name.textContent = imageData.name;
+        }
 
-    // Sort
-    this.sortNameButton?.addEventListener('click', () => {
-      this.state.sort.order = this.state.sort.order === 'asc' ? 'desc' : 'asc';
-      this.sortNameButton.querySelector('i').className = 
-        `fas fa-sort-alpha-${this.state.sort.order === 'asc' ? 'down' : 'up'}`;
-      this.applyFiltersAndSort();
-    });
-  }
+        // Set up icons
+        const galleryIcon = clone.querySelector('.gallery-icon');
+        if (galleryIcon) {
+            galleryIcon.onclick = () => {
+                window.location.href = `/content-gallery.html?image-name=${encodeURIComponent(imageData.name)}`;
+            };
+        }
 
-  /**
-   * Load current page of images from server
-   */
-  async loadCurrentPage() {
-    try {
-      const { currentPage, batchSize } = this.state.pagination;
-      const response = await fetch(`/api/gallery/images?page=${currentPage}&limit=${batchSize}`);
-      
-      if (!response.ok) throw new Error('Failed to fetch images');
-      
-      const data = await response.json();
-      this.state.images = data.images;
-      this.state.pagination.totalPages = data.totalPages;
-      
-      this.applyFiltersAndSort();
-    } catch (error) {
-      console.error('Error loading images:', error);
+        const folderIcon = clone.querySelector('.folder-icon');
+        if (folderIcon) {
+            folderIcon.onclick = () => {
+                window.location.href = `/api/open-folder?path=${encodeURIComponent(imageData.path)}`;
+            };
+        }
+
+        return card;
     }
-  }
-
-  /**
-   * Apply all current filters and sort
-   */
-  applyFiltersAndSort() {
-    let filtered = [...this.state.images];
-
-    // Apply search filter
-    if (this.state.filters.search) {
-      filtered = filtered.filter(img => 
-        img.name.toLowerCase().includes(this.state.filters.search)
-      );
-    }
-
-    // Apply letter filter
-    if (this.state.filters.letter) {
-      filtered = filtered.filter(img => 
-        img.name.toLowerCase().startsWith(this.state.filters.letter.toLowerCase())
-      );
-    }
-
-    // Apply tag filter
-    if (this.state.filters.tag) {
-      filtered = filtered.filter(img => 
-        img.tags?.includes(this.state.filters.tag)
-      );
-    }
-
-    // Apply sort
-    filtered.sort((a, b) => {
-      const aVal = this.state.sort.by === 'name' ? a.name : a.modified;
-      const bVal = this.state.sort.by === 'name' ? b.name : b.modified;
-      
-      const comparison = aVal.localeCompare(bVal);
-      return this.state.sort.order === 'asc' ? comparison : -comparison;
-    });
-
-    this.state.filteredImages = filtered;
-    this.renderImages();
-  }
-
-  /**
-   * Render the current filtered and sorted images
-   */
-  renderImages() {
-    if (!this.imageGrid) return;
-    
-    // Clear existing content
-    this.imageGrid.innerHTML = '';
-    
-    // Show no results message if needed
-    if (this.state.filteredImages.length === 0) {
-      const noResults = document.createElement('div');
-      noResults.className = 'no-results';
-      noResults.textContent = 'No images found';
-      this.imageGrid.appendChild(noResults);
-      return;
-    }
-
-    // Create and append all images
-    const fragment = document.createDocumentFragment();
-
-    this.state.filteredImages.forEach(imageData => {
-      const card = this.createImageCard(imageData);
-      if (card) fragment.appendChild(card);
-    });
-
-    this.imageGrid.appendChild(fragment);
-  }
-
-  /**
-   * Create a single image card using template
-   */
-  createImageCard(imageData) {
-    const template = document.getElementById('gallery-card-template');
-    if (!template) return null;
-
-    const clone = template.content.cloneNode(true);
-    const card = clone.querySelector('.gallery__item');
-    
-    // Set up image
-    const img = clone.querySelector('.item__image');
-    if (img) {
-      img.src = imageData.url;
-      img.alt = imageData.name;
-    }
-
-    // Set up name
-    const name = clone.querySelector('.item__name');
-    if (name) {
-      name.textContent = imageData.name;
-    }
-
-    // Set up icons
-    const galleryIcon = clone.querySelector('.gallery-icon');
-    if (galleryIcon) {
-      console.log('Found gallery icon, adding click listener');
-      galleryIcon.addEventListener('click', (e) => {
-        console.log('Gallery icon clicked');
-        console.log('Image data:', imageData);
-        console.log('Target URL:', `/content-gallery.html?image-name=${encodeURIComponent(imageData.name)}`);
-        e.stopPropagation();
-        window.location.href = `/content-gallery.html?image-name=${encodeURIComponent(imageData.name)}`;
-      });
-    } else {
-      console.log('Gallery icon not found in template');
-    }
-
-    const folderIcon = clone.querySelector('.folder-icon');
-    if (folderIcon) {
-      console.log('Found folder icon, adding click listener');
-      folderIcon.addEventListener('click', (e) => {
-        console.log('Folder icon clicked');
-        e.stopPropagation();
-      });
-    } else {
-      console.log('Folder icon not found in template');
-    }
-
-    // Show image in modal when clicking the image itself
-    img?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.showModal(img.src);
-    });
-
-    return card;
-  }
-
-  /**
-   * Debounce helper function
-   */
-  debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
 }
 
 export default Gallery;

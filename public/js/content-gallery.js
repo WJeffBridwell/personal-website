@@ -11,7 +11,7 @@ class ContentGallery {
         this.loadingSpinner = document.querySelector('.gallery-loading');
         
         // Pagination settings
-        this.itemsPerPage = 20;
+        this.itemsPerPage = 24;
         this.currentPage = 1;
         
         // Data storage
