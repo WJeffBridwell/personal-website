@@ -3,6 +3,8 @@ class ContentGallery {
         // UI Elements
         this.galleryGrid = document.querySelector('.gallery-grid');
         this.modal = document.querySelector('#contentModal');
+        this.imageModal = document.getElementById('imageModal');
+        this.modalImage = document.getElementById('modalImage');
         this.searchInput = document.querySelector('.gallery-search');
         this.typeFilter = document.querySelector('#type-filter');
         this.sortFilter = document.querySelector('#sort-filter');
@@ -45,7 +47,7 @@ class ContentGallery {
                 const fullSrc = img.dataset.fullSrc;
                 const name = img.dataset.name;
                 if (fullSrc && name) {
-                    this.openImageModal(fullSrc, name);
+                    this.openImageModal(fullSrc);
                 }
             }
         });
@@ -477,103 +479,53 @@ class ContentGallery {
         `;
     }
 
-    openImageModal(imageSrc, caption) {
-        if (!this.modal) {
-            console.error('Modal element not found');
-            return;
-        }
+    openImageModal(imageSrc) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
         
-        console.log('[Gallery] Opening modal with image:', imageSrc);
+        // Set image source and show modal
+        modalImg.src = imageSrc;
+        modal.classList.add('show');
         
-        const modalContent = this.modal.querySelector('.modal__content');
-        if (!modalContent) {
-            console.error('Modal content element not found');
-            return;
-        }
-
-        // Get existing image and video elements
-        const img = modalContent.querySelector('img.content-player');
-        const video = modalContent.querySelector('video.content-player');
-        const captionDiv = modalContent.querySelector('.modal__caption');
+        // Prevent scrolling on the background
+        document.body.style.overflow = 'hidden';
         
-        console.log('[Gallery] Modal elements:', {
-            img: img ? 'found' : 'not found',
-            video: video ? 'found' : 'not found',
-            caption: captionDiv ? 'found' : 'not found'
-        });
-
-        if (!img || !video || !captionDiv) {
-            console.error('Required modal elements not found');
-            return;
-        }
-
-        // Hide video, show image
-        video.style.display = 'none';
-        img.style.display = 'block';
+        // Add to browser history so back button works
+        window.history.pushState({ modal: true }, '');
         
-        console.log('[Gallery] Image display style:', img.style.display);
-        console.log('[Gallery] Image current dimensions:', {
-            width: img.offsetWidth,
-            height: img.offsetHeight,
-            naturalWidth: img.naturalWidth,
-            naturalHeight: img.naturalHeight,
-            style: {
-                width: img.style.width,
-                height: img.style.height,
-                display: img.style.display,
-                visibility: img.style.visibility,
-                opacity: img.style.opacity
-            }
-        });
-        
-        // Set image source and caption
-        img.src = imageSrc;
-        img.alt = caption;
-        captionDiv.textContent = caption;
-
-        // Add load and error handlers
-        img.onload = () => {
-            console.log('[Gallery] Modal image loaded:', imageSrc, 
-                       'Dimensions:', img.naturalWidth, 'x', img.naturalHeight);
-            console.log('[Gallery] Image dimensions after load:', {
-                width: img.offsetWidth,
-                height: img.offsetHeight,
-                naturalWidth: img.naturalWidth,
-                naturalHeight: img.naturalHeight,
-                style: {
-                    width: img.style.width,
-                    height: img.style.height,
-                    display: img.style.display,
-                    visibility: img.style.visibility,
-                    opacity: img.style.opacity
-                }
-            });
-        };
-        img.onerror = (e) => {
-            console.error('[Gallery] Modal image failed to load:', imageSrc, e);
-            modalContent.innerHTML = '<div class="modal__error"><i class="fas fa-exclamation-circle"></i><p>Failed to load full-size image</p></div>';
+        // Event handlers
+        const closeModal = () => {
+            modal.classList.remove('show');
+            document.body.style.overflow = '';
+            modalImg.src = '';
         };
         
-        // Show modal
-        this.modal.style.display = 'block';
+        // Click anywhere to close
+        modal.onclick = closeModal;
         
-        // Add click handler to close modal when clicking outside the image
-        this.modal.onclick = (e) => {
-            if (e.target === this.modal) {
-                this.closeModal();
+        // ESC key to close
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', escHandler);
             }
         };
-
-        // Log modal and content dimensions
-        console.log('Modal dimensions:', this.modal.offsetWidth, 'x', this.modal.offsetHeight);
-        console.log('Modal content dimensions:', modalContent.offsetWidth, 'x', modalContent.offsetHeight);
+        document.addEventListener('keydown', escHandler);
+        
+        // Handle back button
+        const popStateHandler = () => {
+            closeModal();
+            window.removeEventListener('popstate', popStateHandler);
+        };
+        window.addEventListener('popstate', popStateHandler);
     }
 
     closeModal() {
-        if (this.modal) {
-            this.modal.style.display = 'none';
-            const player = this.modal.querySelector('video');
-            if (player) player.pause();
+        const modal = document.getElementById('imageModal');
+        if (modal) {
+            modal.classList.remove('show');
+            document.body.style.overflow = '';
+            document.getElementById('modalImage').src = '';
         }
     }
 
