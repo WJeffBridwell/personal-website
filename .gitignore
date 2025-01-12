@@ -43,6 +43,9 @@ public/js/content-gallery-js.old
 junk/
 *.old
 
+# Backup files
+*.bak
+
 # Build/Distribution
 dist/
 build/
