@@ -7,56 +7,6 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/css/content-gallery.css">
-    <style>
-        /* Modal styles only */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            overflow: auto;
-        }
-
-        .modal__content {
-            position: relative;
-            margin: auto;
-            padding: 0;
-            width: 90%;
-            max-width: 1200px;
-            height: 90vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal__close {
-            position: absolute;
-            right: 20px;
-            top: 10px;
-            color: #f1f1f1;
-            font-size: 40px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .content-player {
-            max-width: 100%;
-            max-height: 85vh;
-            object-fit: contain;
-        }
-
-        .modal__caption {
-            color: #f1f1f1;
-            margin-top: 15px;
-            text-align: center;
-            font-size: 1.2em;
-        }
-    </style>
 </head>
 <body>
     <nav>
@@ -81,19 +31,55 @@
 
     <div class="container">
         <main>
+            <!-- Gallery Template -->
+            <template id="gallery-item-template">
+                <article class="gallery-item">
+                    <div class="media-container">
+                        <!-- Only one of these will be present at a time -->
+                        <img class="media-image" loading="lazy">
+                        <video class="media-video" loading="lazy"></video>
+                        <i class="media-icon"></i>
+                    </div>
+                    <div class="item-metadata">
+                        <h3 class="item-title"></h3>
+                        <div class="item-details">
+                            <span class="item-size"></span>
+                            <div class="item-tags"></div>
+                        </div>
+                    </div>
+                </article>
+            </template>
+
+            <!-- Gallery Controls -->
+            <div class="gallery-controls">
+                <input type="search" class="gallery-search" placeholder="Search...">
+                <select class="gallery-filter" id="type-filter">
+                    <option value="">All Types</option>
+                    <option value="VR">VR</option>
+                    <option value="Video">Video</option>
+                    <option value="Images">Images</option>
+                    <option value="Archive">Archive</option>
+                    <option value="Folder">Folder</option>
+                </select>
+                <select class="gallery-filter" id="sort-filter">
+                    <option value="name-asc">Name (A-Z)</option>
+                    <option value="name-desc">Name (Z-A)</option>
+                    <option value="size-asc">Size (Small to Large)</option>
+                    <option value="size-desc">Size (Large to Small)</option>
+                </select>
+            </div>
+
             <!-- Gallery Grid -->
-            <div id="gallery-grid" class="o-gallery__grid"></div>
+            <div id="gallery-grid" class="gallery-grid"></div>
+
+            <!-- Pagination -->
+            <nav class="gallery-pagination" id="pagination"></nav>
         </main>
     </div>
 
-    <footer>
-        <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
-    </footer>
-    </div>
-
-    <!-- Content Modal -->
+    <!-- Modal -->
     <div id="contentModal" class="modal">
-        <button class="modal__close close-button">&times;</button>
+        <button class="modal__close">&times;</button>
         <div class="modal__content">
             <img class="content-player">
             <video class="content-player" controls></video>
@@ -101,20 +87,10 @@
         </div>
     </div>
 
-    <template id="gallery-item-template">
-        <div class="o-gallery__item">
-            <div class="m-card__media">
-                <!-- Media content will be inserted here -->
-            </div>
-            <div class="m-card__content">
-                <h3 class="a-card__title"></h3>
-            </div>
-        </div>
-    </template>
+    <footer>
+        <p>&copy; 2023 Jeff Bridwell. All Rights Reserved.</p>
+    </footer>
 
     <script src="/js/content-gallery.js"></script>
-    <script>
-        // Gallery initialization is handled in content-gallery.js
-    </script>
 </body>
 </html>
