@@ -55,10 +55,8 @@ export class Gallery {
 
         // Tag select
         this.tagSelect?.addEventListener('change', (e) => {
-            this.selectedTags = new Set(
-                Array.from(e.target.selectedOptions).map(option => option.value)
-                    .filter(value => value !== '') // Remove empty placeholder option
-            );
+            const selectedTag = e.target.value;
+            this.selectedTags = selectedTag ? new Set([selectedTag]) : new Set();
             this.currentPage = 1; // Reset to first page
             this.filterAndSortImages();
         });
@@ -127,15 +125,30 @@ export class Gallery {
             this.tagSelect.remove(1);
         }
 
-        // Add tag options
+        // Sort tags alphabetically
         const sortedTags = Array.from(this.availableTags).sort();
+        
+        // Add tag options with color indicators
         sortedTags.forEach(tag => {
             const option = document.createElement('option');
             option.value = tag;
-            // Add color indicator span
-            option.innerHTML = `<span class="tag-color-indicator tag-color-${tag.toLowerCase()}"></span>${tag}`;
+            const normalizedTag = tag.toLowerCase().replace(/[^a-z]/g, '');
+            option.innerHTML = `<span class="tag-color-${normalizedTag}"></span>${tag}`;
             this.tagSelect.appendChild(option);
         });
+
+        // Update select2 if it's being used
+        if (window.jQuery && window.jQuery.fn.select2) {
+            $(this.tagSelect).select2({
+                placeholder: 'Filter by tags...',
+                allowClear: true,
+                templateResult: (tag) => {
+                    if (!tag.id) return tag.text;
+                    const normalizedTag = tag.id.toLowerCase().replace(/[^a-z]/g, '');
+                    return $(`<span><span class="tag-color-indicator tag-color-${normalizedTag}"></span>${tag.text}</span>`);
+                }
+            });
+        }
     }
 
     initLetterFilter() {
@@ -181,10 +194,10 @@ export class Gallery {
             const matchesLetter = this.currentLetter === 'all' || 
                                 image.name.charAt(0).toUpperCase() === this.currentLetter;
             
-            // Tag filtering
+            // Tag filtering - now just check if the image has the single selected tag
             const matchesTags = this.selectedTags.size === 0 || 
                               (image.tags && 
-                               [...this.selectedTags].every(tag => image.tags.includes(tag)));
+                               image.tags.some(tag => this.selectedTags.has(tag)));
 
             return matchesSearch && matchesLetter && matchesTags;
         });
@@ -300,15 +313,16 @@ export class Gallery {
             tagsContainer.innerHTML = '';
         }
         
-        console.log('Rendering tags:', tags);
-        tags.forEach(tag => {
+        // Sort tags to ensure consistent order
+        const sortedTags = [...tags].sort();
+        
+        sortedTags.forEach(tag => {
             const tagEl = document.createElement('div');
-            // Convert tag to lowercase and remove any special characters
+            // Convert tag to lowercase and remove any special characters for class name
             const normalizedTag = tag.toLowerCase().replace(/[^a-z]/g, '');
             tagEl.className = `item__tag item__tag--${normalizedTag}`;
             tagEl.title = tag;  // Show original tag name on hover
             tagsContainer.appendChild(tagEl);
-            console.log('Added tag:', tag, 'with class:', tagEl.className);
         });
     }
 

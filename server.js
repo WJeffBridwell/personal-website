@@ -507,16 +507,31 @@ app.get('/proxy/image/content', async (req, res) => {
 // Function to get tags for a file using xattr
 async function getFileTags(filePath) {
     try {
-        console.log('Reading tags for:', filePath);
-        const { stdout } = await execPromise(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -- -`);
-        console.log('Raw tag output:', stdout);
-        if (stdout.trim()) {
-            const tags = JSON.parse(stdout);
-            console.log('Parsed tags:', tags);
-            // Remove the color suffix that macOS adds (e.g., "tag\n6")
-            return tags.map(tag => tag.split('\n')[0]);
-        }
-        return [];
+        // Get hex output and convert to JSON
+        const hexOutput = await new Promise((resolve, reject) => {
+            exec(`xattr -px com.apple.metadata:_kMDItemUserTags "${filePath}"`, (error, stdout, stderr) => {
+                if (error || stderr) {
+                    reject(error || new Error(stderr));
+                    return;
+                }
+                resolve(stdout);
+            });
+        });
+
+        // Convert hex to binary plist and then to JSON
+        const jsonOutput = await new Promise((resolve, reject) => {
+            exec(`echo "${hexOutput.trim()}" | xxd -r -p > /tmp/tags.plist && plutil -convert json -o - /tmp/tags.plist`, (error, stdout, stderr) => {
+                if (error || stderr) {
+                    reject(error || new Error(stderr));
+                    return;
+                }
+                resolve(stdout);
+            });
+        });
+
+        // Parse JSON and clean up tags
+        const tags = JSON.parse(jsonOutput);
+        return tags.map(tag => tag.replace(/\n\d+$/, '').toLowerCase().trim());
     } catch (error) {
         console.log(`No tags found for ${filePath}:`, error.message);
         return [];

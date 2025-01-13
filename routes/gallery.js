@@ -199,6 +199,36 @@ router.get('/test-images', async (req, res) => {
     }
 });
 
+// Test endpoint to test getFinderTags directly
+router.get('/test-tags/:filename', async (req, res) => {
+    const filename = req.params.filename;
+    const testPath = path.join(IMAGE_DIRECTORY, filename);
+    console.log('Testing getFinderTags for:', testPath);
+    const tags = await getFinderTags(testPath);
+    res.json({ path: testPath, tags });
+});
+
+// Test single file tags
+router.get('/test-single', async (req, res) => {
+    const testFile = '/Volumes/VideosNew/Models/aaliyah-hadid.jpeg';
+    const tags = await getFinderTags(testFile);
+    res.json({ file: testFile, tags });
+});
+
+// Test getFinderTags directly
+router.get('/testtags', async (req, res) => {
+    const tags = await getFinderTags('/Volumes/VideosNew/Models/aaliyah-hadid.jpeg');
+    res.json(tags);
+});
+
+// Test getFinderTags with path argument
+router.get('/testtags/:filepath(*)', async (req, res) => {
+    const filepath = '/' + req.params.filepath;
+    console.log('Testing path:', filepath);
+    const tags = await getFinderTags(filepath);
+    res.json(tags);
+});
+
 /**
  * Serve the main gallery page
  * @route GET /gallery
@@ -350,26 +380,44 @@ async function warmupCache(files) {
 // Helper function to get macOS Finder color tags
 async function getFinderTags(filePath) {
     return new Promise((resolve) => {
-        exec(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -`, (error, stdout) => {
-            if (error || !stdout) {
+        console.log('DEBUG: Starting getFinderTags for:', filePath);
+        // Get hex output and convert
+        exec(`xattr -px com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p > /tmp/tags.plist && plutil -convert json -o - /tmp/tags.plist`, (error, stdout, stderr) => {
+            if (error || stderr || !stdout) {
+                console.log('DEBUG: conversion error:', JSON.stringify({
+                    error: error ? {
+                        message: error.message,
+                        code: error.code,
+                        cmd: error.cmd
+                    } : null,
+                    stderr,
+                    stdout
+                }, null, 2));
                 resolve([]);
                 return;
             }
+            console.log('DEBUG: json output:', stdout);
+
             try {
                 const tags = JSON.parse(stdout);
-                // Convert Finder color tags to our format
                 const colorTags = tags.map(tag => {
-                    // Remove the '\n6' suffix that Finder adds for color tags
-                    const cleanTag = tag.replace(/\n6$/, '').toLowerCase();
-                    return cleanTag;
+                    // Remove newlines and numbers that macOS adds
+                    return tag.replace(/\n\d+$/, '').toLowerCase().trim();
                 });
+                console.log('DEBUG: final tags:', colorTags);
                 resolve(colorTags);
             } catch (e) {
+                console.log('DEBUG: JSON parse error:', e.message);
                 resolve([]);
             }
         });
     });
 }
+
+// Test the function directly
+getFinderTags('/Volumes/VideosNew/Models/aaliyah-hadid.jpeg').then(tags => {
+    console.log('TEST RESULT - Tags for aaliyah-hadid.jpeg:', tags);
+});
 
 // Serve images with tags
 router.get('/images', async (req, res) => {
@@ -381,21 +429,23 @@ router.get('/images', async (req, res) => {
         logGallery('Images List', 'Request received', null, { page, limit, sort, search, letter });
 
         // Get all image files from the directory
-        const files = fs.readdirSync(IMAGE_DIRECTORY)
-            .filter(file => isImageFile(file))
-            .map(file => {
-                const filePath = path.join(IMAGE_DIRECTORY, file);
-                const stats = fs.statSync(filePath);
-                const tags = getFinderTags(filePath);
-                
-                return {
-                    name: file,
-                    path: `/api/gallery/proxy-image/${encodeURIComponent(file)}`, // Use proxy endpoint
-                    size: stats.size,
-                    modified: stats.mtime,
-                    tags: tags
-                };
-            });
+        const files = await Promise.all(
+            fs.readdirSync(IMAGE_DIRECTORY)
+                .filter(file => isImageFile(file))
+                .map(async file => {
+                    const filePath = path.join(IMAGE_DIRECTORY, file);
+                    const stats = fs.statSync(filePath);
+                    const tags = await getFinderTags(filePath);
+                    
+                    return {
+                        name: file,
+                        path: `/api/gallery/proxy-image/${encodeURIComponent(file)}`, // Use proxy endpoint
+                        size: stats.size,
+                        modified: stats.mtime,
+                        tags: tags
+                    };
+                })
+        );
 
         // Apply letter filter if specified
         let filteredFiles = files;
