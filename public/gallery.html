@@ -32,16 +32,22 @@
     <div class="container">
         <main class="main">
             <section class="gallery">
-                <div class="header-band">
-                    <h2>Collections</h2>
-                    <div class="gallery-controls">
+                <div class="gallery-controls">
+                    <div class="gallery-controls__left">
                         <input type="text" id="searchInput" placeholder="Search images..." class="search-input">
+                        <select id="tagSelect" class="tag-select" multiple>
+                            <option value="">Filter by tags...</option>
+                        </select>
                         <select id="sortSelect" class="sort-select">
                             <option value="name-asc">Name (A-Z)</option>
                             <option value="name-desc">Name (Z-A)</option>
                             <option value="date-asc">Date (Oldest)</option>
                             <option value="date-desc">Date (Newest)</option>
                         </select>
+                    </div>
+                    <div class="gallery-controls__filter" id="letterFilter">
+                        <button class="letter-filter__btn active" data-letter="all">All</button>
+                        <!-- A-Z buttons will be added dynamically -->
                     </div>
                 </div>
 
@@ -85,11 +91,7 @@
             const galleryElement = document.querySelector('.gallery');
             if (galleryElement) {
                 console.log('Creating gallery instance...');
-                const gallery = new Gallery(galleryElement);
-                console.log('Gallery instance created, loading images...');
-                gallery.loadImages();
-            } else {
-                console.error('Gallery element not found');
+                new Gallery(galleryElement);
             }
         });
     </script>

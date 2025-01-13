@@ -7,27 +7,165 @@ import fetch from 'node-fetch';
 const app = express();
 const port = 8082;
 
-// Enable CORS
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    next();
-});
+// Create routers
+const apiRouter = express.Router();
+const videoRouter = express.Router();
 
+// Enable CORS - do this before defining routes
 app.use(cors({
     origin: '*',
-    methods: ['GET', 'HEAD'],
-    allowedHeaders: ['Range', 'Accept', 'Content-Type']
+    methods: ['GET', 'HEAD', 'OPTIONS'],
+    allowedHeaders: ['Range', 'Accept', 'Content-Type', 'Origin', 'X-Requested-With']
 }));
+
+// Parse JSON and URL-encoded bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Test endpoint
+app.get('/test', (req, res) => {
+    res.status(200).json({ 
+        message: 'Test endpoint working',
+        routes: app._router.stack
+            .filter(r => r.route || (r.name === 'router'))
+            .map(r => {
+                if (r.route) {
+                    return {
+                        path: r.route.path,
+                        methods: Object.keys(r.route.methods)
+                    };
+                }
+                return {
+                    name: r.name,
+                    regexp: r.regexp.toString()
+                };
+            })
+    });
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-// Test endpoint to check file stats
-app.get('/videos/test', (req, res) => {
+// Image endpoints
+apiRouter.get('/images/:imageName', async (req, res) => {
+    console.log('\n=== Image Request Start ===');
+    console.log('Request params:', req.params);
+    console.log('Request query:', req.query);
+    console.log('Request headers:', req.headers);
+    
+    try {
+        const imageName = decodeURIComponent(req.params.imageName);
+        const imagePath = path.join('/Volumes/VideosNew/Models', imageName);
+        
+        console.log('Decoded image name:', imageName);
+        console.log('Full image path:', imagePath);
+        
+        // Check if file exists
+        if (!fs.existsSync(imagePath)) {
+            console.error('Image not found:', imagePath);
+            return res.status(404).json({ 
+                error: 'Image not found',
+                path: imagePath,
+                name: imageName
+            });
+        }
+        
+        // Check file permissions
+        try {
+            await fs.promises.access(imagePath, fs.constants.R_OK);
+            console.log('File is readable');
+        } catch (accessError) {
+            console.error('File access error:', accessError);
+            return res.status(403).json({ 
+                error: 'Cannot read file',
+                path: imagePath,
+                name: imageName,
+                details: accessError.message
+            });
+        }
+        
+        // Get file stats
+        const stat = await fs.promises.stat(imagePath);
+        console.log('File stats:', {
+            size: stat.size,
+            mode: stat.mode,
+            accessTime: stat.atime,
+            modifyTime: stat.mtime,
+            isFile: stat.isFile(),
+            isDirectory: stat.isDirectory()
+        });
+        
+        if (!stat.isFile()) {
+            console.error('Not a file:', imagePath);
+            return res.status(400).json({ 
+                error: 'Not a file',
+                path: imagePath,
+                name: imageName
+            });
+        }
+        
+        // Set content type based on file extension
+        const ext = path.extname(imageName).toLowerCase();
+        const contentType = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp'
+        }[ext] || 'application/octet-stream';
+        
+        console.log('Content type:', contentType);
+        
+        // Set headers
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', stat.size);
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+        res.setHeader('Last-Modified', stat.mtime.toUTCString());
+        
+        // Stream the file
+        console.log('Creating read stream...');
+        const fileStream = fs.createReadStream(imagePath);
+        
+        fileStream.on('error', (error) => {
+            console.error('Stream error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ 
+                    error: 'Error streaming image',
+                    details: error.message
+                });
+            }
+            res.end();
+        });
+        
+        fileStream.on('open', () => {
+            console.log('Stream opened successfully');
+        });
+        
+        fileStream.pipe(res);
+        
+        // Log when streaming ends
+        res.on('finish', () => {
+            console.log('Successfully served image:', imageName);
+            console.log('=== Image Request End ===\n');
+        });
+    } catch (error) {
+        console.error('Error serving image:', error);
+        console.error('Stack trace:', error.stack);
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                error: 'Error serving image',
+                details: error.message
+            });
+        }
+        res.end();
+        console.log('=== Image Request End (with error) ===\n');
+    }
+});
+
+// Video endpoints
+videoRouter.get('/test', (req, res) => {
     try {
         const videoPath = decodeURIComponent(req.query.path);
         console.log('[Test] Checking video path:', videoPath);
@@ -76,8 +214,7 @@ app.get('/videos/test', (req, res) => {
     }
 });
 
-// Direct video streaming endpoint
-app.get('/videos/direct', (req, res) => {
+videoRouter.get('/direct', (req, res) => {
     try {
         console.log('\n[Video Server] ========== Request Start ==========');
         console.log('[Video Server] Raw URL:', req.url);
@@ -199,8 +336,7 @@ app.get('/videos/direct', (req, res) => {
     }
 });
 
-// API-based video streaming (catch-all route moved to end)
-app.get('/videos/:filename', async (req, res) => {
+videoRouter.get('/:filename', async (req, res) => {
     try {
         // Extract the filename from the request
         const filename = req.params.filename;
@@ -313,6 +449,10 @@ app.get('/videos/:filename', async (req, res) => {
         res.status(500).send('Error streaming video: ' + error.message);
     }
 });
+
+// Mount routers
+app.use('/api', apiRouter);
+app.use('/videos', videoRouter);
 
 // Start server
 app.listen(port, '0.0.0.0', () => {

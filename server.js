@@ -15,25 +15,24 @@
 
 import express from 'express';
 import path from 'path';
-import { promises as fsPromises } from 'fs';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import fs from 'fs';
+import fsPromises from 'fs/promises';
+import httpProxy from 'http-proxy';
+import { exec } from 'child_process';
+import util from 'util';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import compression from 'compression';
 import timeout from 'connect-timeout';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import fs from 'fs';
-import httpProxy from 'http-proxy';
 import fetch from 'node-fetch';
 import sharp from 'sharp';
+import galleryRouter from './routes/gallery.js';
 
-const execPromise = promisify(exec);
+const execPromise = util.promisify(exec);
+
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 // Create logs directory if it doesn't exist
 const logDirectory = path.join(__dirname, 'logs');
@@ -58,7 +57,7 @@ const port = process.env.PORT || 3001;  // Default to 3001 to avoid Windsurf con
 const server = createServer(app);
 
 // Initialize Socket.IO
-const io = new Server(server, {
+const io = new SocketIOServer(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
@@ -85,6 +84,9 @@ app.use((req, res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
+
+// Mount gallery router
+app.use('/gallery', galleryRouter);
 
 // Debug static file directory
 const publicPath = path.join(__dirname, 'public');
@@ -141,12 +143,6 @@ app.get('/gallery', (req, res) => {
     console.log('Gallery route hit, serving gallery.html');
     res.sendFile(path.join(__dirname, 'public/gallery.html'));
 });
-
-// Import routes
-import galleryRouter from './routes/gallery.js';
-
-// Use gallery router for gallery-specific endpoints (like images)
-app.use('/gallery', galleryRouter);
 
 /**
  * GET /api/search
@@ -508,6 +504,25 @@ app.get('/proxy/image/content', async (req, res) => {
     }
 });
 
+// Function to get tags for a file using xattr
+async function getFileTags(filePath) {
+    try {
+        console.log('Reading tags for:', filePath);
+        const { stdout } = await execPromise(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -- -`);
+        console.log('Raw tag output:', stdout);
+        if (stdout.trim()) {
+            const tags = JSON.parse(stdout);
+            console.log('Parsed tags:', tags);
+            // Remove the color suffix that macOS adds (e.g., "tag\n6")
+            return tags.map(tag => tag.split('\n')[0]);
+        }
+        return [];
+    } catch (error) {
+        console.log(`No tags found for ${filePath}:`, error.message);
+        return [];
+    }
+}
+
 // Cache for image listing
 let imageCache = null;
 let lastCacheUpdate = 0;
@@ -517,10 +532,6 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 app.get('/api/gallery/images', async (req, res) => {
     console.log('\n=== Gallery Images Request ===');
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 48; // 6 rows × 8 columns
-        const start = (page - 1) * limit;
-
         // Check cache first
         const now = Date.now();
         if (!imageCache || now - lastCacheUpdate > CACHE_TTL) {
@@ -532,36 +543,35 @@ app.get('/api/gallery/images', async (req, res) => {
                 return res.status(500).json({ error: 'Models directory not found' });
             }
 
-            // Read directory in chunks
+            // Read directory
             const files = await fsPromises.readdir(imagesDir);
             console.log(`Found ${files.length} total files`);
             
-            // Filter image files
-            imageCache = files
-                .filter(file => {
-                    const ext = path.extname(file).toLowerCase();
-                    return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
-                })
-                .map(file => ({
-                    name: file,
-                    url: `/api/gallery/image/${encodeURIComponent(file)}`,
-                    path: path.join(imagesDir, file)
-                }));
+            // Filter image files and get their tags
+            imageCache = await Promise.all(
+                files
+                    .filter(file => {
+                        const ext = path.extname(file).toLowerCase();
+                        return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+                    })
+                    .map(async file => {
+                        const filePath = path.join(imagesDir, file);
+                        const tags = await getFileTags(filePath);
+                        return {
+                            name: file,
+                            url: `/api/gallery/image/${encodeURIComponent(file)}`,
+                            path: filePath,
+                            tags: tags
+                        };
+                    })
+            );
 
             lastCacheUpdate = now;
             console.log(`Cached ${imageCache.length} images`);
         }
-
-        // Paginate from cache
-        const paginatedImages = imageCache.slice(start, start + limit);
         
-        console.log(`Sending page ${page} (${paginatedImages.length} images)`);
-        res.json({ 
-            images: paginatedImages,
-            total: imageCache.length,
-            page,
-            pages: Math.ceil(imageCache.length / limit)
-        });
+        console.log('Sending all images');
+        res.json({ images: imageCache });
     } catch (error) {
         console.error('Error reading images:', error);
         res.status(500).json({ error: 'Failed to read images' });
@@ -646,6 +656,6 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(port, '0.0.0.0', () => {
+server.listen(port, '0.0.0.0', () => {
     console.log(`Server running at http://0.0.0.0:${port}`);
 });

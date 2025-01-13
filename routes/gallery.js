@@ -10,22 +10,24 @@ console.log('=====================================');
 
 // Import required dependencies for file system and routing
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { exec } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-import { promisify } from 'util';
+import { performance } from 'perf_hooks';
+import fetch from 'node-fetch';
 import compression from 'compression';
 import sharp from 'sharp';
 import crypto from 'crypto';
+import { promisify } from 'util';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const router = express.Router();
-const DEFAULT_LIMIT = 1000;  // Show 1000 images by default
-const MAX_LIMIT = 5000;      // Allow up to 5000 images per request
+const DEFAULT_LIMIT = 48;  // Show 48 images by default
+const MAX_LIMIT = 100;      // Allow up to 100 images per request
 const CHUNK_SIZE = 5000;   // Process in larger chunks for better performance
 const THUMBNAIL_WIDTH = 300;  // Width for thumbnails
 const PREVIEW_WIDTH = 800;   // Width for preview images
@@ -171,6 +173,32 @@ router.get('/test-directory', (req, res) => {
     }
 });
 
+// Test route to check first few images
+router.get('/test-images', async (req, res) => {
+    try {
+        const fileNames = fs.readdirSync(IMAGE_DIRECTORY).filter(isImageFile).slice(0, 5);
+        const filesWithTags = await Promise.all(
+            fileNames.map(async filename => {
+                const filePath = path.join(IMAGE_DIRECTORY, filename);
+                const stats = fs.statSync(filePath);
+                const tags = await getFinderTags(filePath);
+                const imagePath = `http://localhost:8082/api/video/image/${encodeURIComponent(filename)}`;
+                return {
+                    name: filename,
+                    path: imagePath,
+                    size: stats.size,
+                    date: stats.mtime,
+                    tags: tags
+                };
+            })
+        );
+        res.json({ images: filesWithTags });
+    } catch (error) {
+        console.error('Test route error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 /**
  * Serve the main gallery page
  * @route GET /gallery
@@ -208,53 +236,41 @@ router.get('/', async (req, res) => {
 
 // Update cache with chunked processing
 async function updateCache(directoryPath) {
-    if (contentCache.updating) {
-        logGallery('Cache Update', 'Already in progress', null, { message: 'Cache update already in progress' });
-        return;
-    }
+    if (contentCache.updating) return;
+    contentCache.updating = true;
 
     try {
-        contentCache.updating = true;
-        logGallery('Cache Update', 'Started', null, { message: 'Starting cache update...' });
-
         const files = await fs.promises.readdir(directoryPath, { withFileTypes: true });
-        const imageFiles = files.filter(file => 
-            file.isFile() && /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name)
-        );
+        const processedFiles = new Set();
 
-        // Process files in chunks
-        for (let i = 0; i < imageFiles.length; i += CHUNK_SIZE) {
-            const chunk = imageFiles.slice(i, i + CHUNK_SIZE);
-            await Promise.all(chunk.map(async (file) => {
+        for (const file of files) {
+            if (processedFiles.has(file.name)) continue;
+            processedFiles.add(file.name);
+
+            if (file.isFile() && isImageFile(file.name)) {
                 try {
                     const filePath = path.join(directoryPath, file.name);
                     const stats = await fs.promises.stat(filePath);
                     
                     contentCache.files.set(file.name, {
                         name: file.name,
-                        path: filePath,
+                        path: `/api/gallery/image/${encodeURIComponent(file.name)}`,
                         size: stats.size,
-                        modified: stats.mtime,
+                        mtime: stats.mtime,
                         type: path.extname(file.name).slice(1)
                     });
                 } catch (error) {
-                    logGallery('Cache Update', 'Error', null, { error: error.message, file: file.name });
+                    logGallery('Cache Update', 'Error', null, {
+                        file: file.name,
+                        error: error.message
+                    });
                 }
-            }));
-            
-            // Allow other operations between chunks
-            await new Promise(resolve => setTimeout(resolve, 0));
+            }
         }
 
         contentCache.lastUpdate = Date.now();
-        logGallery('Cache Update', 'Complete', null, { message: `Cache updated with ${contentCache.files.size} files` });
-        
-        // Warm up the thumbnail cache after file index is complete
-        await warmupCache(Array.from(contentCache.files.values()));
-        
     } catch (error) {
         logGallery('Cache Update', 'Error', null, { error: error.message });
-        throw error;
     } finally {
         contentCache.updating = false;
     }
@@ -317,7 +333,7 @@ async function warmupCache(files) {
 
     const diff = process.hrtime(startTime);
     const duration = (diff[0] * 1e3 + diff[1] * 1e-6).toFixed(2);
-    
+
     logGallery('Cache Warmup', 'Complete', parseFloat(duration), {
         processed,
         errors: errors.length,
@@ -331,86 +347,130 @@ async function warmupCache(files) {
     }
 }
 
-// Ensure cache warmup runs on startup
-async function initializeCache() {
-    logGallery('Cache Initialize', 'Started', null, {
-        message: 'Starting cache initialization and warmup'
+// Helper function to get macOS Finder color tags
+async function getFinderTags(filePath) {
+    return new Promise((resolve) => {
+        exec(`xattr -p com.apple.metadata:_kMDItemUserTags "${filePath}" | xxd -r -p | plutil -convert json -o - -`, (error, stdout) => {
+            if (error || !stdout) {
+                resolve([]);
+                return;
+            }
+            try {
+                const tags = JSON.parse(stdout);
+                // Convert Finder color tags to our format
+                const colorTags = tags.map(tag => {
+                    // Remove the '\n6' suffix that Finder adds for color tags
+                    const cleanTag = tag.replace(/\n6$/, '').toLowerCase();
+                    return cleanTag;
+                });
+                resolve(colorTags);
+            } catch (e) {
+                resolve([]);
+            }
+        });
     });
+}
+
+// Serve images with tags
+router.get('/images', async (req, res) => {
+    console.log('==== /images endpoint hit ====');
+    const startTime = performance.now();
     
     try {
-        // Update file metadata cache with files from image directory
-        await updateCache(IMAGE_DIRECTORY);
-        
-        logGallery('Cache Initialize', 'Complete', null, {
-            files: contentCache.files.size,
-            thumbnails: contentCache.thumbnails.size
-        });
-    } catch (error) {
-        logGallery('Cache Initialize', 'Error', null, {
-            error: error.message
-        });
-    }
-}
+        const { page = 1, limit = DEFAULT_LIMIT, sort = 'name-asc', search = '', letter = 'all' } = req.query;
+        logGallery('Images List', 'Request received', null, { page, limit, sort, search, letter });
 
-// Call on startup
-initializeCache();
+        // Get all image files from the directory
+        const files = fs.readdirSync(IMAGE_DIRECTORY)
+            .filter(file => isImageFile(file))
+            .map(file => {
+                const filePath = path.join(IMAGE_DIRECTORY, file);
+                const stats = fs.statSync(filePath);
+                const tags = getFinderTags(filePath);
+                
+                return {
+                    name: file,
+                    path: `/api/gallery/proxy-image/${encodeURIComponent(file)}`, // Use proxy endpoint
+                    size: stats.size,
+                    modified: stats.mtime,
+                    tags: tags
+                };
+            });
 
-// Get all available first letters
-router.get('/letters', async (req, res) => {
-    try {
-        // Get all unique first letters from existing cache
-        const letters = new Set();
-        for (const [filename] of contentCache.files) {
-            if (filename) {
-                const firstLetter = filename.charAt(0).toUpperCase();
-                if (/[A-Z]/.test(firstLetter)) {
-                    letters.add(firstLetter);
-                }
+        // Apply letter filter if specified
+        let filteredFiles = files;
+        if (letter !== 'all') {
+            filteredFiles = files.filter(file => 
+                file.name.toLowerCase().startsWith(letter.toLowerCase())
+            );
+        }
+
+        // Apply search filter if specified
+        if (search) {
+            const searchLower = search.toLowerCase();
+            filteredFiles = filteredFiles.filter(file =>
+                file.name.toLowerCase().includes(searchLower) ||
+                (file.tags && file.tags.some(tag => tag.toLowerCase().includes(searchLower)))
+            );
+        }
+
+        // Sort the files
+        const [sortField, sortOrder] = sort.split('-');
+        filteredFiles.sort((a, b) => {
+            let comparison = 0;
+            if (sortField === 'name') {
+                comparison = a.name.localeCompare(b.name);
+            } else if (sortField === 'date') {
+                comparison = a.modified - b.modified;
+            } else if (sortField === 'size') {
+                comparison = a.size - b.size;
             }
-        }
+            return sortOrder === 'desc' ? -comparison : comparison;
+        });
+
+        // Get all unique tags
+        const allTags = new Set();
+        files.forEach(file => {
+            if (file.tags) {
+                file.tags.forEach(tag => allTags.add(tag));
+            }
+        });
+
+        // Calculate pagination
+        const totalFiles = filteredFiles.length;
+        const totalPages = Math.ceil(totalFiles / limit);
+        const currentPage = Math.min(Math.max(1, parseInt(page)), totalPages);
+        const startIndex = (currentPage - 1) * limit;
+        const endIndex = Math.min(startIndex + limit, totalFiles);
         
-        // Convert to sorted array
-        const sortedLetters = Array.from(letters).sort();
+        // Get the files for the current page
+        const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+
+        const endTime = performance.now();
+        const duration = Math.round(endTime - startTime);
         
+        logGallery('Images List', 'Success', duration, { 
+            totalFiles,
+            filteredFiles: filteredFiles.length,
+            returnedFiles: paginatedFiles.length
+        });
+
         res.json({
-            letters: sortedLetters,
-            total: contentCache.files.size
+            images: paginatedFiles,
+            pagination: {
+                total: totalFiles,
+                page: currentPage,
+                totalPages,
+                hasMore: currentPage < totalPages
+            },
+            tags: Array.from(allTags)
         });
         
     } catch (error) {
-        logGallery('Letters Route', 'Error', null, { error: error.message });
-        res.status(500).json({ error: 'Failed to get letters' });
+        logGallery('Images List', 'Error', null, { error: error.message });
+        res.status(500).json({ error: 'Failed to get images' });
     }
 });
-
-// Get all available tags
-router.get('/tags', async (req, res) => {
-    try {
-        // Get all unique tags from existing cache
-        const tags = new Set();
-        for (const [filename, metadata] of contentCache.files.entries()) {
-            const fileTags = generateTags(filename);
-            fileTags.forEach(tag => tags.add(tag));
-        }
-        
-        // Convert to sorted array
-        const sortedTags = Array.from(tags).sort();
-        
-        res.json({
-            tags: sortedTags,
-            total: sortedTags.length
-        });
-        
-    } catch (error) {
-        logGallery('Tags Route', 'Error', null, { error: error.message });
-        res.status(500).json({ error: 'Failed to get tags', details: error.message });
-    }
-});
-
-// Helper function to check if a file is an image
-function isImageFile(filename) {
-    return /\.(jpg|jpeg|png|gif|webp)$/i.test(filename);
-}
 
 // Initial endpoint for gallery data
 router.get('/initial', async (req, res) => {
@@ -455,157 +515,138 @@ router.get('/initial', async (req, res) => {
     }
 });
 
-// Serve image files
+// Serve individual images
 router.get('/image/:imageName', async (req, res) => {
     const imageName = decodeURIComponent(req.params.imageName);
-    const thumbnail = req.query.thumbnail === 'true';
+    logGallery('Image Serve', 'Request received', null, { imageName });
     
     try {
         const filePath = path.join(IMAGE_DIRECTORY, imageName);
         
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'Image not found' });
+            logGallery('Image Serve', 'Error', null, { error: 'File not found', filePath });
+            res.status(404).json({ error: 'File not found' });
+            return;
         }
-        
-        // Set caching headers
-        res.setHeader('Cache-Control', `public, max-age=${CACHE_DURATION}`);
-        
-        if (thumbnail) {
-            // Generate and serve thumbnail
-            const thumbnailBuffer = await sharp(filePath)
-                .resize(THUMBNAIL_SIZE, THUMBNAIL_SIZE, {
-                    fit: 'cover',
-                    position: 'center'
-                })
-                .webp({ quality: 80 })
-                .toBuffer();
-                
-            res.type('image/jpeg').send(thumbnailBuffer);
-        } else {
-            // Serve original image
-            res.sendFile(filePath);
-        }
+
+        // Set content type based on file extension
+        const ext = path.extname(imageName).toLowerCase();
+        const contentType = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.webp': 'image/webp',
+            '.gif': 'image/gif'
+        }[ext] || 'image/jpeg';
+
+        // Set headers
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+
+        // Stream the file
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+
     } catch (error) {
-        console.error('Error serving image:', error);
+        logGallery('Image Serve', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Failed to serve image' });
     }
 });
 
-// Helper function to generate tags from filename
-function generateTags(filename) {
-    const tags = new Set();
+// Proxy endpoint for images
+router.get('/proxy-image/:imageName', async (req, res) => {
+    const imageName = decodeURIComponent(req.params.imageName);
+    logGallery('Proxy Image', 'Request received', null, { imageName });
     
-    // Extract potential tags from filename
-    const parts = filename.toLowerCase().split(/[-_\s]/);
-    
-    // Add tags based on file characteristics
-    if (/\.(jpg|jpeg)$/i.test(filename)) tags.add('jpeg');
-    if (/\.png$/i.test(filename)) tags.add('png');
-    if (/\.gif$/i.test(filename)) tags.add('gif');
-    if (/\.(webp)$/i.test(filename)) tags.add('webp');
-    
-    // Add tags based on common patterns
-    if (/\d{4}/.test(filename)) tags.add('dated');
-    if (/^IMG_/.test(filename)) tags.add('camera');
-    if (/^DSC/.test(filename)) tags.add('digital');
-    if (/screenshot/i.test(filename)) tags.add('screenshot');
-    if (/edited|processed/i.test(filename)) tags.add('edited');
-    
-    // Add tags based on filename parts
-    parts.forEach(part => {
-        if (part.length > 2) {  // Only add parts longer than 2 characters
-            if (/^[0-9]+$/.test(part)) {  // If it's a number
-                if (part.length === 4) tags.add('year');
-            } else if (/^[a-z]+$/.test(part)) {  // If it's a word
-                tags.add(part);
-            }
+    try {
+        const filePath = path.join(IMAGE_DIRECTORY, imageName);
+        
+        // Check if file exists
+        if (!fs.existsSync(filePath)) {
+            logGallery('Proxy Image', 'Error', null, { error: 'File not found', filePath });
+            return res.status(404).json({ error: 'Image not found' });
         }
-    });
-    
-    return Array.from(tags);
-}
 
-// Cache helpers
-function checkThumbnailCache(imageName, size) {
-    const key = `${imageName}_${size}`;
-    logGallery('Cache Check', 'Debug', null, {
-        operation: 'check',
-        key,
-        cacheSize: contentCache.thumbnails.size
-    });
+        // Get file stats for cache headers
+        const stat = fs.statSync(filePath);
+        const etag = await generateETag(filePath, stat);
+
+        // Check if client has a cached version
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end();
+        }
+
+        // Set appropriate content type
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp'
+        }[ext] || 'application/octet-stream';
+
+        // Set response headers
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', `public, max-age=${CACHE_DURATION}`);
+        res.setHeader('ETag', etag);
+
+        // Stream the file
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(res);
+        
+        logGallery('Proxy Image', 'Success', null, { imageName });
+    } catch (error) {
+        logGallery('Proxy Image', 'Error', null, { error: error.message });
+        res.status(500).json({ error: 'Failed to serve image' });
+    }
+});
+
+// Proxy endpoint for images
+router.get('/proxy-image/:imageName', async (req, res) => {
+    const imageName = decodeURIComponent(req.params.imageName);
+    const videoServerUrl = `http://localhost:8082/api/images/${encodeURIComponent(imageName)}`;
     
-    const entry = contentCache.thumbnails.get(key);
+    console.log('=== Image Proxy Request ===');
+    console.log('Image name:', imageName);
+    console.log('Video server URL:', videoServerUrl);
     
-    if (entry) {
-        entry.hits++;
-        entry.lastAccessed = Date.now();
-        logGallery('Cache Check', 'Hit', null, {
-            key,
-            hits: entry.hits,
-            size: entry.size
+    try {
+        console.log('Fetching from video server...');
+        const response = await fetch(videoServerUrl);
+        
+        if (!response.ok) {
+            console.error('Video server returned error:', response.status, response.statusText);
+            throw new Error(`Failed to fetch image from video server: ${response.status}`);
+        }
+        
+        console.log('Video server response:', {
+            status: response.status,
+            type: response.headers.get('content-type'),
+            length: response.headers.get('content-length')
         });
-        return entry.buffer;
+        
+        // Forward the content type
+        res.set('Content-Type', response.headers.get('content-type'));
+        res.set('Content-Length', response.headers.get('content-length'));
+        
+        // Pipe the response to our response
+        response.body.pipe(res);
+        
+        // Log when the response is finished
+        res.on('finish', () => {
+            console.log('Successfully proxied image:', imageName);
+        });
+    } catch (error) {
+        console.error('Error proxying image:', error);
+        res.status(500).json({ error: 'Failed to proxy image' });
     }
-    logGallery('Cache Check', 'Miss', null, { key });
-    return null;
-}
+});
 
-function storeThumbnail(imageName, size, buffer) {
-    const key = `${imageName}_${size}`;
-    logGallery('Cache Store', 'Debug', null, {
-        operation: 'store',
-        key,
-        bufferSize: buffer.length,
-        currentCacheSize: contentCache.thumbnails.size
-    });
-    
-    const entry = {
-        buffer,
-        size: buffer.length,
-        created: Date.now(),
-        lastAccessed: Date.now(),
-        etag: crypto.createHash('md5').update(buffer).digest('hex'),
-        hits: 1
-    };
-    
-    contentCache.thumbnails.set(key, entry);
-    logGallery('Cache Store', 'Complete', null, {
-        key,
-        newCacheSize: contentCache.thumbnails.size,
-        entrySize: entry.size,
-        totalMemoryMB: (Array.from(contentCache.thumbnails.values())
-            .reduce((sum, e) => sum + e.size, 0) / (1024 * 1024)).toFixed(2)
-    });
+// Helper function to check if a file is an image
+function isImageFile(filename) {
+    return /\.(jpg|jpeg|png|gif|webp)$/i.test(filename);
 }
-
-function getCacheStats() {
-    const stats = {
-        size: contentCache.thumbnails.size,
-        totalMemory: 0,
-        averageHits: 0,
-        hitsBySize: {
-            thumb: 0,
-            full: 0
-        }
-    };
-    
-    for (const [key, entry] of contentCache.thumbnails) {
-        stats.totalMemory += entry.size;
-        stats.averageHits += entry.hits;
-        stats.hitsBySize[key.endsWith('thumb') ? 'thumb' : 'full']++;
-    }
-    
-    if (contentCache.thumbnails.size > 0) {
-        stats.averageHits /= contentCache.thumbnails.size;
-    }
-    
-    return stats;
-}
-
-// Log cache stats every 5 minutes
-setInterval(() => {
-    logGallery('Cache Stats', 'Status', null, getCacheStats());
-}, 300000);
 
 // Image optimization middleware
 async function optimizeImage(req, res, next) {
@@ -1184,15 +1225,39 @@ end tell`;
 // Add route to trigger Finder search
 router.get('/finder-search/:filename', (req, res) => {
     const filename = req.params.filename;
-    const searchScript = `tell application "Finder"
-        activate
-        set searchText to "${filename}"
-        tell application "System Events"
-            keystroke "f" using {command down, shift down}
-            delay 0.5
-            keystroke searchText
-        end tell
-    end tell`;
+    const searchPrefix = filename.replace(/\.[^/.]+$/, "");
+    logGallery('Finder Search', 'Request received', null, { searchPrefix });
+    
+    const searchScript = `
+tell application "Finder"
+    activate
+    make new Finder window
+end tell
+delay 1
+tell application "System Events"
+    tell process "Finder"
+        -- Open Find dialog
+        click menu item "Find" of menu "File" of menu bar 1
+        delay 1
+        
+        -- Type search term (select all and replace any existing text)
+        keystroke "a" using command down
+        delay 0.2
+        keystroke "name:${searchPrefix.replace(/"/g, '\\"')}"
+        delay 0.5
+        
+        -- Navigate to and click "This Mac" button
+        key code 48 -- tab key
+        delay 0.2
+        key code 48
+        delay 0.2
+        key code 49 -- space key
+        delay 0.5
+        
+        -- Press return to execute search
+        key code 36 -- return key
+    end tell
+end tell`;
     
     exec(`osascript -e '${searchScript}'`, (error, stdout, stderr) => {
         if (error) {
