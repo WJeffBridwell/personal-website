@@ -309,12 +309,37 @@ export class Gallery {
         currentImages.forEach(image => {
             const item = document.createElement('div');
             item.className = 'gallery__item';
-            item.dataset.imageUrl = image.url;  // Use the API URL
+            item.dataset.imageUrl = image.url;
             item.dataset.imageName = image.name;
+
+            // Add icon wrappers
+            const galleryIconWrapper = document.createElement('div');
+            galleryIconWrapper.className = 'icon-wrapper gallery-icon-wrapper';
+            const galleryIcon = document.createElement('i');
+            galleryIcon.className = 'fas fa-image gallery-icon';
+            galleryIcon.title = 'View in Gallery';
+            galleryIconWrapper.appendChild(galleryIcon);
+            galleryIconWrapper.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering the modal
+                window.location.href = `content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
+            });
+            item.appendChild(galleryIconWrapper);
+
+            const folderIconWrapper = document.createElement('div');
+            folderIconWrapper.className = 'icon-wrapper folder-icon-wrapper';
+            const folderIcon = document.createElement('i');
+            folderIcon.className = 'fas fa-folder folder-icon';
+            folderIcon.title = 'Open in Finder';
+            folderIconWrapper.appendChild(folderIcon);
+            folderIconWrapper.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering the modal
+                fetch(`/gallery/finder-search/${encodeURIComponent(image.name)}`);
+            });
+            item.appendChild(folderIconWrapper);
 
             const img = document.createElement('img');
             img.className = 'item__image';
-            img.src = image.url;  // Use the API URL
+            img.src = image.url;
             img.alt = image.name;
             img.loading = 'lazy';
 
@@ -325,18 +350,19 @@ export class Gallery {
             name.className = 'item__name';
             name.textContent = image.name;
 
-            const tags = document.createElement('div');
-            tags.className = 'item__tags';
-            if (image.tags) {
+            // Only create tags container if there are tags
+            if (image.tags && image.tags.length > 0) {
+                const tags = document.createElement('div');
+                tags.className = 'item__tags';
                 image.tags.forEach(tag => {
                     const tagSpan = document.createElement('span');
                     tagSpan.className = `item__tag item__tag--${tag.toLowerCase()}`;
-                    tagSpan.textContent = tag;
+                    tagSpan.title = tag; // Show tag name on hover
                     tags.appendChild(tagSpan);
                 });
+                info.appendChild(tags);
             }
 
-            info.appendChild(tags);
             info.appendChild(name);
             item.appendChild(img);
             item.appendChild(info);
