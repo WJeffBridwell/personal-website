@@ -504,38 +504,33 @@ app.get('/proxy/image/content', async (req, res) => {
     }
 });
 
-// Function to get tags for a file using xattr
-async function getFileTags(filePath) {
-    try {
-        // Get hex output and convert to JSON
-        const hexOutput = await new Promise((resolve, reject) => {
-            exec(`xattr -px com.apple.metadata:_kMDItemUserTags "${filePath}"`, (error, stdout, stderr) => {
-                if (error || stderr) {
-                    reject(error || new Error(stderr));
-                    return;
-                }
-                resolve(stdout);
-            });
-        });
+// Load pre-generated tags file
+const tagMapPath = path.join(__dirname, 'data', 'image-tags.json');
+let imageTagMap = {};
 
-        // Convert hex to binary plist and then to JSON
-        const jsonOutput = await new Promise((resolve, reject) => {
-            exec(`echo "${hexOutput.trim()}" | xxd -r -p > /tmp/tags.plist && plutil -convert json -o - /tmp/tags.plist`, (error, stdout, stderr) => {
-                if (error || stderr) {
-                    reject(error || new Error(stderr));
-                    return;
-                }
-                resolve(stdout);
-            });
-        });
+try {
+    const tagData = fs.readFileSync(tagMapPath, 'utf8');
+    imageTagMap = JSON.parse(tagData);
+    console.log('Loaded image tags from:', tagMapPath);
+    console.log('Number of images with tags:', Object.keys(imageTagMap).length);
+} catch (error) {
+    console.error('Error loading image tags:', error);
+}
 
-        // Parse JSON and clean up tags
-        const tags = JSON.parse(jsonOutput);
-        return tags.map(tag => tag.replace(/\n\d+$/, '').toLowerCase().trim());
-    } catch (error) {
-        console.log(`No tags found for ${filePath}:`, error.message);
-        return [];
+// Function to get tags from our pre-generated map
+function getFileTags(filePath) {
+    console.log('JEFF TEST - getFileTags called with:', filePath);
+    const filename = path.basename(filePath);
+    console.log('JEFF TEST - looking for tags for:', filename);
+    
+    const tags = imageTagMap[filename];
+    console.log('JEFF TEST - found tags:', tags);
+    
+    if (tags && tags.includes('red')) {
+        console.log('JEFF TEST - RED TAG FOUND for:', filename);
     }
+    
+    return tags || [];
 }
 
 // Cache for image listing

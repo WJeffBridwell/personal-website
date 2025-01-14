@@ -70,6 +70,7 @@ if (!fs.existsSync(logDir)) {
 // Create a separate stream for gallery logging
 const galleryLog = fs.createWriteStream(path.join(logDir, 'gallery-debug.log'), { flags: 'a' });
 const metricsLog = fs.createWriteStream(path.join(logDir, 'gallery-metrics.log'), { flags: 'a' });
+const tagLog = fs.createWriteStream(path.join(logDir, 'tag-debug.log'), { flags: 'a' });
 
 // Enhanced logging function with performance metrics
 function logGallery(component, event, duration = null, details = null) {
@@ -91,6 +92,18 @@ function logGallery(component, event, duration = null, details = null) {
         };
         metricsLog.write(JSON.stringify(metrics) + '\n');
     }
+}
+
+function logTagOperation(operation, filename, tags, error = null) {
+    const timestamp = new Date().toISOString();
+    const logMessage = {
+        timestamp,
+        operation,
+        filename,
+        tags,
+        error: error ? error.toString() : null
+    };
+    tagLog.write(JSON.stringify(logMessage) + '\n');
 }
 
 // Performance monitoring middleware
@@ -383,152 +396,112 @@ const tagMapPath = path.join(__dirname, '..', 'data', 'image-tags.json');
 let imageTagMap = {};
 
 try {
-    imageTagMap = JSON.parse(fs.readFileSync(tagMapPath, 'utf8'));
-    logGallery('Tags', 'Loaded tag map', null, {
-        tagCount: Object.keys(imageTagMap).length
-    });
-} catch (err) {
-    logGallery('Tags', 'Failed to load tag map', err);
+    if (fs.existsSync(tagMapPath)) {
+        const tagData = fs.readFileSync(tagMapPath, 'utf8');
+        imageTagMap = JSON.parse(tagData);
+        
+        // Count red tags immediately after loading
+        const redTagCount = Object.values(imageTagMap).filter(tags => 
+            Array.isArray(tags) && tags.includes('red')
+        ).length;
+        
+        console.log('>>>>> TOTAL RED TAGS IN JSON FILE:', redTagCount);
+        console.log('>>>>> First few red-tagged images:', 
+            Object.entries(imageTagMap)
+                .filter(([_, tags]) => Array.isArray(tags) && tags.includes('red'))
+                .slice(0, 5)
+                .map(([filename]) => filename)
+        );
+        
+        logTagOperation('load_tag_map', 'image-tags.json', { 
+            totalEntries: Object.keys(imageTagMap).length,
+            redTagCount
+        });
+    } else {
+        logTagOperation('tag_map_missing', tagMapPath, null, new Error('Tag map file not found'));
+    }
+} catch (error) {
+    logTagOperation('tag_map_error', tagMapPath, null, error);
+    console.error('Error loading tag map:', error);
 }
 
 // Helper function to get macOS Finder color tags from pre-generated map
-async function getFinderTags(filePath) {
-    return new Promise((resolve) => {
-        const filename = path.basename(filePath);
-        
-        try {
-            const tags = imageTagMap[filename] || [];
-            
-            // Only log when we actually find tags
-            if (tags.length > 0) {
-                const colorEmojis = {
-                    'red': '🔴',
-                    'orange': '🟠',
-                    'yellow': '💛',
-                    'green': '💚',
-                    'blue': '💙',
-                    'purple': '💜',
-                    'gray': '⚪'
-                };
-                
-                logGallery('Finder Tags', 'Found Tags', null, { 
-                    filename,
-                    tags: tags.map(tag => `${colorEmojis[tag] || '🏷 '}${tag}`),
-                    tagCount: tags.length
-                });
-            }
-            
-            resolve({ tags, error: null });
-        } catch (e) {
-            logGallery('Tags', 'Error getting tags from map', e, { filename });
-            resolve({ tags: [], error: 'MAP_ERROR' });
-        }
-    });
+function getFinderTags(filePath) {
+    console.log('JEFF TEST - getFinderTags called with:', filePath);
+    const filename = path.basename(filePath);
+    console.log('JEFF TEST - looking for tags for:', filename);
+    
+    const tags = imageTagMap[filename];
+    console.log('JEFF TEST - found tags:', tags);
+    
+    if (tags && tags.includes('red')) {
+        console.log('JEFF TEST - RED TAG FOUND for:', filename);
+    }
+    
+    return tags || [];
 }
 
 // Serve images with tags
 router.get('/images', async (req, res) => {
-    console.log('==== /images endpoint hit ====');
+    console.log('JEFF SERVER - /images endpoint hit at:', new Date().toISOString());
+    console.log('JEFF SERVER - Request headers:', req.headers);
     const startTime = performance.now();
     
     try {
-        const { page = 1, limit = DEFAULT_LIMIT, sort = 'name-asc', search = '', letter = 'all', tag = '' } = req.query;
-        logGallery('Images List', 'Request received', null, { page, limit, sort, search, letter, tag });
-
-        // Get all filenames first (fast operation)
-        let allFileNames = fs.readdirSync(IMAGE_DIRECTORY)
-            .filter(file => isImageFile(file))
-            .sort((a, b) => a.localeCompare(b));
-
-        // Apply tag filter if specified
-        if (tag) {
-            allFileNames = allFileNames.filter(file => {
-                const tags = imageTagMap[file] || [];
-                return tags.includes(tag);
+        logGallery('Images', 'Request started', null);
+        
+        // Check if cache is valid
+        if (contentCache.files.size > 0 && !contentCache.updating) {
+            const cachedFiles = Array.from(contentCache.files.values());
+            logGallery('Images', 'Serving from cache', null, { 
+                cacheSize: cachedFiles.length,
+                sampleTags: cachedFiles.slice(0, 5).map(f => ({ name: f.name, tags: f.tags }))
             });
+            return res.json({ images: cachedFiles });
         }
 
-        // Apply letter filter
-        if (letter !== 'all') {
-            allFileNames = allFileNames.filter(file => 
-                file.charAt(0).toUpperCase() === letter.toUpperCase()
-            );
-        }
-
-        // Apply search filter
-        if (search) {
-            allFileNames = allFileNames.filter(file => 
-                file.toLowerCase().includes(search.toLowerCase())
-            );
-        }
-
-        // Calculate pagination
-        const totalFiles = allFileNames.length;
-        const totalPages = Math.ceil(totalFiles / limit);
-        const currentPage = Math.min(Math.max(1, parseInt(page)), totalPages);
-        const startIndex = (currentPage - 1) * limit;
-        const endIndex = Math.min(startIndex + limit, totalFiles);
+        // Read directory
+        const imageFiles = await fs.promises.readdir(IMAGE_DIRECTORY);
+        console.log('JEFF TEST - Found this many images:', imageFiles.length);
         
-        // Get files for current page
-        const pageFiles = allFileNames.slice(startIndex, endIndex);
-        
-        // Check if we have processed files in cache
-        const processedFiles = req.app.locals.processedFiles || new Map();
-        
-        // Get detailed info for current page
-        const pageData = await Promise.all(
-            pageFiles.map(async file => {
-                // Check if we have processed this file already
-                if (processedFiles.has(file)) {
-                    return processedFiles.get(file);
-                }
-                
-                // If not, process it now
-                const filePath = path.join(IMAGE_DIRECTORY, file);
+        // Process files
+        const processedFiles = await Promise.all(
+            imageFiles.map(async filename => {
+                const filePath = path.join(IMAGE_DIRECTORY, filename);
+                console.log('JEFF TEST - Processing file:', filename);
                 const stats = fs.statSync(filePath);
-                const tagResult = await getFinderTags(filePath);
+                const tags = getFinderTags(filePath);
+                console.log('JEFF TEST - Got tags:', tags);
                 
-                const fileData = {
-                    name: file,
-                    url: `/api/gallery/proxy-image/${encodeURIComponent(file)}`,
-                    path: filePath,
+                // Log tag information for each file
+                logTagOperation('process_file', filename, tags);
+
+                return {
+                    name: filename,
+                    url: `/api/gallery/image/${encodeURIComponent(filename)}`,
                     size: stats.size,
-                    modified: stats.mtime,
-                    tags: tagResult.tags,
-                    tagError: tagResult.error
+                    date: stats.mtime,
+                    tags: tags
                 };
-                
-                // Store in cache
-                processedFiles.set(file, fileData);
-                return fileData;
             })
         );
 
-        // Get processing status
-        const processingStatus = {
-            isProcessing: req.app.locals.processingImages,
-            progress: req.app.locals.processingProgress || 0,
-            processedCount: processedFiles.size
-        };
-
-        // Send response with total count
-        res.json({
-            images: pageData,
-            total: totalFiles,
-            currentPage,
-            totalPages,
-            processing: processingStatus
+        // Update cache
+        processedFiles.forEach(file => {
+            contentCache.files.set(file.name, file);
         });
 
         const endTime = performance.now();
-        logGallery('Images List', 'Response sent', endTime - startTime, {
-            totalFiles,
-            pageSize: pageData.length,
-            processingStatus
+        logGallery('Images', 'Request completed', endTime - startTime, { 
+            totalProcessed: processedFiles.length,
+            sampleTags: processedFiles.slice(0, 5).map(f => ({ name: f.name, tags: f.tags }))
         });
+
+        res.json({ images: processedFiles });
     } catch (error) {
-        logGallery('Images List', 'Error', null, { error: error.message });
-        res.status(500).json({ error: 'Failed to get images' });
+        logGallery('Images', 'Error', null, { error: error.message });
+        console.error('Error serving images:', error);
+        res.status(500).json({ error: 'Failed to serve images' });
     }
 });
 
@@ -546,7 +519,7 @@ router.get('/initial', async (req, res) => {
         const files = fs.readdirSync(IMAGE_DIRECTORY)
             .filter(file => isImageFile(file))
             .sort((a, b) => a.localeCompare(b));
-            
+
         const totalFiles = files.length;
         const totalPages = Math.ceil(totalFiles / batchSize);
         const hasMore = page < totalPages;

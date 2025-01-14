@@ -55,7 +55,6 @@ export class Gallery {
         // Search input
         this.searchInput?.addEventListener('input', (e) => {
             this.searchTerm = e.target.value.toLowerCase();
-            this.currentPage = 1; // Reset to first page
             this.filterAndSortImages();
         });
 
@@ -68,8 +67,19 @@ export class Gallery {
         // Tag select
         this.tagSelect?.addEventListener('change', (e) => {
             const selectedTag = e.target.value;
+            console.log('Tag selected:', selectedTag);
             this.selectedTags = selectedTag ? new Set([selectedTag]) : new Set();
-            this.currentPage = 1; // Reset to first page
+            console.log('Selected tags set to:', [...this.selectedTags]);
+            
+            // Count images with this tag before filtering
+            if (selectedTag) {
+                const taggedImages = this.allImages.filter(img => 
+                    img.tags && Array.isArray(img.tags) && 
+                    img.tags.some(tag => tag.toLowerCase() === selectedTag.toLowerCase())
+                );
+                console.log(`Before filtering - Images with tag '${selectedTag}':`, taggedImages.length);
+            }
+            
             this.filterAndSortImages();
         });
 
@@ -92,40 +102,56 @@ export class Gallery {
     }
 
     async loadImages() {
+        console.log('JEFF CLIENT - About to fetch /api/gallery/images');
         try {
             if (this.imageGrid) {
                 this.imageGrid.innerHTML = '<div class="loading-progress">Loading images...</div>';
             }
 
-            console.log('Fetching images from /api/gallery/images...');
             const response = await fetch('/api/gallery/images');
+            console.log('JEFF CLIENT - Got response:', response.status);
             if (!response.ok) throw new Error('Failed to fetch images');
             
             const data = await response.json();
-            console.log('Gallery data received:', data);
-            console.log('First image example:', data.images[0]);
+            
+            // Single, clear count of red-tagged images
+            const redCount = data.images.filter(img => 
+                img.tags && Array.isArray(img.tags) && 
+                img.tags.some(tag => tag.toLowerCase() === 'red')
+            ).length;
+            console.log('>>>>> TOTAL RED TAGGED IMAGES IN DATA:', redCount);
             
             // Store the images as-is
             this.allImages = data.images;
             
+            // Log tag statistics
+            const tagStats = {};
+            let imagesWithoutTags = 0;
+            let imagesWithTags = 0;
+            
+            this.allImages.forEach(img => {
+                if (img.tags && Array.isArray(img.tags)) {
+                    imagesWithTags++;
+                    img.tags.forEach(tag => {
+                        tagStats[tag] = (tagStats[tag] || 0) + 1;
+                    });
+                } else {
+                    imagesWithoutTags++;
+                    console.warn('Image missing tags or invalid tags format:', img.name);
+                }
+            });
+            
+            console.log('Tag statistics:', tagStats);
+            console.log(`Images with tags: ${imagesWithTags}, without tags: ${imagesWithoutTags}`);
+            
             // Collect all unique tags and update tag select
             this.availableTags = new Set(
-                this.allImages.reduce((tags, img) => {
-                    if (img.tags) tags.push(...img.tags);
-                    return tags;
-                }, [])
+                Object.keys(tagStats).sort((a, b) => tagStats[b] - tagStats[a])
             );
-
-            console.log('Available tags:', [...this.availableTags]);
-            this.updateTagSelect();
             
-            // Initial filter and sort
+            this.updateTagSelect();
             this.filterAndSortImages();
-
-            // Update processing status
-            if (data.processing) {
-                this.updateProcessingStatus(data.processing);
-            }
+            
         } catch (error) {
             console.error('Error loading images:', error);
             if (this.imageGrid) {
@@ -198,7 +224,6 @@ export class Gallery {
 
                 // Update filter and refresh display
                 this.currentLetter = e.target.dataset.letter;
-                this.currentPage = 1; // Reset to first page
                 this.filterAndSortImages();
             }
         });
@@ -273,19 +298,48 @@ export class Gallery {
     }
 
     filterAndSortImages() {
+        console.log('Starting filterAndSortImages');
+        console.log('Total images before filter:', this.allImages.length);
+        console.log('Current search term:', this.searchTerm);
+        console.log('Current letter filter:', this.currentLetter);
+        console.log('Selected tags:', [...this.selectedTags]);
+
         // Filter images by search term, letter, and tags
         this.filteredImages = this.allImages.filter(image => {
             const matchesSearch = image.name.toLowerCase().includes(this.searchTerm);
             const matchesLetter = this.currentLetter === 'all' || 
                                 image.name.charAt(0).toUpperCase() === this.currentLetter;
             
-            // Tag filtering - now just check if the image has the single selected tag
-            const matchesTags = this.selectedTags.size === 0 || 
-                              (image.tags && 
-                               image.tags.some(tag => this.selectedTags.has(tag)));
+            // Tag filtering - normalize tag case for comparison
+            let matchesTags = false;
+            if (this.selectedTags.size === 0) {
+                matchesTags = true;
+            } else if (image.tags && Array.isArray(image.tags)) {
+                matchesTags = image.tags.some(tag => {
+                    const normalizedTag = tag.toLowerCase();
+                    const matches = Array.from(this.selectedTags).some(selectedTag => 
+                        selectedTag.toLowerCase() === normalizedTag
+                    );
+                    if (matches) {
+                        console.log(`Image ${image.name} matches tag filter with tag: ${tag}`);
+                    }
+                    return matches;
+                });
+            }
 
-            return matchesSearch && matchesLetter && matchesTags;
+            const matches = matchesSearch && matchesLetter && matchesTags;
+            if (!matches && this.selectedTags.size > 0) {
+                console.log(`Image ${image.name} filtered out:`, {
+                    matchesSearch,
+                    matchesLetter,
+                    matchesTags,
+                    imageTags: image.tags
+                });
+            }
+            return matches;
         });
+
+        console.log('Total images after filter:', this.filteredImages.length);
 
         // Sort images
         this.filteredImages.sort((a, b) => {
@@ -303,14 +357,21 @@ export class Gallery {
             }
         });
 
+        // Reset to first page when filter changes
+        this.currentPage = 1;
+        
         // Render the first page
         this.renderCurrentPage();
     }
 
     renderCurrentPage() {
+        console.log('renderCurrentPage - current page:', this.currentPage);
+        console.log('renderCurrentPage - items per page:', this.itemsPerPage);
         const start = (this.currentPage - 1) * this.itemsPerPage;
         const end = start + this.itemsPerPage;
         const currentImages = this.filteredImages.slice(start, end);
+        console.log('renderCurrentPage - showing images from index', start, 'to', end);
+        console.log('renderCurrentPage - total filtered images:', this.filteredImages.length);
 
         // Clear current grid
         this.imageGrid.innerHTML = '';
@@ -325,47 +386,75 @@ export class Gallery {
     }
 
     updatePagination() {
+        const totalPages = Math.ceil(this.filteredImages.length / this.itemsPerPage);
+        const totalImages = this.filteredImages.length;
+        
+        console.log('updatePagination - total pages:', totalPages);
+        console.log('updatePagination - total images:', totalImages);
+        console.log('updatePagination - items per page:', this.itemsPerPage);
+
         // Update prev/next buttons
         if (this.prevPageBtn) {
             this.prevPageBtn.disabled = this.currentPage === 1;
         }
         if (this.nextPageBtn) {
-            this.nextPageBtn.disabled = this.currentPage === Math.ceil(this.filteredImages.length / this.itemsPerPage);
+            this.nextPageBtn.disabled = this.currentPage === totalPages;
         }
 
         // Update page numbers
         if (this.pageNumbers) {
             this.pageNumbers.innerHTML = '';
             
-            // Always show first page, last page, current page, and one page before/after current
-            const pagesToShow = new Set([
-                1,
-                Math.ceil(this.filteredImages.length / this.itemsPerPage),
-                this.currentPage,
-                this.currentPage - 1,
-                this.currentPage + 1
-            ].filter(p => p >= 1 && p <= Math.ceil(this.filteredImages.length / this.itemsPerPage)));
-
-            const sortedPages = Array.from(pagesToShow).sort((a, b) => a - b);
-
-            sortedPages.forEach((pageNum, index) => {
-                // Add ellipsis if there's a gap
-                if (index > 0 && pageNum - sortedPages[index - 1] > 1) {
-                    const ellipsis = document.createElement('span');
-                    ellipsis.className = 'page-ellipsis';
-                    ellipsis.textContent = '...';
-                    this.pageNumbers.appendChild(ellipsis);
-                }
-
+            // Add total count display
+            const countDisplay = document.createElement('span');
+            countDisplay.className = 'page-count';
+            countDisplay.textContent = `${totalImages.toLocaleString()} images (${totalPages.toLocaleString()} pages) `;
+            this.pageNumbers.appendChild(countDisplay);
+            
+            // Helper function to add page button
+            const addPageButton = (page, text = page) => {
                 const button = document.createElement('button');
-                button.className = `page-number ${pageNum === this.currentPage ? 'active' : ''}`;
-                button.textContent = pageNum;
+                button.className = `page-number ${page === this.currentPage ? 'active' : ''}`;
+                button.textContent = text;
                 button.onclick = () => {
-                    this.currentPage = pageNum;
+                    this.currentPage = page;
                     this.renderCurrentPage();
                 };
                 this.pageNumbers.appendChild(button);
-            });
+            };
+
+            // Add ellipsis
+            const addEllipsis = () => {
+                const span = document.createElement('span');
+                span.className = 'page-ellipsis';
+                span.textContent = '...';
+                this.pageNumbers.appendChild(span);
+            };
+
+            // First page
+            if (totalPages > 0) {
+                addPageButton(1);
+            }
+
+            // Add ellipsis if there's a gap after first page
+            if (this.currentPage > 4) {
+                addEllipsis();
+            }
+
+            // Pages around current page
+            for (let i = Math.max(2, this.currentPage - 2); i <= Math.min(totalPages - 1, this.currentPage + 2); i++) {
+                addPageButton(i);
+            }
+
+            // Add ellipsis if there's a gap before last page
+            if (this.currentPage < totalPages - 3) {
+                addEllipsis();
+            }
+
+            // Last page
+            if (totalPages > 1) {
+                addPageButton(totalPages);
+            }
         }
     }
 
@@ -468,8 +557,10 @@ export class Gallery {
     }
 
     renderTags(tags, container) {
+        console.log('renderTags called for:', tags);
+        
         if (!tags || !Array.isArray(tags)) {
-            console.log('No tags to render:', tags);
+            console.warn('Invalid tags:', tags);
             return;
         }
         
@@ -478,6 +569,7 @@ export class Gallery {
         
         // Sort tags to ensure consistent order
         const sortedTags = [...tags].sort();
+        console.log('Sorted tags:', sortedTags);
         
         sortedTags.forEach(tag => {
             const tagEl = document.createElement('div');
@@ -485,6 +577,14 @@ export class Gallery {
             const normalizedTag = tag.toLowerCase().replace(/[^a-z]/g, '');
             tagEl.className = `item__tag item__tag--${normalizedTag}`;
             tagEl.title = tag;  // Show original tag name on hover
+            
+            // Log tag element creation
+            console.log('Creating tag element:', {
+                originalTag: tag,
+                normalizedTag: normalizedTag,
+                className: tagEl.className
+            });
+            
             container.appendChild(tagEl);
         });
     }
