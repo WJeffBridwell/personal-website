@@ -38,6 +38,11 @@ export class Gallery {
         this.currentLetter = 'all';
         this.selectedTags = new Set();
         this.availableTags = new Set();
+        this.processingStatus = {
+            isProcessing: false,
+            progress: 0,
+            processedCount: 0
+        };
 
         // Initialize
         this.loadImages();
@@ -116,6 +121,11 @@ export class Gallery {
             
             // Initial filter and sort
             this.filterAndSortImages();
+
+            // Update processing status
+            if (data.processing) {
+                this.updateProcessingStatus(data.processing);
+            }
         } catch (error) {
             console.error('Error loading images:', error);
             if (this.imageGrid) {
@@ -321,7 +331,7 @@ export class Gallery {
             galleryIconWrapper.appendChild(galleryIcon);
             galleryIconWrapper.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent triggering the modal
-                window.location.href = `content-gallery.html?image-name=${encodeURIComponent(image.name)}`;
+                window.open(`content-gallery.html?image-name=${encodeURIComponent(image.name)}`, '_blank');
             });
             item.appendChild(galleryIconWrapper);
 
@@ -414,6 +424,34 @@ export class Gallery {
                 };
                 this.pageNumbers.appendChild(button);
             });
+        }
+    }
+
+    updateProcessingStatus(status) {
+        this.processingStatus = status;
+        // Update UI to show processing status
+        const statusElement = document.getElementById('processing-status');
+        if (!statusElement) {
+            const header = document.querySelector('.gallery-header');
+            if (header) {
+                const statusDiv = document.createElement('div');
+                statusDiv.id = 'processing-status';
+                statusDiv.className = 'processing-status';
+                header.appendChild(statusDiv);
+            }
+        }
+
+        if (status.isProcessing) {
+            const statusElement = document.getElementById('processing-status');
+            if (statusElement) {
+                statusElement.innerHTML = `Processing images: ${Math.round(status.progress)}% (${status.processedCount} files processed)`;
+                statusElement.style.display = 'block';
+            }
+        } else {
+            const statusElement = document.getElementById('processing-status');
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
         }
     }
 
@@ -517,7 +555,7 @@ export class Gallery {
         const folderIcon = card.querySelector('.folder-icon');
 
         galleryIcon?.addEventListener('click', () => {
-            window.location.href = `content-gallery.html?image-name=${encodeURIComponent(imageData.name)}`;
+            window.open(`content-gallery.html?image-name=${encodeURIComponent(imageData.name)}`, '_blank');
         });
 
         folderIcon?.addEventListener('click', async () => {
@@ -534,5 +572,19 @@ export class Gallery {
         return container;
     }
 }
+
+const style = document.createElement('style');
+style.textContent = `
+    .processing-status {
+        background-color: #f0f0f0;
+        padding: 8px 16px;
+        border-radius: 4px;
+        margin: 8px 0;
+        font-size: 14px;
+        color: #666;
+        display: none;
+    }
+`;
+document.head.appendChild(style);
 
 export default Gallery;
