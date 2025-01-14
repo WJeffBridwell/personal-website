@@ -63,13 +63,17 @@
 
         <template id="gallery-card-template">
             <div class="gallery__item">
-                <div class="item__icons">
+                <div class="icon-wrapper gallery-icon-wrapper">
                     <i class="fas fa-image gallery-icon" title="View in Gallery"></i>
+                </div>
+                <div class="icon-wrapper folder-icon-wrapper">
                     <i class="fas fa-folder folder-icon" title="Open in Finder"></i>
                 </div>
                 <img class="item__image" src="" alt="" loading="lazy">
-                <div class="item__tags"></div>
-                <div class="item__name"></div>
+                <div class="item__info">
+                    <div class="item__tags"></div>
+                    <div class="item__name"></div>
+                </div>
             </div>
         </template>
 

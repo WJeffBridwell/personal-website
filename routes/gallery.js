@@ -182,7 +182,7 @@ router.get('/test-images', async (req, res) => {
                 const filePath = path.join(IMAGE_DIRECTORY, filename);
                 const stats = fs.statSync(filePath);
                 const tags = await getFinderTags(filePath);
-                const imagePath = `http://localhost:8082/api/video/image/${encodeURIComponent(filename)}`;
+                const imagePath = `http://192.168.86.242:8082/api/video/image/${encodeURIComponent(filename)}`;
                 return {
                     name: filename,
                     path: imagePath,
@@ -655,7 +655,7 @@ router.get('/proxy-image/:imageName', async (req, res) => {
 // Proxy endpoint for images
 router.get('/proxy-image/:imageName', async (req, res) => {
     const imageName = decodeURIComponent(req.params.imageName);
-    const videoServerUrl = `http://localhost:8082/api/images/${encodeURIComponent(imageName)}`;
+    const videoServerUrl = `http://192.168.86.242:8082/api/images/${encodeURIComponent(imageName)}`;
     
     console.log('=== Image Proxy Request ===');
     console.log('Image name:', imageName);
