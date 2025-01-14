@@ -22,6 +22,12 @@ export class Gallery {
         this.tagSelect = document.querySelector('#tagSelect');
         this.letterFilter = document.querySelector('#letterFilter');
 
+        // Modal elements
+        this.modal = document.getElementById('imageModal');
+        this.modalImg = this.modal.querySelector('.modal-img');
+        this.modalCaption = this.modal.querySelector('.modal-caption');
+        this.closeBtn = this.modal.querySelector('.close-modal');
+
         // State
         this.allImages = [];        // All images from server
         this.filteredImages = [];   // Images after search/filter
@@ -37,6 +43,7 @@ export class Gallery {
         this.loadImages();
         this.initControls();
         this.initLetterFilter();
+        this.initModalEvents();
     }
 
     initControls() {
@@ -187,6 +194,74 @@ export class Gallery {
         });
     }
 
+    initModalEvents() {
+        // Click on gallery item to open modal
+        this.imageGrid.addEventListener('click', (e) => {
+            const galleryItem = e.target.closest('.gallery__item');
+            if (galleryItem) {
+                const imageUrl = galleryItem.dataset.imageUrl;
+                const imageName = galleryItem.dataset.imageName;
+                if (imageUrl && imageName) {
+                    this.openModal(imageUrl, imageName);
+                }
+            }
+        });
+
+        // Close modal on X button click
+        this.closeBtn.addEventListener('click', () => this.closeModal());
+
+        // Close modal on clicking outside the image
+        this.modal.addEventListener('click', (e) => {
+            if (e.target === this.modal) {
+                this.closeModal();
+            }
+        });
+
+        // Close modal on ESC key or browser back
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.closeModal();
+            }
+        });
+
+        // Handle browser back button
+        window.addEventListener('popstate', () => {
+            if (this.modal.style.display === 'flex') {
+                this.closeModal();
+            }
+        });
+    }
+
+    openModal(imageUrl, imageName) {
+        // Push state for back button support
+        history.pushState({ modal: true }, '', window.location.pathname);
+        
+        // Show loading state
+        this.modalImg.style.opacity = '0';
+        this.modal.style.display = 'flex';
+        
+        // Load full size image
+        this.modalImg.onload = () => {
+            this.modalImg.style.opacity = '1';
+        };
+        this.modalImg.src = imageUrl;
+        this.modalCaption.textContent = imageName;
+        
+        // Prevent body scroll
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeModal() {
+        this.modal.style.display = 'none';
+        this.modalImg.src = '';
+        document.body.style.overflow = 'auto';
+        
+        // Handle browser history
+        if (window.location.hash !== '') {
+            history.back();
+        }
+    }
+
     filterAndSortImages() {
         // Filter images by search term, letter, and tags
         this.filteredImages = this.allImages.filter(image => {
@@ -223,42 +298,61 @@ export class Gallery {
     }
 
     renderCurrentPage() {
-        if (!this.imageGrid) return;
+        const start = (this.currentPage - 1) * this.itemsPerPage;
+        const end = start + this.itemsPerPage;
+        const currentImages = this.filteredImages.slice(start, end);
 
-        // Calculate pagination
-        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-        const endIndex = startIndex + this.itemsPerPage;
-        const currentPageImages = this.filteredImages.slice(startIndex, endIndex);
-        const totalPages = Math.ceil(this.filteredImages.length / this.itemsPerPage);
-
-        // Update pagination UI
-        this.updatePaginationUI(totalPages);
-
-        // Clear grid
+        // Clear current grid
         this.imageGrid.innerHTML = '';
 
-        // Show no results message if needed
-        if (this.filteredImages.length === 0) {
-            this.imageGrid.innerHTML = '<div class="no-results">No images found</div>';
-            return;
-        }
+        // Create and append new items
+        currentImages.forEach(image => {
+            const item = document.createElement('div');
+            item.className = 'gallery__item';
+            item.dataset.imageUrl = image.url;  // Use the API URL
+            item.dataset.imageName = image.name;
 
-        // Render images
-        const fragment = document.createDocumentFragment();
-        currentPageImages.forEach(imageData => {
-            const card = this.createImageCard(imageData);
-            if (card) fragment.appendChild(card);
+            const img = document.createElement('img');
+            img.className = 'item__image';
+            img.src = image.url;  // Use the API URL
+            img.alt = image.name;
+            img.loading = 'lazy';
+
+            const info = document.createElement('div');
+            info.className = 'item__info';
+            
+            const name = document.createElement('div');
+            name.className = 'item__name';
+            name.textContent = image.name;
+
+            const tags = document.createElement('div');
+            tags.className = 'item__tags';
+            if (image.tags) {
+                image.tags.forEach(tag => {
+                    const tagSpan = document.createElement('span');
+                    tagSpan.className = `item__tag item__tag--${tag.toLowerCase()}`;
+                    tagSpan.textContent = tag;
+                    tags.appendChild(tagSpan);
+                });
+            }
+
+            info.appendChild(tags);
+            info.appendChild(name);
+            item.appendChild(img);
+            item.appendChild(info);
+            this.imageGrid.appendChild(item);
         });
-        this.imageGrid.appendChild(fragment);
+
+        this.updatePagination();
     }
 
-    updatePaginationUI(totalPages) {
+    updatePagination() {
         // Update prev/next buttons
         if (this.prevPageBtn) {
             this.prevPageBtn.disabled = this.currentPage === 1;
         }
         if (this.nextPageBtn) {
-            this.nextPageBtn.disabled = this.currentPage === totalPages;
+            this.nextPageBtn.disabled = this.currentPage === Math.ceil(this.filteredImages.length / this.itemsPerPage);
         }
 
         // Update page numbers
@@ -268,11 +362,11 @@ export class Gallery {
             // Always show first page, last page, current page, and one page before/after current
             const pagesToShow = new Set([
                 1,
-                totalPages,
+                Math.ceil(this.filteredImages.length / this.itemsPerPage),
                 this.currentPage,
                 this.currentPage - 1,
                 this.currentPage + 1
-            ].filter(p => p >= 1 && p <= totalPages));
+            ].filter(p => p >= 1 && p <= Math.ceil(this.filteredImages.length / this.itemsPerPage)));
 
             const sortedPages = Array.from(pagesToShow).sort((a, b) => a - b);
 

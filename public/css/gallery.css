@@ -808,3 +808,58 @@ body {
 .tag-color-blue { background-color: var(--tag-blue); }
 .tag-color-purple { background-color: var(--tag-purple); }
 .tag-color-gray { background-color: var(--tag-gray); }
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    z-index: 1000;
+    padding: 2rem;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.modal-img {
+    max-width: 90%;
+    max-height: 80vh;
+    object-fit: contain;
+    transition: opacity 0.3s ease;
+}
+
+.close-modal {
+    position: absolute;
+    top: 1rem;
+    right: 2rem;
+    color: white;
+    font-size: 2rem;
+    cursor: pointer;
+    z-index: 1001;
+    transition: color 0.2s ease;
+}
+
+.close-modal:hover {
+    color: var(--accent-color);
+}
+
+.modal-caption {
+    color: white;
+    margin-top: 1rem;
+    font-size: 1.1rem;
+    font-family: var(--font-mono);
+}
+
+/* Enhance gallery item interaction */
+.gallery__item {
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.gallery__item:hover {
+    transform: scale(1.02);
+}
