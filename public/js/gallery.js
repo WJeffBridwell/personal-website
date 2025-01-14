@@ -378,8 +378,8 @@ export class Gallery {
 
         // Create and append new items
         currentImages.forEach(image => {
-            const card = this.createImageCard(image);
-            this.imageGrid.appendChild(card);
+            const tile = this.createImageTile(image);
+            this.imageGrid.appendChild(tile);
         });
 
         this.updatePagination();
@@ -486,6 +486,55 @@ export class Gallery {
         }
     }
 
+    createImageTile(image) {
+        const container = document.createElement('div');
+        container.className = 'image-container';
+        
+        // Background image
+        const img = document.createElement('img');
+        img.src = image.url;
+        img.alt = image.name;
+        container.appendChild(img);
+        
+        // Image icon (top left)
+        const imageIcon = document.createElement('div');
+        imageIcon.className = 'image-icon';
+        const imageI = document.createElement('i');
+        imageI.className = 'fas fa-image';
+        imageIcon.appendChild(imageI);
+        container.appendChild(imageIcon);
+        
+        // Folder icon (top right)
+        const folderIcon = document.createElement('div');
+        folderIcon.className = 'folder-icon';
+        const folderI = document.createElement('i');
+        folderI.className = 'fas fa-folder';
+        folderIcon.appendChild(folderI);
+        container.appendChild(folderIcon);
+        
+        // Tags (below image icon)
+        if (image.tags && image.tags.length > 0) {
+            const tagDots = document.createElement('div');
+            tagDots.className = 'tag-dots';
+            image.tags.forEach(tag => {
+                const dot = document.createElement('div');
+                dot.className = 'tag-dot';
+                dot.style.backgroundColor = this.getTagColor(tag);
+                dot.title = tag;
+                tagDots.appendChild(dot);
+            });
+            container.appendChild(tagDots);
+        }
+        
+        // Image name (bottom center)
+        const name = document.createElement('div');
+        name.className = 'image-name';
+        name.textContent = image.name;
+        container.appendChild(name);
+        
+        return container;
+    }
+
     createImageCard(imageData) {
         const card = document.createElement('div');
         card.className = 'gallery__item';
@@ -554,6 +603,23 @@ export class Gallery {
         card.appendChild(nameEl);
 
         return card;
+    }
+
+    /**
+     * Get a consistent color for a tag
+     * @param {string} tag - The tag to get a color for
+     * @returns {string} - The color in hex format
+     */
+    getTagColor(tag) {
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+            '#FFEEAD', '#D4A5A5', '#9B59B6', '#3498DB'
+        ];
+        let hash = 0;
+        for (let i = 0; i < tag.length; i++) {
+            hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return colors[Math.abs(hash) % colors.length];
     }
 
     renderTags(tags, container) {
