@@ -411,13 +411,13 @@ body {
 }
 
 .item__tags {
-    display: inline-flex;
+    display: flex;
     flex-direction: column;
     gap: 4px;
     position: absolute;
-    right: 8px;
-    top: calc(32px + 24px); /* folder icon height (32px) + spacing (24px) */
-    z-index: 2;
+    top: calc(32px + 8px); /* Position below icon (32px) plus 8px spacing */
+    left: 8px; /* Align with left-positioned image icon */
+    z-index: 1;
     background: rgba(255, 255, 255, 0.9);
     padding: 4px;
     border-radius: 4px;
@@ -429,6 +429,7 @@ body {
     width: 12px;
     height: 12px;
     border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
     flex-shrink: 0;
 }
 
@@ -534,10 +535,12 @@ body {
     position: absolute;
     bottom: 40px;
     right: 8px;
-    z-index: 2;
-    background: white;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.9);
     padding: 4px 8px;
     border-radius: 4px;
+    width: fit-content;
+    height: fit-content;
 }
 
 .item__tag {
@@ -545,6 +548,7 @@ body {
     height: 12px;
     border-radius: 50%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
 }
 
 /* Image Card */
