@@ -285,7 +285,7 @@ async function updateCache(directoryPath) {
                     
                     contentCache.files.set(file.name, {
                         name: file.name,
-                        path: `/api/gallery/image/${encodeURIComponent(file.name)}`,
+                        url: `/api/gallery/proxy-image/${encodeURIComponent(file.name)}`,
                         size: stats.size,
                         mtime: stats.mtime,
                         type: path.extname(file.name).slice(1)
@@ -378,52 +378,51 @@ async function warmupCache(files) {
     }
 }
 
-// Helper function to get macOS Finder color tags
+// Load pre-generated tags file
+const tagMapPath = path.join(__dirname, '..', 'data', 'image-tags.json');
+let imageTagMap = {};
+
+try {
+    imageTagMap = JSON.parse(fs.readFileSync(tagMapPath, 'utf8'));
+    logGallery('Tags', 'Loaded tag map', null, {
+        tagCount: Object.keys(imageTagMap).length
+    });
+} catch (err) {
+    logGallery('Tags', 'Failed to load tag map', err);
+}
+
+// Helper function to get macOS Finder color tags from pre-generated map
 async function getFinderTags(filePath) {
     return new Promise((resolve) => {
         const filename = path.basename(filePath);
         
-        // Combine all commands into a single exec call to reduce file descriptors
-        const cmd = `(xattr -l "${filePath}" 2>/dev/null && xattr -px com.apple.metadata:_kMDItemUserTags "${filePath}" 2>/dev/null | xxd -r -p | plutil -convert json -o - -) || echo "{}"`;
-        
-        exec(cmd, { maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-            try {
-                // If no attributes or no tag attribute, return empty tags silently
-                if (error || !stdout.trim() || stdout.trim() === '{}') {
-                    resolve({ tags: [], error: 'NO_TAGS' });
-                    return;
-                }
-
-                const tags = JSON.parse(stdout);
-                const colorTags = Array.isArray(tags) ? tags.map(tag => {
-                    return tag.replace(/\n\d+$/, '').toLowerCase().trim();
-                }) : [];
+        try {
+            const tags = imageTagMap[filename] || [];
+            
+            // Only log when we actually find tags
+            if (tags.length > 0) {
+                const colorEmojis = {
+                    'red': '🔴',
+                    'orange': '🟠',
+                    'yellow': '💛',
+                    'green': '💚',
+                    'blue': '💙',
+                    'purple': '💜',
+                    'gray': '⚪'
+                };
                 
-                // Only log when we actually find tags
-                if (colorTags.length > 0) {
-                    const colorEmojis = {
-                        'red': '🔴',
-                        'orange': '🟠',
-                        'yellow': '💛',
-                        'green': '💚',
-                        'blue': '💙',
-                        'purple': '💜',
-                        'gray': '⚪'
-                    };
-                    
-                    logGallery('Finder Tags', 'Found Tags', null, { 
-                        filename,
-                        tags: colorTags.map(tag => `${colorEmojis[tag] || '🏷 '}${tag}`),
-                        tagCount: colorTags.length
-                    });
-                }
-                
-                resolve({ tags: colorTags, error: null });
-            } catch (e) {
-                // Silently handle any parsing errors
-                resolve({ tags: [], error: 'PARSE_ERROR' });
+                logGallery('Finder Tags', 'Found Tags', null, { 
+                    filename,
+                    tags: tags.map(tag => `${colorEmojis[tag] || '🏷 '}${tag}`),
+                    tagCount: tags.length
+                });
             }
-        });
+            
+            resolve({ tags, error: null });
+        } catch (e) {
+            logGallery('Tags', 'Error getting tags from map', e, { filename });
+            resolve({ tags: [], error: 'MAP_ERROR' });
+        }
     });
 }
 
@@ -433,15 +432,37 @@ router.get('/images', async (req, res) => {
     const startTime = performance.now();
     
     try {
-        const { page = 1, limit = DEFAULT_LIMIT, sort = 'name-asc', search = '', letter = 'all' } = req.query;
-        logGallery('Images List', 'Request received', null, { page, limit, sort, search, letter });
+        const { page = 1, limit = DEFAULT_LIMIT, sort = 'name-asc', search = '', letter = 'all', tag = '' } = req.query;
+        logGallery('Images List', 'Request received', null, { page, limit, sort, search, letter, tag });
 
         // Get all filenames first (fast operation)
-        const allFileNames = fs.readdirSync(IMAGE_DIRECTORY)
+        let allFileNames = fs.readdirSync(IMAGE_DIRECTORY)
             .filter(file => isImageFile(file))
             .sort((a, b) => a.localeCompare(b));
 
-        // Calculate pagination for the request
+        // Apply tag filter if specified
+        if (tag) {
+            allFileNames = allFileNames.filter(file => {
+                const tags = imageTagMap[file] || [];
+                return tags.includes(tag);
+            });
+        }
+
+        // Apply letter filter
+        if (letter !== 'all') {
+            allFileNames = allFileNames.filter(file => 
+                file.charAt(0).toUpperCase() === letter.toUpperCase()
+            );
+        }
+
+        // Apply search filter
+        if (search) {
+            allFileNames = allFileNames.filter(file => 
+                file.toLowerCase().includes(search.toLowerCase())
+            );
+        }
+
+        // Calculate pagination
         const totalFiles = allFileNames.length;
         const totalPages = Math.ceil(totalFiles / limit);
         const currentPage = Math.min(Math.max(1, parseInt(page)), totalPages);
@@ -469,7 +490,8 @@ router.get('/images', async (req, res) => {
                 
                 const fileData = {
                     name: file,
-                    path: `/api/gallery/proxy-image/${encodeURIComponent(file)}`,
+                    url: `/api/gallery/proxy-image/${encodeURIComponent(file)}`,
+                    path: filePath,
                     size: stats.size,
                     modified: stats.mtime,
                     tags: tagResult.tags,
@@ -482,14 +504,6 @@ router.get('/images', async (req, res) => {
             })
         );
 
-        // Start background processing if not already running
-        if (!req.app.locals.processingImages) {
-            req.app.locals.processingImages = true;
-            req.app.locals.lastProcessedIndex = endIndex; // Start after current page
-            req.app.locals.processingProgress = (endIndex / totalFiles) * 100;
-            processFileBatch(allFileNames, req.app, endIndex);
-        }
-
         // Get processing status
         const processingStatus = {
             isProcessing: req.app.locals.processingImages,
@@ -497,123 +511,26 @@ router.get('/images', async (req, res) => {
             processedCount: processedFiles.size
         };
 
-        // Apply filters to current page data
-        let filteredFiles = pageData;
-        if (letter !== 'all') {
-            filteredFiles = filteredFiles.filter(file => 
-                file.name.toLowerCase().startsWith(letter.toLowerCase())
-            );
-        }
-
-        if (search) {
-            const searchLower = search.toLowerCase();
-            filteredFiles = filteredFiles.filter(file =>
-                file.name.toLowerCase().includes(searchLower) ||
-                (file.tags && file.tags.some(tag => tag.toLowerCase().includes(searchLower)))
-            );
-        }
-
-        // Sort the filtered files
-        const [sortField, sortOrder] = sort.split('-');
-        filteredFiles.sort((a, b) => {
-            let comparison = 0;
-            if (sortField === 'name') {
-                comparison = a.name.localeCompare(b.name);
-            } else if (sortField === 'date') {
-                comparison = a.modified - b.modified;
-            } else if (sortField === 'size') {
-                comparison = a.size - b.size;
-            }
-            return sortOrder === 'desc' ? -comparison : comparison;
-        });
-
-        // Get all unique tags from processed files
-        const allTags = new Set();
-        processedFiles.forEach(file => {
-            if (file.tags) {
-                file.tags.forEach(tag => allTags.add(tag));
-            }
+        // Send response with total count
+        res.json({
+            images: pageData,
+            total: totalFiles,
+            currentPage,
+            totalPages,
+            processing: processingStatus
         });
 
         const endTime = performance.now();
-        const duration = Math.round(endTime - startTime);
-        
-        logGallery('Images List', 'Success', duration, { 
+        logGallery('Images List', 'Response sent', endTime - startTime, {
             totalFiles,
-            processedFiles: processedFiles.size,
-            returnedFiles: filteredFiles.length,
+            pageSize: pageData.length,
             processingStatus
         });
-
-        res.json({
-            images: filteredFiles,
-            pagination: {
-                total: totalFiles,
-                page: currentPage,
-                totalPages,
-                hasMore: currentPage < totalPages
-            },
-            tags: Array.from(allTags),
-            processing: processingStatus
-        });
-        
     } catch (error) {
         logGallery('Images List', 'Error', null, { error: error.message });
         res.status(500).json({ error: 'Failed to get images' });
     }
 });
-
-async function processFileBatch(files, app, startIndex) {
-    const batch = files.slice(startIndex, startIndex + BACKGROUND_BATCH_SIZE);
-    if (batch.length === 0) {
-        app.locals.processingImages = false;
-        app.locals.lastProcessedIndex = 0;
-        return;
-    }
-
-    try {
-        const results = await Promise.all(
-            batch.map(async file => {
-                const filePath = path.join(IMAGE_DIRECTORY, file);
-                const stats = fs.statSync(filePath);
-                const tagResult = await getFinderTags(filePath);
-                
-                const fileData = {
-                    name: file,
-                    path: `/api/gallery/proxy-image/${encodeURIComponent(file)}`,
-                    size: stats.size,
-                    modified: stats.mtime,
-                    tags: tagResult.tags,
-                    tagError: tagResult.error
-                };
-                
-                // Store in cache
-                if (!app.locals.processedFiles) {
-                    app.locals.processedFiles = new Map();
-                }
-                
-                app.locals.processedFiles.set(file, fileData);
-                return fileData;
-            })
-        );
-
-        // Update progress
-        app.locals.lastProcessedIndex = startIndex + batch.length;
-        app.locals.processingProgress = (app.locals.lastProcessedIndex / files.length) * 100;
-
-        // Process next batch
-        setTimeout(() => {
-            processFileBatch(files, app, startIndex + BACKGROUND_BATCH_SIZE);
-        }, 100); // Small delay to prevent overwhelming the system
-    } catch (error) {
-        logGallery('Background Processing', 'Error', null, { 
-            error: error.message,
-            startIndex,
-            batchSize: BACKGROUND_BATCH_SIZE
-        });
-        app.locals.processingImages = false;
-    }
-}
 
 // Initial endpoint for gallery data
 router.get('/initial', async (req, res) => {

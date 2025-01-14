@@ -105,7 +105,7 @@ export class Gallery {
             console.log('Gallery data received:', data);
             console.log('First image example:', data.images[0]);
             
-            // Store the images as-is - paths are now relative
+            // Store the images as-is
             this.allImages = data.images;
             
             // Collect all unique tags and update tag select
@@ -317,66 +317,8 @@ export class Gallery {
 
         // Create and append new items
         currentImages.forEach(image => {
-            const item = document.createElement('div');
-            item.className = 'gallery__item';
-            item.dataset.imageUrl = image.url;
-            item.dataset.imageName = image.name;
-
-            // Add icon wrappers
-            const galleryIconWrapper = document.createElement('div');
-            galleryIconWrapper.className = 'icon-wrapper gallery-icon-wrapper';
-            const galleryIcon = document.createElement('i');
-            galleryIcon.className = 'fas fa-image gallery-icon';
-            galleryIcon.title = 'View in Gallery';
-            galleryIconWrapper.appendChild(galleryIcon);
-            galleryIconWrapper.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent triggering the modal
-                window.open(`content-gallery.html?image-name=${encodeURIComponent(image.name)}`, '_blank');
-            });
-            item.appendChild(galleryIconWrapper);
-
-            const folderIconWrapper = document.createElement('div');
-            folderIconWrapper.className = 'icon-wrapper folder-icon-wrapper';
-            const folderIcon = document.createElement('i');
-            folderIcon.className = 'fas fa-folder folder-icon';
-            folderIcon.title = 'Open in Finder';
-            folderIconWrapper.appendChild(folderIcon);
-            folderIconWrapper.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent triggering the modal
-                fetch(`/gallery/finder-search/${encodeURIComponent(image.name)}`);
-            });
-            item.appendChild(folderIconWrapper);
-
-            const img = document.createElement('img');
-            img.className = 'item__image';
-            img.src = image.url;
-            img.alt = image.name;
-            img.loading = 'lazy';
-
-            const info = document.createElement('div');
-            info.className = 'item__info';
-            
-            const name = document.createElement('div');
-            name.className = 'item__name';
-            name.textContent = image.name;
-
-            // Only create tags container if there are tags
-            if (image.tags && image.tags.length > 0) {
-                const tags = document.createElement('div');
-                tags.className = 'item__tags';
-                image.tags.forEach(tag => {
-                    const tagSpan = document.createElement('span');
-                    tagSpan.className = `item__tag item__tag--${tag.toLowerCase()}`;
-                    tagSpan.title = tag; // Show tag name on hover
-                    tags.appendChild(tagSpan);
-                });
-                info.appendChild(tags);
-            }
-
-            info.appendChild(name);
-            item.appendChild(img);
-            item.appendChild(info);
-            this.imageGrid.appendChild(item);
+            const card = this.createImageCard(image);
+            this.imageGrid.appendChild(card);
         });
 
         this.updatePagination();
@@ -455,21 +397,84 @@ export class Gallery {
         }
     }
 
+    createImageCard(imageData) {
+        const card = document.createElement('div');
+        card.className = 'gallery__item';
+        card.dataset.imageUrl = imageData.url;
+        card.dataset.imageName = imageData.name;
+
+        // Add icon wrappers
+        const galleryIconWrapper = document.createElement('div');
+        galleryIconWrapper.className = 'icon-wrapper gallery-icon-wrapper';
+        const galleryIcon = document.createElement('i');
+        galleryIcon.className = 'fa-solid fa-image gallery-icon';
+        galleryIcon.title = 'View in Gallery';
+        galleryIconWrapper.appendChild(galleryIcon);
+        galleryIconWrapper.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering the modal
+            window.open(`/content-gallery?image-name=${encodeURIComponent(imageData.name)}`, '_blank');
+        });
+        card.appendChild(galleryIconWrapper);
+
+        const folderIconWrapper = document.createElement('div');
+        folderIconWrapper.className = 'icon-wrapper folder-icon-wrapper';
+        const folderIcon = document.createElement('i');
+        folderIcon.className = 'fa-solid fa-folder folder-icon';
+        folderIcon.title = 'Open in Finder';
+        folderIconWrapper.appendChild(folderIcon);
+        folderIconWrapper.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent triggering the modal
+            fetch(`/gallery/finder-search/${encodeURIComponent(imageData.name)}`);
+        });
+        card.appendChild(folderIconWrapper);
+
+        // Create image container
+        const imageContainer = document.createElement('div');
+        imageContainer.className = 'item__image';
+
+        // Create image element
+        const img = document.createElement('img');
+        img.src = imageData.url;
+        img.alt = imageData.name;
+        img.loading = 'lazy';
+        img.onload = () => {
+            img.style.opacity = '1';
+        };
+        img.onerror = () => {
+            console.error('Failed to load image:', imageData.name);
+            img.src = '/images/error-placeholder.jpg';
+            img.alt = 'Error loading image';
+        };
+
+        // Create name element
+        const nameEl = document.createElement('div');
+        nameEl.className = 'item__name';
+        nameEl.textContent = imageData.name;
+
+        // Add tags if they exist
+        if (imageData.tags && imageData.tags.length > 0) {
+            const tagsContainer = document.createElement('div');
+            tagsContainer.className = 'item__tags';
+            this.renderTags(imageData.tags, tagsContainer);
+            card.appendChild(tagsContainer);
+        }
+
+        // Append elements
+        imageContainer.appendChild(img);
+        card.appendChild(imageContainer);
+        card.appendChild(nameEl);
+
+        return card;
+    }
+
     renderTags(tags, container) {
         if (!tags || !Array.isArray(tags)) {
             console.log('No tags to render:', tags);
             return;
         }
         
-        // Create a div for tags if it doesn't exist
-        let tagsContainer = container.querySelector('.item__tags');
-        if (!tagsContainer) {
-            tagsContainer = document.createElement('div');
-            tagsContainer.className = 'item__tags';
-            container.appendChild(tagsContainer);
-        } else {
-            tagsContainer.innerHTML = '';
-        }
+        // Clear existing tags
+        container.innerHTML = '';
         
         // Sort tags to ensure consistent order
         const sortedTags = [...tags].sort();
@@ -480,96 +485,8 @@ export class Gallery {
             const normalizedTag = tag.toLowerCase().replace(/[^a-z]/g, '');
             tagEl.className = `item__tag item__tag--${normalizedTag}`;
             tagEl.title = tag;  // Show original tag name on hover
-            tagsContainer.appendChild(tagEl);
+            container.appendChild(tagEl);
         });
-    }
-
-    createImageCard(imageData) {
-        console.log('Creating card for:', imageData.name, 'with path:', imageData.path);
-        const template = document.getElementById('gallery-card-template');
-        if (!template) {
-            console.error('Gallery card template not found');
-            return null;
-        }
-
-        const card = template.content.cloneNode(true);
-        const container = card.querySelector('.gallery__item');
-        const img = card.querySelector('.item__image');
-        const name = card.querySelector('.item__name');
-
-        // Use the video server endpoint
-        img.src = `http://localhost:8082/api/images/${encodeURIComponent(imageData.name)}`;
-        img.alt = imageData.name;
-        name.textContent = imageData.name;
-
-        // Add loading state
-        img.classList.add('loading');
-        
-        // Create a loading indicator
-        const loadingIndicator = document.createElement('div');
-        loadingIndicator.className = 'loading-indicator';
-        loadingIndicator.textContent = 'Loading...';
-        container.appendChild(loadingIndicator);
-
-        img.onload = () => {
-            console.log(`Image loaded successfully: ${imageData.name}`);
-            img.classList.remove('loading');
-            loadingIndicator.remove();
-        };
-        
-        img.onerror = () => {
-            console.error(`Failed to load image: ${imageData.path}`);
-            img.classList.remove('loading');
-            img.classList.add('error');
-            loadingIndicator.remove();
-            
-            // Add a retry button
-            const retryBtn = document.createElement('button');
-            retryBtn.className = 'retry-btn';
-            retryBtn.textContent = 'Retry';
-            retryBtn.onclick = () => {
-                console.log(`Retrying image load: ${imageData.path}`);
-                img.classList.remove('error');
-                img.classList.add('loading');
-                container.appendChild(loadingIndicator);
-                // Use the video server endpoint for retry as well
-                img.src = `http://localhost:8082/api/images/${encodeURIComponent(imageData.name)}?retry=${Date.now()}`;
-            };
-            container.appendChild(retryBtn);
-            
-            // Add error message
-            const errorMsg = document.createElement('div');
-            errorMsg.className = 'error-message';
-            errorMsg.textContent = 'Failed to load image';
-            container.appendChild(errorMsg);
-        };
-
-        // Render tags if they exist
-        if (imageData.tags && imageData.tags.length > 0) {
-            console.log(`Rendering tags for ${imageData.name}:`, imageData.tags);
-            this.renderTags(imageData.tags, container);
-        }
-
-        // Add click handlers for icons
-        const galleryIcon = card.querySelector('.gallery-icon');
-        const folderIcon = card.querySelector('.folder-icon');
-
-        galleryIcon?.addEventListener('click', () => {
-            window.open(`content-gallery.html?image-name=${encodeURIComponent(imageData.name)}`, '_blank');
-        });
-
-        folderIcon?.addEventListener('click', async () => {
-            try {
-                const response = await fetch(`/gallery/finder-search/${encodeURIComponent(imageData.name)}`);
-                if (!response.ok) {
-                    throw new Error('Failed to launch Finder search');
-                }
-            } catch (error) {
-                console.error('Error launching Finder search:', error);
-            }
-        });
-
-        return container;
     }
 }
 
