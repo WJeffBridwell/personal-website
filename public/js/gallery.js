@@ -32,7 +32,7 @@ export class Gallery {
         this.allImages = [];        // All images from server
         this.filteredImages = [];   // Images after search/filter
         this.currentPage = 1;
-        this.itemsPerPage = 48;     // 6 rows × 8 columns
+        this.itemsPerPage = 30;     // 5 rows × 6 columns
         this.searchTerm = '';
         this.sortOrder = 'name-asc';
         this.currentLetter = 'all';
@@ -232,10 +232,10 @@ export class Gallery {
     initModalEvents() {
         // Click on gallery item to open modal
         this.imageGrid.addEventListener('click', (e) => {
-            const galleryItem = e.target.closest('.gallery__item');
+            const galleryItem = e.target.closest('.image-container');
             if (galleryItem) {
-                const imageUrl = galleryItem.dataset.imageUrl;
-                const imageName = galleryItem.dataset.imageName;
+                const imageUrl = galleryItem.querySelector('img').src;
+                const imageName = galleryItem.querySelector('img').alt;
                 if (imageUrl && imageName) {
                     this.openModal(imageUrl, imageName);
                 }
@@ -502,6 +502,10 @@ export class Gallery {
         const imageI = document.createElement('i');
         imageI.className = 'fas fa-image';
         imageIcon.appendChild(imageI);
+        imageIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.open(`/content-gallery.html?image-name=${encodeURIComponent(image.name)}`, '_blank');
+        });
         container.appendChild(imageIcon);
         
         // Folder icon (top right)
@@ -510,6 +514,20 @@ export class Gallery {
         const folderI = document.createElement('i');
         folderI.className = 'fas fa-folder';
         folderIcon.appendChild(folderI);
+        folderIcon.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            console.log('Folder icon clicked for image:', image.name);
+            try {
+                const response = await fetch(`/gallery/finder-search/${encodeURIComponent(image.name)}`);
+                const data = await response.json();
+                console.log('Finder search response:', data);
+                if (!data.success) {
+                    console.error('Finder search failed:', data.error);
+                }
+            } catch (error) {
+                console.error('Error opening Finder search:', error);
+            }
+        });
         container.appendChild(folderIcon);
         
         // Tags (below image icon)
@@ -535,91 +553,20 @@ export class Gallery {
         return container;
     }
 
-    createImageCard(imageData) {
-        const card = document.createElement('div');
-        card.className = 'gallery__item';
-        card.dataset.imageUrl = imageData.url;
-        card.dataset.imageName = imageData.name;
-
-        // Add icon wrappers
-        const galleryIconWrapper = document.createElement('div');
-        galleryIconWrapper.className = 'icon-wrapper gallery-icon-wrapper';
-        const galleryIcon = document.createElement('i');
-        galleryIcon.className = 'fa-solid fa-image gallery-icon';
-        galleryIcon.title = 'View in Gallery';
-        galleryIconWrapper.appendChild(galleryIcon);
-        galleryIconWrapper.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent triggering the modal
-            window.open(`/content-gallery?image-name=${encodeURIComponent(imageData.name)}`, '_blank');
-        });
-        card.appendChild(galleryIconWrapper);
-
-        const folderIconWrapper = document.createElement('div');
-        folderIconWrapper.className = 'icon-wrapper folder-icon-wrapper';
-        const folderIcon = document.createElement('i');
-        folderIcon.className = 'fa-solid fa-folder folder-icon';
-        folderIcon.title = 'Open in Finder';
-        folderIconWrapper.appendChild(folderIcon);
-        folderIconWrapper.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent triggering the modal
-            fetch(`/gallery/finder-search/${encodeURIComponent(imageData.name)}`);
-        });
-        card.appendChild(folderIconWrapper);
-
-        // Create image container
-        const imageContainer = document.createElement('div');
-        imageContainer.className = 'item__image';
-
-        // Create image element
-        const img = document.createElement('img');
-        img.src = imageData.url;
-        img.alt = imageData.name;
-        img.loading = 'lazy';
-        img.onload = () => {
-            img.style.opacity = '1';
-        };
-        img.onerror = () => {
-            console.error('Failed to load image:', imageData.name);
-            img.src = '/images/error-placeholder.jpg';
-            img.alt = 'Error loading image';
-        };
-
-        // Create name element
-        const nameEl = document.createElement('div');
-        nameEl.className = 'item__name';
-        nameEl.textContent = imageData.name;
-
-        // Add tags if they exist
-        if (imageData.tags && imageData.tags.length > 0) {
-            const tagsContainer = document.createElement('div');
-            tagsContainer.className = 'item__tags';
-            this.renderTags(imageData.tags, tagsContainer);
-            card.appendChild(tagsContainer);
-        }
-
-        // Append elements
-        imageContainer.appendChild(img);
-        card.appendChild(imageContainer);
-        card.appendChild(nameEl);
-
-        return card;
-    }
-
-    /**
-     * Get a consistent color for a tag
-     * @param {string} tag - The tag to get a color for
-     * @returns {string} - The color in hex format
-     */
     getTagColor(tag) {
-        const colors = [
-            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
-            '#FFEEAD', '#D4A5A5', '#9B59B6', '#3498DB'
-        ];
-        let hash = 0;
-        for (let i = 0; i < tag.length; i++) {
-            hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-        }
-        return colors[Math.abs(hash) % colors.length];
+        // Map tag names to actual colors
+        const tagColors = {
+            'green': '#96CEB4',  // Using a nice green from the original colors array
+            'red': '#FF6B6B',    // Using the red from the original colors array
+            'blue': '#45B7D1',   // Using the blue from the original colors array
+            'orange': '#FFEEAD'  // Using the yellow/orange from the original colors array
+        };
+        
+        // Convert tag to lowercase for case-insensitive matching
+        const normalizedTag = tag.toLowerCase();
+        
+        // Return the mapped color or a default color if tag is not recognized
+        return tagColors[normalizedTag] || '#D4A5A5';  // Default to a neutral color
     }
 
     renderTags(tags, container) {
