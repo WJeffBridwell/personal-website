@@ -987,3 +987,51 @@ body {
     text-overflow: ellipsis;
     z-index: 10;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 480px) {
+    /* Letter filter adjustments for mobile */
+    .letter-filter {
+        gap: 0.25rem;
+        padding: 0.5rem;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE and Edge */
+    }
+    
+    .letter-filter::-webkit-scrollbar {
+        display: none; /* Chrome, Safari, Opera */
+    }
+    
+    .letter-filter__btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        min-width: 2rem;
+    }
+
+    /* Gallery grid adjustments for mobile */
+    .gallery-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.5rem;
+        padding: 0 0.5rem;
+    }
+
+    /* Ensure images don't overflow */
+    .image-container img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    /* Adjust spacing for better mobile view */
+    .gallery-controls {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+
+    .gallery-search {
+        width: 100%;
+        max-width: none;
+    }
+}
