@@ -166,84 +166,353 @@ app.use(express.static(publicPath, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/blog', express.static(path.join(__dirname, 'blog', 'public')));
 
-// Initialize Hexo
-const hexo = new Hexo(process.cwd() + '/blog', {
-  silent: false // Enable logging for debugging
+// Initialize Hexo once
+const hexo = new Hexo(path.join(__dirname, 'blog'), {
+  debug: true,  // Enable debug mode
+  silent: false // Show more logs
 });
 
 // Ensure Hexo is initialized before handling requests
 let hexoInitialized = false;
+
 async function ensureHexoInitialized() {
-  if (!hexoInitialized) {
-    console.log('Initializing Hexo...');
-    await hexo.init();
-    await hexo.load();
-    hexoInitialized = true;
-    console.log('Hexo initialized successfully');
+  try {
+    if (!hexoInitialized) {
+      console.log('Initializing Hexo...');
+      await hexo.init();
+      await hexo.load();
+      hexoInitialized = true;
+      console.log('Hexo initialized successfully');
+      
+      // Log available posts for debugging
+      const posts = hexo.locals.get('posts').data;
+      console.log('Available posts:', posts.map(p => ({ 
+        title: p.title, 
+        path: p.path,
+        source: p.source,
+        full_source: p.full_source 
+      })));
+    }
+  } catch (error) {
+    console.error('Error initializing Hexo:', error);
+    hexoInitialized = false; // Reset flag on error
+    throw error;
   }
 }
 
-// Blog post routes
-app.get('/post/:year/:month/:day/:slug', async (req, res) => {
+// Safely execute Hexo command
+async function safeExecHexo(command) {
+  return new Promise((resolve, reject) => {
+    console.log(`Executing Hexo command: ${command}`);
+    exec(`cd blog && ${command}`, { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error executing ${command}:`, error);
+        console.error('stderr:', stderr);
+        reject(new Error(`Failed to execute ${command}: ${error.message}`));
+      } else {
+        console.log(`${command} output:`, stdout);
+        resolve(stdout);
+      }
+    });
+  });
+}
+
+// Create a new blog post
+app.post('/blog/api/posts', async (req, res) => {
   try {
-    const { year, month, day, slug } = req.params;
-    const postPath = `${year}/${month}/${day}/${slug}/`;  // Add trailing slash to match Hexo format
-    console.log('Requesting blog post:', postPath);
+    console.log('Creating new post with data:', req.body);
     
+    // Validate required fields first
+    const { title, content } = req.body;
+    if (!title || typeof title !== 'string') {
+      return res.status(400).json({ error: 'Title is required and must be a string' });
+    }
+    if (!content || typeof content !== 'string') {
+      return res.status(400).json({ error: 'Content is required and must be a string' });
+    }
+    
+    // Ensure categories and tags are arrays
+    const categories = Array.isArray(req.body.categories) ? req.body.categories : [];
+    const tags = Array.isArray(req.body.tags) ? req.body.tags : [];
+    
+    const date = new Date();
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    
+    // Create the post file
+    const postsDir = path.join(__dirname, 'blog', 'source', '_posts');
+    const postPath = path.join(postsDir, `${slug}.md`);
+    
+    console.log('Creating post directory:', postsDir);
+    await fs.promises.mkdir(postsDir, { recursive: true });
+    
+    console.log('Writing post to:', postPath);
+    const postContent = `---
+title: "${title.replace(/"/g, '\\"')}"
+date: ${date.toISOString()}
+layout: post
+categories:${categories.length ? '\n' + categories.map(cat => `  - ${cat}`).join('\n') : ' []'}
+tags:${tags.length ? '\n' + tags.map(tag => `  - ${tag}`).join('\n') : ' []'}
+---
+
+${content}`;
+    
+    await fs.promises.writeFile(postPath, postContent, 'utf8');
+    console.log('Post file written successfully');
+    
+    // Send response immediately after saving the file
+    res.json({
+      success: true,
+      post: {
+        title,
+        path: slug,
+        date: date.toISOString(),
+        categories,
+        tags,
+        content
+      }
+    });
+    
+    // Handle Hexo regeneration asynchronously
+    (async () => {
+      try {
+        console.log('Running Hexo clean...');
+        await new Promise((resolve, reject) => {
+          exec('cd blog && npx hexo clean', (error, stdout, stderr) => {
+            if (error) {
+              console.error('Error during hexo clean:', error);
+              console.error('stderr:', stderr);
+              reject(error);
+            } else {
+              console.log('Hexo clean output:', stdout);
+              resolve();
+            }
+          });
+        });
+        
+        console.log('Running Hexo generate...');
+        await new Promise((resolve, reject) => {
+          exec('cd blog && npx hexo generate', (error, stdout, stderr) => {
+            if (error) {
+              console.error('Error during hexo generate:', error);
+              console.error('stderr:', stderr);
+              reject(error);
+            } else {
+              console.log('Hexo generate output:', stdout);
+              resolve();
+            }
+          });
+        });
+        
+        console.log('Blog regeneration completed successfully');
+      } catch (error) {
+        console.error('Error during blog regeneration:', error);
+      }
+    })();
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ error: 'Error creating post: ' + error.message });
+  }
+});
+
+// Blog post routes
+app.get('/blog/api/posts/:path(*)', async (req, res) => {
+  try {
+    console.log('Fetching post with path:', req.params.path);
     await ensureHexoInitialized();
-    const posts = hexo.locals.get('posts');
-    const post = posts.find(p => p.path === postPath);
+    
+    // Get the path and ensure it has the correct format
+    let requestedPath = req.params.path;
+    if (!requestedPath.endsWith('/')) {
+      requestedPath += '/';
+    }
+    console.log('Looking for post with path:', requestedPath);
+    
+    // Get all posts and find the matching one
+    const posts = hexo.locals.get('posts').data;
+    console.log('Total posts available:', posts.length);
+    
+    // Find the post by matching the path
+    const post = posts.find(p => {
+      console.log('Comparing post path:', p.path, 'with requested path:', requestedPath);
+      return p.path === requestedPath;
+    });
     
     if (!post) {
-      console.log('Post not found:', postPath);
+      console.log('Post not found');
       return res.status(404).json({ error: 'Post not found' });
     }
-
-    // Convert post to a plain object and ensure all fields are present
+    
+    console.log('Found post:', post.title);
+    
+    // Return the full post data
     const postData = {
       title: post.title || 'Untitled Post',
+      path: post.path,
       date: post.date ? post.date.toISOString() : new Date().toISOString(),
-      content: post.content || '',
-      excerpt: post._content ? post._content.slice(0, 200) + '...' : '',
       categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
       tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
-      path: post.path,
+      content: post._content || post.content || '',  // Use raw content if available
       raw: post._content || ''  // Include raw content for editing
     };
-
+    
     console.log('Sending post data:', postData);
     res.json(postData);
   } catch (error) {
-    console.error('Error serving blog post:', error);
-    res.status(500).json({ error: 'Error serving blog post: ' + error.message });
+    console.error('Error fetching post:', error);
+    res.status(500).json({ error: 'Error fetching post: ' + error.message });
   }
 });
 
 // Handle blog post editing
-app.get('/blog/api/posts/:path(*)', async (req, res) => {
+app.get('/blog/api/posts/:path', async (req, res) => {
   try {
-    console.log('Fetching post for edit:', req.params.path);
+    console.log('Fetching post with path:', req.params.path);
     await ensureHexoInitialized();
     
-    const postPath = req.params.path.replace(/\/$/, '') + '/';
-    const post = hexo.locals.get('posts').find(p => p.path === postPath);
+    // Clean up the path parameter
+    const cleanPath = req.params.path.replace(/\.html$/, '');
+    console.log('Looking for post with clean path:', cleanPath);
+    
+    // Get all posts and find the matching one
+    const posts = hexo.locals.get('posts');
+    console.log('Total posts available:', posts.length);
+    
+    const post = posts.find(p => {
+      console.log('Comparing post path:', p.path, 'with requested path:', cleanPath);
+      return p.path.replace(/\.html$/, '') === cleanPath;
+    });
     
     if (!post) {
-      console.log('Post not found:', postPath);
+      console.log('Post not found');
       return res.status(404).json({ error: 'Post not found' });
     }
     
+    console.log('Found post:', post.title);
+    
+    // Return the full post data
     res.json({
       title: post.title,
       path: post.path,
       date: post.date,
       categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
       tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
-      content: post.content
+      content: post.content,
+      raw: post._content // Include the raw markdown content for editing
     });
   } catch (error) {
     console.error('Error fetching post:', error);
     res.status(500).json({ error: 'Error fetching post: ' + error.message });
+  }
+});
+
+// Delete a blog post
+app.delete('/blog/api/posts/:path(*)', async (req, res) => {
+  try {
+    console.log('Deleting post with path:', req.params.path);
+    await ensureHexoInitialized();
+    
+    // Extract the post name from the path
+    const pathParts = req.params.path.split('/').filter(part => part.length > 0);
+    const postName = pathParts[pathParts.length - 1]; // Get the last non-empty part
+    console.log('Looking for post with name:', postName);
+    
+    // Find the post by matching the title or filename
+    const posts = hexo.locals.get('posts').data;
+    if (!Array.isArray(posts)) {
+      console.error('No posts found in Hexo');
+      return res.status(500).json({ error: 'Error accessing blog posts' });
+    }
+    
+    console.log('Available posts:', posts.map(p => ({ 
+      title: p.title,
+      source: p.source,
+      slug: p.slug,
+      path: p.path
+    })));
+    
+    const post = posts.find(p => {
+      if (!p || !p.source) {
+        console.log('Invalid post entry:', p);
+        return false;
+      }
+      // Try matching by filename (without .md extension) or by title
+      const filename = path.basename(p.source, '.md');
+      console.log('Comparing:', { filename, postName, title: p.title });
+      return filename.toLowerCase() === postName.toLowerCase() || 
+             (p.slug && p.slug.toLowerCase() === postName.toLowerCase());
+    });
+    
+    if (!post) {
+      console.log('Post not found in Hexo posts');
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    if (!post.full_source) {
+      console.error('Post file path not found:', post);
+      return res.status(500).json({ error: 'Post file path not found' });
+    }
+    
+    // Get the actual file path
+    const postPath = post.full_source;
+    console.log('Found post file at:', postPath);
+    
+    // Check if file exists before deleting
+    try {
+      await fs.promises.access(postPath, fs.constants.F_OK);
+    } catch (error) {
+      console.error('Post file not found on disk:', postPath);
+      return res.status(404).json({ error: 'Post file not found' });
+    }
+    
+    // Delete the post file
+    try {
+      console.log('Deleting post file:', postPath);
+      await fs.promises.unlink(postPath);
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      return res.status(500).json({ error: 'Failed to delete post file' });
+    }
+    
+    // Regenerate the blog
+    console.log('Regenerating blog...');
+    try {
+      await new Promise((resolve, reject) => {
+        const child = exec('cd blog && npx hexo generate', (error, stdout, stderr) => {
+          if (error) {
+            console.error('Error regenerating blog:', error);
+            console.error('stderr:', stderr);
+            reject(error);
+          } else {
+            console.log('Blog regenerated:', stdout);
+            resolve();
+          }
+        });
+        
+        // Add timeout to prevent hanging
+        setTimeout(() => {
+          child.kill();
+          reject(new Error('Blog regeneration timed out'));
+        }, 30000); // 30 second timeout
+      });
+    } catch (error) {
+      console.error('Failed to regenerate blog:', error);
+      return res.status(500).json({ error: 'Failed to regenerate blog' });
+    }
+    
+    // Reinitialize Hexo to pick up the changes
+    try {
+      hexoInitialized = false;
+      await ensureHexoInitialized();
+    } catch (error) {
+      console.error('Failed to reinitialize Hexo:', error);
+      return res.status(500).json({ error: 'Failed to reinitialize blog' });
+    }
+    
+    console.log('Post deleted successfully');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ error: 'Error deleting post: ' + error.message });
   }
 });
 
@@ -699,58 +968,239 @@ app.get('/blog/api/posts', async (req, res) => {
 
 app.get('/blog/api/posts/:path', async (req, res) => {
   try {
+    console.log('Fetching post with path:', req.params.path);
     await ensureHexoInitialized();
-    const post = hexo.locals.get('posts').findOne({ path: req.params.path });
+    
+    // Clean up the path parameter
+    const cleanPath = req.params.path.replace(/\.html$/, '');
+    console.log('Looking for post with clean path:', cleanPath);
+    
+    // Get all posts and find the matching one
+    const posts = hexo.locals.get('posts');
+    console.log('Total posts available:', posts.length);
+    
+    const post = posts.find(p => {
+      console.log('Comparing post path:', p.path, 'with requested path:', cleanPath);
+      return p.path.replace(/\.html$/, '') === cleanPath;
+    });
+    
     if (!post) {
+      console.log('Post not found');
       return res.status(404).json({ error: 'Post not found' });
     }
+    
+    console.log('Found post:', post.title);
+    
+    // Return the full post data
     res.json({
       title: post.title,
       path: post.path,
       date: post.date,
-      categories: post.categories.toArray().map(cat => cat.name),
-      tags: post.tags.toArray().map(tag => tag.name),
-      content: post.content
+      categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
+      tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
+      content: post.content,
+      raw: post._content // Include the raw markdown content for editing
     });
   } catch (error) {
     console.error('Error fetching post:', error);
-    res.status(500).json({ error: 'Error fetching post' });
+    res.status(500).json({ error: 'Error fetching post: ' + error.message });
   }
 });
 
-app.put('/blog/api/posts/:path', async (req, res) => {
+app.post('/blog/api/posts', async (req, res) => {
   try {
-    const { title, categories, tags, content } = req.body;
-    const post = hexo.locals.get('posts').findOne({ path: req.params.path });
-    if (!post) {
-      return res.status(404).json({ error: 'Post not found' });
-    }
-
+    console.log('Creating new post with data:', req.body);
+    await ensureHexoInitialized();
+    
+    const { title, content, categories = [], tags = [] } = req.body;
+    const date = new Date();
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    
+    // Create the post file
+    const postPath = path.join(__dirname, 'blog', 'source', '_posts', `${slug}.md`);
     const postContent = `---
 title: ${title}
-date: ${post.date.toISOString()}
-categories:
-${categories.map(cat => `  - ${cat}`).join('\n')}
-tags:
-${tags.map(tag => `  - ${tag}`).join('\n')}
+date: ${date.toISOString()}
+categories: [${categories.join(', ')}]
+tags: [${tags.join(', ')}]
 ---
-
 ${content}`;
-
-    await fs.writeFile(post.full_source, postContent);
-
-    // Regenerate blog
+    
+    await fs.promises.writeFile(postPath, postContent);
+    
+    // Regenerate the blog
+    console.log('Regenerating blog...');
     await new Promise((resolve, reject) => {
-      exec('cd blog && npx hexo generate', (error) => {
-        if (error) reject(error);
-        else resolve();
+      exec('cd blog && npx hexo generate', (error, stdout, stderr) => {
+        if (error) {
+          console.error('Error regenerating blog:', error);
+          console.error('stderr:', stderr);
+          reject(error);
+        } else {
+          console.log('Blog regenerated:', stdout);
+          resolve();
+        }
       });
     });
+    
+    // Reinitialize Hexo to pick up the changes
+    hexoInitialized = false;
+    await ensureHexoInitialized();
+    
+    // Get the new post data
+    const posts = hexo.locals.get('posts').data;
+    const newPost = posts.find(p => p.source.endsWith(`${slug}.md`));
+    
+    if (!newPost) {
+      throw new Error('Failed to get new post data');
+    }
+    
+    // Return the new post data
+    res.json({
+      title: newPost.title,
+      path: newPost.path,
+      date: newPost.date.toISOString(),
+      categories: newPost.categories.toArray().map(cat => cat.name),
+      tags: newPost.tags.toArray().map(tag => tag.name),
+      content: newPost._content || newPost.content,
+      raw: newPost._content
+    });
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ error: 'Error creating post: ' + error.message });
+  }
+});
 
-    res.json({ success: true });
+app.put('/blog/api/posts/:path(*)', async (req, res) => {
+  try {
+    console.log('Updating post with path:', req.params.path);
+    await ensureHexoInitialized();
+    
+    // Find the post
+    const posts = hexo.locals.get('posts').data;
+    const post = posts.find(p => p.path === req.params.path);
+    
+    if (!post) {
+      console.log('Post not found');
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    // Update the post file
+    const postPath = post.full_source;
+    const updatedContent = `---
+title: ${req.body.title}
+date: ${post.date.toISOString()}
+categories: [${req.body.categories.join(', ')}]
+tags: [${req.body.tags.join(', ')}]
+---
+${req.body.content}`;
+    
+    await fs.promises.writeFile(postPath, updatedContent);
+    
+    // Regenerate the blog
+    console.log('Regenerating blog...');
+    await new Promise((resolve, reject) => {
+      exec('cd blog && npx hexo generate', (error, stdout, stderr) => {
+        if (error) {
+          console.error('Error regenerating blog:', error);
+          console.error('stderr:', stderr);
+          reject(error);
+        } else {
+          console.log('Blog regenerated:', stdout);
+          resolve();
+        }
+      });
+    });
+    
+    // Reinitialize Hexo to pick up the changes
+    hexoInitialized = false;
+    await ensureHexoInitialized();
+    
+    // Get the updated post data
+    const updatedPosts = hexo.locals.get('posts').data;
+    const updatedPost = updatedPosts.find(p => p.path === req.params.path);
+    
+    if (!updatedPost) {
+      throw new Error('Failed to get updated post data');
+    }
+    
+    // Return the updated post data
+    res.json({
+      title: updatedPost.title,
+      path: updatedPost.path,
+      date: updatedPost.date.toISOString(),
+      categories: updatedPost.categories.toArray().map(cat => cat.name),
+      tags: updatedPost.tags.toArray().map(tag => tag.name),
+      content: updatedPost._content || updatedPost.content,
+      raw: updatedPost._content
+    });
   } catch (error) {
     console.error('Error updating post:', error);
-    res.status(500).json({ error: 'Error updating post' });
+    res.status(500).json({ error: 'Error updating post: ' + error.message });
+  }
+});
+
+app.post('/blog/api/posts', async (req, res) => {
+  try {
+    console.log('Creating new post with data:', req.body);
+    await ensureHexoInitialized();
+    
+    const { title, content, categories = [], tags = [] } = req.body;
+    const date = new Date();
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    
+    // Create the post file
+    const postPath = path.join(__dirname, 'blog', 'source', '_posts', `${slug}.md`);
+    const postContent = `---
+title: ${title}
+date: ${date.toISOString()}
+categories: [${categories.join(', ')}]
+tags: [${tags.join(', ')}]
+---
+${content}`;
+    
+    await fs.promises.writeFile(postPath, postContent);
+    
+    // Regenerate the blog
+    console.log('Regenerating blog...');
+    await new Promise((resolve, reject) => {
+      exec('cd blog && npx hexo generate', (error, stdout, stderr) => {
+        if (error) {
+          console.error('Error regenerating blog:', error);
+          console.error('stderr:', stderr);
+          reject(error);
+        } else {
+          console.log('Blog regenerated:', stdout);
+          resolve();
+        }
+      });
+    });
+    
+    // Reinitialize Hexo to pick up the changes
+    hexoInitialized = false;
+    await ensureHexoInitialized();
+    
+    // Get the new post data
+    const posts = hexo.locals.get('posts').data;
+    const newPost = posts.find(p => p.source.endsWith(`${slug}.md`));
+    
+    if (!newPost) {
+      throw new Error('Failed to get new post data');
+    }
+    
+    // Return the new post data
+    res.json({
+      title: newPost.title,
+      path: newPost.path,
+      date: newPost.date.toISOString(),
+      categories: newPost.categories.toArray().map(cat => cat.name),
+      tags: newPost.tags.toArray().map(tag => tag.name),
+      content: newPost._content || newPost.content,
+      raw: newPost._content
+    });
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ error: 'Error creating post: ' + error.message });
   }
 });
 
@@ -817,67 +1267,6 @@ app.post('/blog/api/config', async (req, res) => {
   } catch (error) {
     console.error('Error saving configuration:', error);
     res.status(500).json({ error: 'Error saving configuration' });
-  }
-});
-
-app.post('/blog/api/posts', async (req, res) => {
-  try {
-    console.log('Creating new post:', req.body);
-    const { title, categories, tags, content } = req.body;
-    
-    if (!title || !content) {
-      return res.status(400).json({ error: 'Title and content are required' });
-    }
-
-    await ensureHexoInitialized();
-
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const date = new Date().toISOString();
-    
-    const postContent = `---
-title: ${title}
-date: ${date}
-categories:
-${categories.map(cat => `  - ${cat}`).join('\n')}
-tags:
-${tags.map(tag => `  - ${tag}`).join('\n')}
----
-
-${content}`;
-
-    const postPath = path.join(postsDirectory, `${slug}.md`);
-    console.log('Writing post to:', postPath);
-    
-    await fs.promises.writeFile(postPath, postContent);
-
-    // Regenerate blog
-    try {
-      console.log('Regenerating blog...');
-      await new Promise((resolve, reject) => {
-        exec('cd blog && npx hexo generate', (error) => {
-          if (error) {
-            console.error('Error generating blog:', error);
-            reject(error);
-          } else {
-            console.log('Blog regenerated successfully');
-            resolve();
-          }
-        });
-      });
-
-      // Reload Hexo after generating
-      hexoInitialized = false;
-      await ensureHexoInitialized();
-    } catch (error) {
-      console.error('Failed to regenerate blog:', error);
-      // Continue anyway since the post was saved
-    }
-
-    console.log('Post created successfully');
-    res.json({ success: true, path: slug });
-  } catch (error) {
-    console.error('Error creating post:', error);
-    res.status(500).json({ error: 'Error creating post: ' + error.message });
   }
 });
 

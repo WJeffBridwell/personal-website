@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="modal.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
     <style>
         /* Image Gallery Styles */
         .image-container {
@@ -162,6 +163,7 @@
                 <li><a href="#" class="nav__link--active">Home</a></li>
                 <li><a href="#about">About</a></li>
                 <li><a href="#projects">Projects</a></li>
+                <li><a href="gallery.html">Gallery</a></li>
                 <li><a href="#blog">Blog</a></li>
                 <li><a href="#contact">Contact</a></li>
             </ul>
@@ -257,28 +259,6 @@
                     <div class="blog-controls">
                         <button id="newPostBtn" class="btn primary">New Post</button>
                         <button id="configureBtn" class="btn">Configure Blog</button>
-                    </div>
-
-                    <!-- Inline Post Editor -->
-                    <div id="postEditor" class="post-editor hidden">
-                        <form id="postForm">
-                            <div class="form-group">
-                                <input type="text" id="postTitle" name="title" placeholder="Post Title" required>
-                            </div>
-                            <div class="form-group">
-                                <input type="text" id="postCategories" name="categories" placeholder="Categories (comma-separated)">
-                            </div>
-                            <div class="form-group">
-                                <input type="text" id="postTags" name="tags" placeholder="Tags (comma-separated)">
-                            </div>
-                            <div class="form-group">
-                                <textarea id="postContent" name="content" placeholder="Write your post content here..."></textarea>
-                            </div>
-                            <div class="form-actions">
-                                <button type="submit" class="btn primary">Save Post</button>
-                                <button type="button" class="btn" id="cancelEdit">Cancel</button>
-                            </div>
-                        </form>
                     </div>
 
                     <!-- Blog Posts List -->
@@ -383,6 +363,7 @@
     </script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
     <script src="js/index.js"></script>
     <script src="js/blog.js"></script>
 </body>
