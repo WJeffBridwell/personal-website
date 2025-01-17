@@ -1,0 +1,76 @@
+@startuml Personal Website Class Diagram
+
+package "Server" {
+  class Server {
+    - port: number
+    - app: Express
+    - io: SocketIO
+    + start()
+    - setupMiddleware()
+    - setupRoutes()
+  }
+
+  class GalleryRouter {
+    - imageCache: Map
+    - lastCacheUpdate: number
+    + getImages()
+    + getImage(name: string)
+    + searchImages(query: string)
+    - updateCache()
+  }
+
+  class BlogRouter {
+    - hexo: Hexo
+    + getPosts()
+    + getPost(path: string)
+    + createPost(data: PostData)
+    + updatePost(path: string, data: PostData)
+    + deletePost(path: string)
+  }
+
+  class ImageProcessor {
+    + generateThumbnail(image: Buffer): Buffer
+    + generatePreview(image: Buffer): Buffer
+    + optimizeImage(image: Buffer): Buffer
+  }
+
+  class CacheManager {
+    - cacheDir: string
+    + getCachedFile(key: string): Buffer
+    + setCachedFile(key: string, data: Buffer)
+    + clearCache()
+  }
+}
+
+package "Frontend" {
+  class Gallery {
+    - images: Image[]
+    + loadImages()
+    + searchImages(query: string)
+    + displayImage(image: Image)
+  }
+
+  class Blog {
+    - posts: Post[]
+    + loadPosts()
+    + createPost()
+    + editPost(post: Post)
+    + deletePost(post: Post)
+  }
+
+  class ImageViewer {
+    - currentImage: Image
+    + showImage(image: Image)
+    + zoomIn()
+    + zoomOut()
+  }
+}
+
+Server --> GalleryRouter
+Server --> BlogRouter
+GalleryRouter --> ImageProcessor
+GalleryRouter --> CacheManager
+BlogRouter --> CacheManager
+Gallery --> ImageViewer
+
+@enduml

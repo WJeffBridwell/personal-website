@@ -1,6 +1,6 @@
 # Personal Website with Image Gallery
 
-A modern, responsive personal website featuring a dynamic image gallery with advanced search, sort, and filter capabilities. Built with modern JavaScript and comprehensive test coverage.
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
 
 ## 🚀 Features
 
@@ -11,6 +11,15 @@ A modern, responsive personal website featuring a dynamic image gallery with adv
   - Responsive grid layout with automatic resizing
   - Modal image viewing with keyboard navigation
   - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
 
 - **Modern Architecture**
   - ES6+ JavaScript modules
@@ -18,6 +27,8 @@ A modern, responsive personal website featuring a dynamic image gallery with adv
   - Responsive design with CSS Grid/Flexbox
   - Progressive enhancement
   - Accessibility-first approach
+  - Comprehensive logging system
+  - Performance monitoring
 
 - **Developer Experience**
   - Comprehensive test suite (90%+ coverage)
@@ -25,6 +36,8 @@ A modern, responsive personal website featuring a dynamic image gallery with adv
   - Automated documentation
   - Git hooks for code quality
   - Continuous Integration ready
+  - Debug middleware
+  - Detailed performance metrics
 
 ## 🏗️ Technical Stack
 
@@ -37,6 +50,8 @@ A modern, responsive personal website featuring a dynamic image gallery with adv
   - Node.js
   - Express.js
   - Sharp for image processing
+  - Hexo blog engine
+  - Socket.IO for real-time features
   
 - **Testing**
   - Jest
@@ -48,6 +63,7 @@ A modern, responsive personal website featuring a dynamic image gallery with adv
   - Rate limiting
   - Content Security Policy
   - XSS Protection
+  - CORS configuration
 
 ## 📁 Project Structure
 
@@ -56,12 +72,21 @@ personal-website/
 ├── public/                 # Static assets and client-side code
 │   ├── js/                # JavaScript modules
 │   │   ├── gallery.js     # Gallery component and logic
+│   │   ├── blog.js        # Blog functionality
+│   │   ├── content-gallery.js # Enhanced media gallery
 │   │   ├── helpers.js     # Utility functions
 │   │   └── modal.js       # Modal component
 │   ├── css/               # Stylesheets
-│   └── index.html         # Entry point
+│   └── *.html             # Entry points
 ├── routes/                # Express routes
 │   └── gallery.js         # Gallery API endpoints
+├── blog/                  # Blog content and configuration
+│   ├── source/           # Blog posts and pages
+│   └── _config.yml       # Hexo configuration
+├── logs/                  # Application logs
+│   ├── console.log       # General logs
+│   ├── gallery-debug.log # Gallery-specific logs
+│   └── gallery-metrics.log # Performance metrics
 ├── test/                  # Test suites
 │   ├── unit/             # Unit tests
 │   ├── integration/      # Integration tests
@@ -128,14 +153,38 @@ All files   |   90.61 |    76.70 |   90.19 |   90.52 |
 - Input validation and sanitization
 - Regular dependency updates
 - XSS protection
+- CORS configuration
+- Proper error handling
 
 ## 📈 Performance
 
+- Advanced caching system
+  - LRU cache for thumbnails
+  - Preview caching
+  - Metadata caching
+  - ETag support
+- Image optimization
+  - Multiple format support (JPEG, WebP, AVIF)
+  - Quality optimization
+  - Thumbnail generation
 - Lazy loading of images
-- Minified and compressed assets
+- Compression enabled
 - Browser caching
 - Responsive images
 - Optimized JavaScript bundles
+- Batch processing support
+- Cache warmup system
+
+## 🔄 Future Improvements
+
+1. Redis integration for enhanced caching
+2. Worker system for image processing
+3. Expanded API documentation
+4. Increased test coverage
+5. Container support
+6. GraphQL API option
+7. WebSocket real-time updates
+8. Machine learning for image tagging
 
 ## 🤝 Contributing
 

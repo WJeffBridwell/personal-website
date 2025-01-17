@@ -1,0 +1,72 @@
+@startuml Personal Website Sequence Diagram
+
+actor User
+participant "Frontend" as FE
+participant "Backend Server" as BE
+participant "Cache" as Cache
+participant "Image Storage" as Storage
+
+== Image Gallery Flow ==
+
+User -> FE : View Gallery
+activate FE
+
+FE -> BE : GET /api/gallery/images
+activate BE
+
+BE -> Cache : Check image cache
+activate Cache
+Cache --> BE : Cache status
+deactivate Cache
+
+alt Cache miss
+    BE -> Storage : Read image directory
+    activate Storage
+    Storage --> BE : Image list
+    deactivate Storage
+    
+    BE -> Cache : Update cache
+    activate Cache
+    Cache --> BE : Cache updated
+    deactivate Cache
+end
+
+BE --> FE : Return image list
+deactivate BE
+
+FE -> User : Display gallery
+deactivate FE
+
+== Image Preview Flow ==
+
+User -> FE : Click image
+activate FE
+
+FE -> BE : GET /proxy/image/preview
+activate BE
+
+BE -> Cache : Check preview cache
+activate Cache
+Cache --> BE : Cache status
+deactivate Cache
+
+alt Cache miss
+    BE -> Storage : Get original image
+    activate Storage
+    Storage --> BE : Image data
+    deactivate Storage
+    
+    BE -> BE : Generate preview
+    BE -> Cache : Store preview
+    activate Cache
+    Cache --> BE : Preview stored
+    deactivate Cache
+end
+
+BE --> FE : Return preview
+deactivate BE
+
+FE -> User : Display preview
+deactivate FE
+
+@enduml

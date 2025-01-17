@@ -1,192 +1,298 @@
 openapi: 3.0.3
 info:
-  title: Images API
+  title: Personal Website API
   description: |
-    A high-performance image serving and processing API built with Rust and Actix Web.
-    Provides endpoints for image retrieval, processing, and metadata management.
+    API documentation for Jeff Bridwell's personal website.
+    Includes endpoints for blog management, gallery operations, and media handling.
   version: 1.0.0
   contact:
     name: Jeff Bridwell
+
 servers:
-  - url: http://192.168.86.242:8081
-    description: Local development server
+  - url: http://localhost:3001
+    description: Development server
+
+tags:
+  - name: Gallery
+    description: Image gallery and media management endpoints
+  - name: Blog
+    description: Blog post management endpoints
+  - name: Media
+    description: Media processing and serving endpoints
 
 paths:
-  /health:
+  /gallery/images:
     get:
-      summary: Health check endpoint
-      description: Returns the current health status of the service
-      operationId: healthCheck
+      summary: List gallery images
+      description: Returns a paginated list of images with their metadata and tags
+      operationId: listImages
       tags:
-        - System
+        - Gallery
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [name-asc, name-desc, date-asc, date-desc]
+        - name: tag
+          in: query
+          description: Filter by tag
+          schema:
+            type: string
       responses:
         '200':
-          description: Service is healthy
+          description: Successfully retrieved images
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                $ref: '#/components/schemas/PaginatedImageResponse'
 
-  /image-content:
+  /gallery/images/{imageName}:
     get:
-      summary: Search for content related to an image
-      description: |
-        Searches for movies, archives, and folders related to the given image name.
-        Results are paginated and include metadata about the files found.
-      operationId: searchImageContent
+      summary: Get image details
+      description: Returns details for a specific image
+      operationId: getImage
       tags:
-        - Content
+        - Gallery
+      parameters:
+        - name: imageName
+          in: path
+          required: true
+          description: Name of the image
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageDetail'
+        '404':
+          description: Image not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /gallery/batch-images:
+    post:
+      summary: Batch process images
+      description: Process multiple images at once
+      operationId: batchProcessImages
+      tags:
+        - Gallery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Successfully processed images
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchProcessResponse'
+
+  /blog/api/posts:
+    get:
+      summary: List blog posts
+      description: Returns a list of blog posts
+      operationId: listPosts
+      tags:
+        - Blog
+      responses:
+        '200':
+          description: Successfully retrieved posts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostList'
+    
+    post:
+      summary: Create blog post
+      description: Creates a new blog post
+      operationId: createPost
+      tags:
+        - Blog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostCreate'
+      responses:
+        '201':
+          description: Successfully created post
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+
+  /proxy/image/preview:
+    get:
+      summary: Get image preview
+      description: Returns a preview version of an image
+      operationId: getImagePreview
+      tags:
+        - Media
       parameters:
         - name: image_name
           in: query
-          description: Name of the image to search for
           required: true
+          description: Name of the image
           schema:
             type: string
-        - name: page
-          in: query
-          description: Page number (1-based)
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: page_size
-          in: query
-          description: Number of items per page
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
       responses:
         '200':
-          description: Successfully retrieved content
+          description: Image preview
           content:
-            application/json:
+            image/*:
               schema:
-                $ref: '#/components/schemas/PaginatedContentResponse'
-        '400':
-          description: Bad request - missing or invalid parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                format: binary
 
 components:
   schemas:
-    HealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Current health status of the service
-          example: "healthy"
-        commit:
-          type: string
-          description: Current git commit hash
-          example: "a1b2c3d4"
-        timestamp:
-          type: string
-          format: date-time
-          description: Current server timestamp
-          example: "2025-01-09T11:53:13-05:00"
-      required:
-        - status
-        - commit
-        - timestamp
-
-    ContentInfo:
-      type: object
-      properties:
-        content_name:
-          type: string
-          description: Name of the content file
-          example: "example.mp4"
-        content_type:
-          type: string
-          description: Type/extension of the content
-          example: "mp4"
-        content_url:
-          type: string
-          description: Full path to the content
-          example: "/path/to/content/example.mp4"
-        content_tags:
-          type: array
-          description: User-assigned tags for the content
-          items:
-            type: string
-          example: ["tag1", "tag2"]
-        content_created:
-          type: integer
-          format: int64
-          description: Unix timestamp of content creation time
-          nullable: true
-          example: 1641740400
-        content_viewed:
-          type: integer
-          format: int64
-          description: Unix timestamp of last viewed time
-          nullable: true
-          example: 1641740400
-        content_size:
-          type: integer
-          format: int64
-          description: Size of the content in bytes
-          nullable: true
-          example: 1024
-      required:
-        - content_name
-        - content_type
-        - content_url
-        - content_tags
-
-    PaginatedContentResponse:
+    PaginatedImageResponse:
       type: object
       properties:
         items:
           type: array
-          description: Array of content items for the current page
           items:
-            $ref: '#/components/schemas/ContentInfo'
+            $ref: '#/components/schemas/ImageDetail'
         total:
           type: integer
-          description: Total number of items across all pages
-          example: 352
         page:
           type: integer
-          description: Current page number
-          minimum: 1
-          example: 1
-        total_pages:
+        totalPages:
           type: integer
-          description: Total number of pages
-          minimum: 1
-          example: 8
-        page_size:
+        pageSize:
           type: integer
-          description: Number of items per page
-          example: 50
       required:
         - items
         - total
         - page
-        - total_pages
-        - page_size
+        - totalPages
+        - pageSize
 
-    ErrorResponse:
+    ImageDetail:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+        size:
+          type: integer
+        modifiedDate:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+        type:
+          type: string
+        dimensions:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+      required:
+        - name
+        - path
+        - size
+        - modifiedDate
+
+    BatchProcessResponse:
+      type: object
+      properties:
+        processed:
+          type: array
+          items:
+            type: string
+        failed:
+          type: array
+          items:
+            type: string
+        processingTime:
+          type: number
+      required:
+        - processed
+        - failed
+        - processingTime
+
+    PostList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Post'
+
+    Post:
+      type: object
+      properties:
+        title:
+          type: string
+        path:
+          type: string
+        content:
+          type: string
+        date:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - path
+        - content
+        - date
+
+    PostCreate:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+      required:
+        - title
+        - content
+
+    Error:
       type: object
       properties:
         error:
           type: string
-          description: Error message
-          example: "No image_name provided"
+        code:
+          type: string
       required:
         - error
-
-tags:
-  - name: System
-    description: System-related endpoints
-  - name: Content
-    description: Content-related endpoints

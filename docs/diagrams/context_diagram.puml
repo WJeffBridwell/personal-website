@@ -1,0 +1,28 @@
+@startuml Personal Website Context Diagram
+
+!define RECTANGLE class
+
+skinparam rectangle {
+    BackgroundColor<<External>> LightGray
+    BorderColor<<External>> Gray
+}
+
+actor "User" as user
+rectangle "Personal Website" as website {
+    rectangle "Frontend Application" as frontend
+    rectangle "Backend Server" as backend
+    rectangle "Cache System" as cache
+    rectangle "Blog Engine" as blog
+}
+
+rectangle "File System" as fs <<External>>
+rectangle "Image Storage" as storage <<External>>
+
+user --> frontend : Views and interacts
+frontend --> backend : API requests
+backend --> cache : Reads/Writes
+backend --> blog : Manages posts
+backend --> fs : Reads/Writes files
+backend --> storage : Retrieves images
+
+@enduml
