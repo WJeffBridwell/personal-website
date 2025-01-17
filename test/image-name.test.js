@@ -44,7 +44,7 @@ describe('Image Name Display', () => {
 
     // Display images
     const imageFunctions = {
-      displayImages: async function (images) {
+      async displayImages(images) {
         const grid = document.getElementById('image-grid');
 
         for (const image of images) {
@@ -89,7 +89,7 @@ describe('Image Name Display', () => {
 
     // Display images
     const imageFunctions = {
-      displayImages: async function (images) {
+      async displayImages(images) {
         const grid = document.getElementById('image-grid');
 
         for (const image of images) {
@@ -142,7 +142,7 @@ describe('Image Name Display', () => {
 
     // Display images
     const imageFunctions = {
-      displayImages: async function (images) {
+      async displayImages(images) {
         const grid = document.getElementById('image-grid');
 
         for (const image of images) {

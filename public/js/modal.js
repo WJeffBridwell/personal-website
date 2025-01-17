@@ -7,7 +7,7 @@
 /**
  * Initializes or creates the modal component and sets up event handlers.
  * If the modal doesn't exist in the DOM, it will be created dynamically.
- * 
+ *
  * @returns {Object} Modal interface containing open and close methods
  * @throws {Error} If modal elements cannot be created or accessed
  */
@@ -33,7 +33,7 @@ export function initializeModal() {
 
   /**
    * Opens the modal with the specified image and caption.
-   * 
+   *
    * @param {string} imageSrc - URL of the image to display
    * @param {string} caption - Caption text for the image
    * @returns {void}
@@ -53,7 +53,7 @@ export function initializeModal() {
   /**
    * Closes the modal and resets its state.
    * Removes error states and messages if present.
-   * 
+   *
    * @returns {void}
    */
   function closeModal() {
@@ -68,7 +68,7 @@ export function initializeModal() {
   /**
    * Handles error states in the modal.
    * Displays error message and applies error styling.
-   * 
+   *
    * @param {string} message - Error message to display
    * @returns {void}
    */

@@ -1,16 +1,47 @@
 {
   "env": {
     "browser": true,
-    "commonjs": true,
     "es2021": true,
     "node": true,
-    "mocha": true
+    "jest": true
   },
   "extends": "airbnb-base",
   "parserOptions": {
-    "ecmaVersion": "latest"
+    "ecmaVersion": "latest",
+    "sourceType": "module"
   },
   "rules": {
-    "no-console": "off"
-  }
+    "import/extensions": "off",
+    "max-classes-per-file": ["error", 3],
+    "no-underscore-dangle": ["error", {
+      "allowAfterThis": true,
+      "allowAfterSuper": true,
+      "enforceInMethodNames": false,
+      "allow": ["_galleryState", "_filterFunctions", "_handlers", "_controlsContainer", "_sortContainer", "_searchContainer"]
+    }],
+    "no-plusplus": ["error", { "allowForLoopAfterthoughts": true }],
+    "no-restricted-syntax": [
+      "error",
+      "ForInStatement",
+      "LabeledStatement",
+      "WithStatement"
+    ],
+    "no-param-reassign": ["error", { "props": false }],
+    "no-use-before-define": ["error", { "functions": false }],
+    "consistent-return": "off",
+    "func-names": "off"
+  },
+  "overrides": [
+    {
+      "files": ["test/**/*.js", "**/*.test.js"],
+      "env": {
+        "jest": true
+      },
+      "rules": {
+        "import/no-unresolved": "off",
+        "no-unused-vars": "off",
+        "no-undef": "off"
+      }
+    }
+  ]
 }

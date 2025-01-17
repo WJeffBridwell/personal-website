@@ -3,7 +3,9 @@
  * Tests the performance characteristics of key application features
  */
 
-import { describe, test, expect, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe, test, expect, beforeEach, afterEach,
+} from '@jest/globals';
 
 describe('Gallery Performance', () => {
   let imageGrid;

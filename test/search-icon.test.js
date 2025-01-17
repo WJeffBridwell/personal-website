@@ -20,12 +20,10 @@ describe('Search Icon Functionality', () => {
         `;
 
     // Mock fetch
-    fetchMock = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ success: true, searchTerm: 'test1' }),
-      }),
-    );
+    fetchMock = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ success: true, searchTerm: 'test1' }),
+    }));
     global.fetch = fetchMock;
 
     // Spy on console.error for error cases
@@ -77,12 +75,10 @@ describe('Search Icon Functionality', () => {
 
   test('handles finder search error gracefully', async () => {
     // Mock fetch to return error
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: false,
-        status: 500,
-      }),
-    );
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: false,
+      status: 500,
+    }));
 
     const searchIcon = document.querySelector('.search-icon');
     searchIcon.click();
@@ -101,12 +97,10 @@ describe('Search Icon Functionality', () => {
 
   test('handles finder search invalid response gracefully', async () => {
     // Mock fetch to return invalid success status
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ success: false, error: 'Invalid search' }),
-      }),
-    );
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ success: false, error: 'Invalid search' }),
+    }));
 
     const searchIcon = document.querySelector('.search-icon');
     searchIcon.click();

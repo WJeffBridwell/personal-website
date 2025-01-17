@@ -45,10 +45,8 @@ app.get('/api/images/search', async (req, res) => {
 
   try {
     const files = await mockFs.readdir(path.join(__dirname, '../public/images'));
-    const imageFiles = files.filter((file) =>
-      /\.(jpg|jpeg|png|gif)$/i.test(file) &&
-      file.toLowerCase().includes(q.toLowerCase()),
-    );
+    const imageFiles = files.filter((file) => /\.(jpg|jpeg|png|gif)$/i.test(file)
+      && file.toLowerCase().includes(q.toLowerCase()));
     const images = await Promise.all(imageFiles.map(async (file) => {
       const stats = await mockFs.stat(path.join(__dirname, '../public/images', file));
       return {
@@ -134,9 +132,7 @@ describe('Gallery Routes', () => {
         .expect(200);
 
       expect(response.body).toHaveLength(2);
-      expect(response.body.every((file) =>
-        file.name.match(/\.(jpg|jpeg|png|gif)$/i),
-      )).toBe(true);
+      expect(response.body.every((file) => file.name.match(/\.(jpg|jpeg|png|gif)$/i))).toBe(true);
     });
   });
 

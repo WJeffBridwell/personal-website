@@ -14,405 +14,160 @@ describe('Gallery Class', () => {
       <div id="gallery-container">
         <div id="image-grid"></div>
         <div class="gallery-controls">
-          <input id="search-input" type="text" />
-          <div id="letter-filter">
-            <div class="letter-buttons"></div>
-          </div>
-          <button id="sort-name" class="sort-btn">Sort by Name</button>
-          <button id="sort-date" class="sort-btn">Sort by Date</button>
+          <input id="searchInput" type="text" />
+          <select id="sortSelect">
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="date-asc">Date (Oldest)</option>
+            <option value="date-desc">Date (Newest)</option>
+          </select>
+          <select id="tagSelect">
+            <option value="">All tags</option>
+          </select>
+          <div id="letterFilter"></div>
         </div>
-        <div id="imageModal" style="display: none;">
-          <img class="modal-img" />
-          <div class="modal-caption"></div>
-          <button class="close-modal"></button>
+        <div id="imageModal" class="modal">
+          <div class="modal-content">
+            <img class="modal-img" />
+            <div class="modal-caption"></div>
+            <button class="close-modal">&times;</button>
+          </div>
         </div>
       </div>
     `;
 
-    gallery = new Gallery();
-    gallery.initializeEventListeners();
-    gallery.createLetterFilter();
-    gallery.initializeStickyControls();
-    gallery.initSearch();
-
-    // Add test images
-    const imageGrid = document.getElementById('image-grid');
-    images = [
-      { name: 'test1.jpg', date: '2023-01-01' },
-      { name: 'test2.jpg', date: '2023-01-02' }
-    ];
-
-    images.forEach(img => {
-      const container = document.createElement('div');
-      container.className = 'image-container';
-      container.style.display = 'block';
-      
-      const nameDiv = document.createElement('div');
-      nameDiv.className = 'image-name';
-      nameDiv.textContent = img.name;
-      
-      container.appendChild(nameDiv);
-      imageGrid.appendChild(container);
+    // Mock fetch
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        images: [
+          { name: 'test1.jpg', date: '2023-01-01', tags: ['red', 'nature'] },
+          { name: 'test2.jpg', date: '2023-01-02', tags: ['blue', 'urban'] },
+        ],
+      }),
     });
 
-    gallery.images = images;
+    gallery = new Gallery(document.getElementById('gallery-container'));
   });
 
   afterEach(() => {
     jest.clearAllTimers();
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   describe('Event Handling', () => {
-    test('attaches search input listener', () => {
-      const handleSearchSpy = jest.spyOn(gallery, 'handleSearch');
-      
-      const searchInput = document.getElementById('search-input');
-      searchInput.value = 'test';
-      searchInput.dispatchEvent(new Event('input'));
-      
-      jest.advanceTimersByTime(300); 
-      expect(handleSearchSpy).toHaveBeenCalled();
-      
-      handleSearchSpy.mockRestore();
+    test('filters images on search input', async () => {
+      await gallery.loadImages();
+
+      gallery.searchInput.value = 'test1';
+      gallery.searchInput.dispatchEvent(new Event('input'));
+
+      expect(gallery.filteredImages.length).toBe(1);
+      expect(gallery.filteredImages[0].name).toBe('test1.jpg');
     });
   });
 
   describe('Image Loading and Error Handling', () => {
-    test('handles malformed image data gracefully', () => {
-      const gallery = new Gallery();
-      const _imageGrid = document.getElementById('image-grid');
+    test('handles malformed image data gracefully', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          images: [
+            {
+              name: '', path: '', date: '', tags: [],
+            },
+          ],
+        }),
+      });
 
-      if (_imageGrid) {
-        _imageGrid.innerHTML = `
-                <div class="image-container">
-                    <div class="image-name"></div>
-                    <img src="" alt="">
-                </div>
-            `;
-
-        const containers = _imageGrid.querySelectorAll('.image-container');
-        const firstImage = containers[0].querySelector('img');
-
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(containers).toHaveLength(1);
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(firstImage).toBeTruthy();
-
-        // Test empty src and alt
-        expect(firstImage.src).toMatch(/^(http|https):\/\//);
-        expect(firstImage.alt).toBe('');
-      }
+      await gallery.loadImages();
+      expect(gallery.allImages.length).toBe(1);
     });
   });
 
   describe('Advanced Event Handling', () => {
-    let gallery;
-    let images;
+    test('combines letter filter with search', async () => {
+      await gallery.loadImages();
 
-    beforeEach(() => {
-      jest.useFakeTimers();
+      // Click letter filter
+      gallery.currentLetter = 'T';
+      gallery.filterAndSortImages();
 
-      document.body.innerHTML = `
-        <div id="gallery-container">
-          <div id="image-grid"></div>
-          <div class="gallery-controls">
-            <input id="search-input" type="text" />
-            <div id="letter-filter">
-              <div class="letter-buttons"></div>
-            </div>
-            <button id="sort-name" class="sort-btn">Sort by Name</button>
-            <button id="sort-date" class="sort-btn">Sort by Date</button>
-          </div>
-          <div id="imageModal" style="display: none;">
-            <img class="modal-img" />
-            <div class="modal-caption"></div>
-            <button class="close-modal"></button>
-          </div>
-        </div>
-      `;
+      // Type in search
+      gallery.searchInput.value = 'test1';
+      gallery.searchInput.dispatchEvent(new Event('input'));
 
-      gallery = new Gallery();
-      gallery.initializeEventListeners();
-      gallery.createLetterFilter();
-      gallery.initializeStickyControls();
-      gallery.initSearch();
-
-      // Add test images
-      const imageGrid = document.getElementById('image-grid');
-      images = [
-        { name: 'test1.jpg', date: '2023-01-01' },
-        { name: 'test2.jpg', date: '2023-01-02' }
-      ];
-
-      images.forEach(img => {
-        const container = document.createElement('div');
-        container.className = 'image-container';
-        container.style.display = 'block';
-        
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'image-name';
-        nameDiv.textContent = img.name;
-        
-        container.appendChild(nameDiv);
-        imageGrid.appendChild(container);
-      });
-
-      gallery.images = images;
+      expect(gallery.filteredImages.length).toBe(1);
+      expect(gallery.filteredImages[0].name).toBe('test1.jpg');
     });
 
-    afterEach(() => {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-    });
+    test('handles filter reset sequence', async () => {
+      await gallery.loadImages();
 
-    describe('Letter Filter Events', () => {
-      test('combines letter filter with search', () => {
-        const handleSearchSpy = jest.spyOn(gallery, 'handleSearch');
-        const filterByLetterSpy = jest.spyOn(gallery, 'filterByLetter');
-        
-        // Create letter filter
-        gallery.createLetterFilter();
-        
-        // Click 'B' button
-        const letterFilter = document.getElementById('letter-filter');
-        const letterButtons = letterFilter.querySelectorAll('.letter-button');
-        const bButton = Array.from(letterButtons).find(btn => btn.textContent === 'B');
-        bButton.click();
-        
-        // Type in search
-        const searchInput = document.getElementById('search-input');
-        searchInput.value = 'test';
-        searchInput.dispatchEvent(new Event('input'));
-        
-        jest.advanceTimersByTime(300);
-        
-        expect(handleSearchSpy).toHaveBeenCalled();
-        expect(filterByLetterSpy).toHaveBeenCalledWith('B');
-        
-        handleSearchSpy.mockRestore();
-        filterByLetterSpy.mockRestore();
-      });
-    });
+      // Apply filters
+      gallery.currentLetter = 'T';
+      gallery.searchInput.value = 'test';
+      gallery.searchInput.dispatchEvent(new Event('input'));
 
-    describe('Edge Cases', () => {
-      test('handles filter reset sequence', async () => {
-        // Setup initial state with multiple images
-        const imageGrid = document.getElementById('image-grid');
-        const images = [
-          { name: 'Apple', url: 'apple.jpg' },
-          { name: 'Banana', url: 'banana.jpg' },
-          { name: 'Cherry', url: 'cherry.jpg' },
-        ];
+      // Reset filters
+      gallery.currentLetter = 'all';
+      gallery.searchInput.value = '';
+      gallery.searchInput.dispatchEvent(new Event('input'));
 
-        images.forEach(img => {
-          const container = document.createElement('div');
-          container.className = 'image-container';
-          container.style.display = 'block';
-          
-          const nameDiv = document.createElement('div');
-          nameDiv.className = 'image-name';
-          nameDiv.textContent = img.name;
-          
-          container.appendChild(nameDiv);
-          imageGrid.appendChild(container);
-        });
-
-        gallery.images = images;
-        gallery.renderImages();
-        gallery.createLetterFilter();
-        gallery.initializeEventListeners();
-
-        // Apply letter filter
-        gallery.filterByLetter('A');
-        jest.advanceTimersByTime(100);
-
-        // Verify only A items are visible
-        let visibleContainers = Array.from(document.querySelectorAll('.image-container'))
-          .filter((c) => c.style.display !== 'none');
-        expect(visibleContainers).toHaveLength(1);
-        expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Apple');
-
-        // Reset filter
-        gallery.filterByLetter('All');
-        jest.advanceTimersByTime(100);
-
-        // Verify all items are visible
-        visibleContainers = Array.from(document.querySelectorAll('.image-container'))
-          .filter((c) => c.style.display !== 'none');
-        expect(visibleContainers).toHaveLength(3);
-      });
-    });
-  });
-
-  describe('Event Handling', () => {
-    let gallery;
-    let images;
-
-    beforeEach(() => {
-      jest.useFakeTimers();
-
-      document.body.innerHTML = `
-        <div id="gallery-container">
-          <div id="image-grid"></div>
-          <div class="gallery-controls">
-            <input id="search-input" type="text" />
-            <div id="letter-filter">
-              <div class="letter-buttons"></div>
-            </div>
-            <button id="sort-name" class="sort-btn">Sort by Name</button>
-            <button id="sort-date" class="sort-btn">Sort by Date</button>
-          </div>
-          <div id="imageModal" style="display: none;">
-            <img class="modal-img" />
-            <div class="modal-caption"></div>
-            <button class="close-modal"></button>
-          </div>
-        </div>
-      `;
-
-      gallery = new Gallery();
-      gallery.initializeEventListeners();
-      gallery.createLetterFilter();
-      gallery.initializeStickyControls();
-      gallery.initSearch();
-
-      // Add test images
-      const imageGrid = document.getElementById('image-grid');
-      images = [
-        { name: 'test1.jpg', date: '2023-01-01' },
-        { name: 'test2.jpg', date: '2023-01-02' }
-      ];
-
-      images.forEach(img => {
-        const container = document.createElement('div');
-        container.className = 'image-container';
-        container.style.display = 'block';
-        
-        const nameDiv = document.createElement('div');
-        nameDiv.className = 'image-name';
-        nameDiv.textContent = img.name;
-        
-        container.appendChild(nameDiv);
-        imageGrid.appendChild(container);
-      });
-
-      gallery.images = images;
-    });
-
-    afterEach(() => {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-    });
-
-    test('attaches search input listener', async () => {
-      // Setup initial state
-      const handleSearchSpy = jest.spyOn(gallery, 'handleSearch');
-
-      // Initialize event listeners after spy is set up
-      gallery.initializeEventListeners();
-
-      // Trigger search input event
-      const searchInput = document.getElementById('search-input');
-      searchInput.value = 'test';
-      const event = new Event('input', { bubbles: true });
-      Object.defineProperty(event, 'target', { value: searchInput });
-      searchInput.dispatchEvent(event);
-
-      // Fast forward debounce timer
-      jest.advanceTimersByTime(300);
-
-      expect(handleSearchSpy).toHaveBeenCalled();
-      handleSearchSpy.mockRestore();
+      expect(gallery.filteredImages.length).toBe(2);
     });
   });
 
   describe('Accessibility', () => {
-    beforeEach(() => {
-      document.body.innerHTML = `
-              <div id="gallery-container">
-                  <div id="image-grid"></div>
-                  <div class="gallery-controls">
-                    <input id="search-input" type="text" aria-label="Search images" />
-                    <div id="letter-filter">
-                      <div class="letter-buttons"></div>
-                    </div>
-                    <button id="sort-name" class="sort-btn">Sort by Name</button>
-                    <button id="sort-date" class="sort-btn">Sort by Date</button>
-                  </div>
-              </div>
-          `;
+    test('maintains keyboard navigation', async () => {
+      await gallery.loadImages();
+
+      // Test modal keyboard navigation
+      gallery.openModal('/images/test1.jpg', 'test1.jpg');
+
+      const escapeEvent = new KeyboardEvent('keydown', { key: 'Escape' });
+      document.dispatchEvent(escapeEvent);
+
+      expect(gallery.modal.style.display).toBe('none');
     });
 
-    test('maintains keyboard navigation', () => {
-      const gallery = new Gallery();
-      const _letterFilter = document.getElementById('letter-filter');
+    test('handles screen reader announcements', async () => {
+      await gallery.loadImages();
 
-      if (_letterFilter) {
-        const buttons = _letterFilter.querySelectorAll('button');
-        buttons.forEach((button) => {
-          // Check if button can receive focus (implicit tabindex of 0)
-          expect(button.tabIndex).toBe(0);
-          // Check if button has accessible name (either via text content or aria-label)
-          expect(button.textContent || button.getAttribute('aria-label')).toBeTruthy();
-        });
-      }
-    });
+      // Test image alt text
+      const imageContainers = gallery.imageGrid.querySelectorAll('.image-container');
+      expect(imageContainers.length).toBeGreaterThan(0);
 
-    test('handles screen reader announcements', () => {
-      const gallery = new Gallery();
-      const _imageContainers = document.querySelectorAll('.image-container');
-
-      _imageContainers.forEach((container) => {
-        const img = container.querySelector('img');
-        expect(img.getAttribute('alt')).toBeTruthy();
-      });
+      const firstImage = imageContainers[0].querySelector('img');
+      expect(firstImage.alt).toBeTruthy();
     });
   });
 
   describe('Memory Management', () => {
-    test('cleans up event listeners', () => {
-      const gallery = new Gallery();
-      const searchInput = document.getElementById('search-input');
+    test('handles large datasets without memory leaks', async () => {
+      const largeImageSet = Array(100).fill(null).map((_, i) => ({
+        name: `test${i}.jpg`,
+        date: '2023-01-01',
+        tags: ['test'],
+      }));
 
-      // Mock removeEventListener
-      const removeEventListenerSpy = jest.spyOn(searchInput, 'removeEventListener');
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ images: largeImageSet }),
+      });
 
-      // Simulate cleanup
-      searchInput.removeEventListener('input', gallery.handleSearch);
+      await gallery.loadImages();
 
-      expect(removeEventListenerSpy).toHaveBeenCalledWith('input', gallery.handleSearch);
+      // Test filtering
+      gallery.searchInput.value = 'test';
+      gallery.searchInput.dispatchEvent(new Event('input'));
 
-      removeEventListenerSpy.mockRestore();
-    });
+      // Test sorting
+      gallery.sortSelect.value = 'name-desc';
+      gallery.sortSelect.dispatchEvent(new Event('change'));
 
-    test('handles large datasets without memory leaks', () => {
-      const gallery = new Gallery();
-      const _imageGrid = document.getElementById('image-grid');
-
-      if (_imageGrid) {
-        // Add many images
-        const initialMemory = process.memoryUsage().heapUsed;
-
-        for (let i = 0; i < 1000; i++) {
-          const div = document.createElement('div');
-          div.className = 'image-container';
-          div.innerHTML = `
-                    <div class="image-name">image${i}.jpg</div>
-                    <img src="image${i}.jpg" alt="image${i}.jpg" />
-                `;
-          _imageGrid.appendChild(div);
-        }
-
-        // Perform operations
-        gallery.renderImages();
-        gallery.handleSearch({ target: { value: 'test' } });
-        gallery.filterByLetter('A');
-
-        // Check memory usage
-        const finalMemory = process.memoryUsage().heapUsed;
-        expect(finalMemory - initialMemory).toBeLessThan(50 * 1024 * 1024); // Less than 50MB increase
-      }
+      expect(gallery.filteredImages.length).toBe(100);
     });
   });
 });

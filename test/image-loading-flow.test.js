@@ -6,7 +6,7 @@ import { jest } from '@jest/globals';
 
 // Mock the functions we need
 const gridFunctions = {
-  setupImageGrid: function () {
+  setupImageGrid() {
     const grid = document.getElementById('image-grid');
     if (!grid) {
       console.error('Image grid not found');
@@ -17,7 +17,7 @@ const gridFunctions = {
 };
 
 const imageFunctions = {
-  fetchImages: async function (page = 1, limit = 10) {
+  async fetchImages(page = 1, limit = 10) {
     try {
       const response = await fetch(`/api/images?page=${page}&limit=${limit}`);
       if (!response.ok) {
@@ -40,7 +40,7 @@ const imageFunctions = {
     }
   },
 
-  displayImages: async function (images) {
+  async displayImages(images) {
     console.log('Starting to display images:', images.length);
     const grid = document.getElementById('image-grid');
     if (!grid) {
@@ -89,7 +89,7 @@ const imageFunctions = {
     }
   },
 
-  loadNextImageChunk: async function () {
+  async loadNextImageChunk() {
     if (global.isLoading || !global.hasMoreImages) return;
 
     try {
@@ -104,7 +104,6 @@ const imageFunctions = {
 
       await imageFunctions.displayImages(images);
       global.currentPage++;
-
     } catch (error) {
       console.error('Error loading next chunk:', error);
       showError('Failed to load more images');
@@ -136,15 +135,13 @@ describe('Image Loading Flow', () => {
         `;
 
     // Mock fetch
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([
-          { name: 'test1.jpg' },
-          { name: 'test2.jpg' },
-        ]),
-      }),
-    );
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve([
+        { name: 'test1.jpg' },
+        { name: 'test2.jpg' },
+      ]),
+    }));
 
     // Mock console methods
     console.log = jest.fn();
@@ -199,12 +196,10 @@ describe('Image Loading Flow', () => {
 
   test('handles empty response correctly', async () => {
     // Mock fetch to return empty array
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve([]),
-      }),
-    );
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve([]),
+    }));
 
     await imageFunctions.loadNextImageChunk();
 
@@ -217,9 +212,7 @@ describe('Image Loading Flow', () => {
 
   test('handles fetch error correctly', async () => {
     // Mock fetch to throw error
-    global.fetch = jest.fn(() =>
-      Promise.reject(new Error('Network error')),
-    );
+    global.fetch = jest.fn(() => Promise.reject(new Error('Network error')));
 
     await imageFunctions.loadNextImageChunk();
 
@@ -232,12 +225,10 @@ describe('Image Loading Flow', () => {
 
   test('handles malformed response correctly', async () => {
     // Mock fetch to return invalid data
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve('not an array'),
-      }),
-    );
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve('not an array'),
+    }));
 
     await imageFunctions.loadNextImageChunk();
 

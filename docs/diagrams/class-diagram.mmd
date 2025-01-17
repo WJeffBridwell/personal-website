@@ -1,0 +1,33 @@
+classDiagram
+    class GalleryManager {
+        -currentPage: number
+        -totalPages: number
+        -isLoading: boolean
+        -images: array
+        +initializeGallery()
+        +fetchImages(page, limit, letter)
+        +displayImages(images)
+        +createImageContainer(image)
+        +updatePagination(currentPage, totalPages)
+    }
+
+    class ModalSystem {
+        -modal: HTMLElement
+        -modalImg: HTMLElement
+        -modalCaption: HTMLElement
+        -closeBtn: HTMLElement
+        +initializeModal()
+        +openModal(imageSrc, caption)
+        +closeModal()
+        +setupModalEventListeners()
+    }
+
+    class FilterSystem {
+        +initializeLetterFilter()
+        +filterImagesByLetter(letter)
+        +initializeSearchFilter()
+        +filterImagesBySearch(searchTerm)
+    }
+
+    GalleryManager --> ModalSystem
+    GalleryManager --> FilterSystem

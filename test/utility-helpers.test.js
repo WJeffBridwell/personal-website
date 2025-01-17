@@ -3,7 +3,9 @@
  */
 
 import { jest } from '@jest/globals';
-import { debounce, formatDate, validateImageType, sanitizeFileName } from '../public/js/helpers.js';
+import {
+  debounce, formatDate, validateImageType, sanitizeFileName,
+} from '../public/js/helpers.js';
 
 describe('Utility Helper Functions', () => {
   describe('debounce', () => {

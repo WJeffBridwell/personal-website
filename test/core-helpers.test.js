@@ -46,7 +46,7 @@ describe('Core Helper Functions', () => {
 
     test('maintains correct context and arguments', () => {
       const context = { value: 'test' };
-      const callback = jest.fn(function(arg) {
+      const callback = jest.fn(function (arg) {
         expect(this).toBe(context);
         expect(arg).toBe('arg');
       });

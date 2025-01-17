@@ -7,7 +7,7 @@
 /**
  * Creates a debounced function that delays invoking the provided function
  * until after `wait` milliseconds have elapsed since the last time it was invoked.
- * 
+ *
  * @param {Function} func - The function to debounce
  * @param {number} wait - The number of milliseconds to delay
  * @returns {Function} A debounced version of the provided function
@@ -29,7 +29,7 @@ export function debounce(func, wait) {
 /**
  * Formats a date string into a localized, human-readable format.
  * Handles UTC conversion to ensure consistent dates across timezones.
- * 
+ *
  * @param {string} dateString - The date string to format
  * @returns {string} Formatted date string (e.g., "Jan 1, 2023")
  * @throws {Error} If the date string is invalid
@@ -38,7 +38,7 @@ export function debounce(func, wait) {
  * // Returns: "Jan 1, 2023"
  */
 export function formatDate(dateString) {
-  if (!dateString || isNaN(new Date(dateString).getTime())) {
+  if (!dateString || Number.isNaN(new Date(dateString).getTime())) {
     throw new Error('Invalid date');
   }
   const date = new Date(dateString);
@@ -58,7 +58,7 @@ export function formatDate(dateString) {
 
 /**
  * Validates if a file has an allowed image extension.
- * 
+ *
  * @param {string} filename - The filename to validate
  * @returns {boolean} True if the file extension is valid
  * @example
@@ -75,7 +75,7 @@ export function validateImageType(filename) {
 
 /**
  * Sanitizes a filename by removing invalid characters and normalizing the format.
- * 
+ *
  * @param {string} filename - The filename to sanitize
  * @returns {string} Sanitized filename
  * @throws {Error} If filename is invalid or empty
@@ -112,7 +112,7 @@ export function sanitizeFileName(filename) {
 
 /**
  * Creates an image element with specified data and event handlers.
- * 
+ *
  * @param {Object} imageData - The image data
  * @param {string} imageData.src - Image source URL
  * @param {string} imageData.alt - Alt text for the image
@@ -162,7 +162,7 @@ export function createImageElement(imageData) {
 
 /**
  * Updates the gallery state and triggers necessary UI updates.
- * 
+ *
  * @param {Object} newState - New state object to merge with current state
  * @param {Array} [newState.images] - Array of image objects
  * @param {string} [newState.filter] - Current filter string
@@ -213,7 +213,7 @@ export function updateGalleryState(newState = {}) {
 
 /**
  * Handles and logs errors, with optional debug information.
- * 
+ *
  * @param {Error|string} error - Error object or message
  * @param {boolean} [debug=false] - Whether to show debug information
  * @returns {void}
@@ -246,7 +246,7 @@ export function handleError(error, debug = false) {
 
 /**
  * Filters images based on a search term.
- * 
+ *
  * @param {string} [searchTerm=''] - Term to filter images by
  * @returns {Array} Filtered array of images
  */
@@ -261,8 +261,8 @@ export function filterImages(searchTerm = '') {
 
   images.forEach((container) => {
     const name = container.querySelector('.image-name')?.textContent.toLowerCase() || '';
-    const matches = searchTerms.length === 0 ||
-                       searchTerms.every((term) => name.includes(term));
+    const matches = searchTerms.length === 0
+                       || searchTerms.every((term) => name.includes(term));
     container.style.display = matches ? '' : 'none';
     if (matches) hasVisibleImages = true;
   });
@@ -272,7 +272,7 @@ export function filterImages(searchTerm = '') {
 
 /**
  * Filters images by starting letter.
- * 
+ *
  * @param {string} letter - Letter to filter by
  * @returns {Array} Filtered array of images
  */
@@ -296,7 +296,7 @@ export function filterByLetter(letter) {
 
 /**
  * Sorts images by specified criteria and order.
- * 
+ *
  * @param {string} [sortBy='name'] - Sort criteria ('name'|'date'|'size')
  * @param {string} [order='asc'] - Sort order ('asc'|'desc')
  * @returns {Array} Sorted array of images
@@ -309,7 +309,8 @@ export function sortImages(sortBy = 'name', order = 'asc') {
   const fragment = document.createDocumentFragment();
 
   images.sort((a, b) => {
-    let valueA, valueB;
+    let valueA; let
+      valueB;
 
     if (sortBy === 'name') {
       valueA = a.querySelector('.image-name')?.textContent.toLowerCase() || '';
@@ -319,9 +320,14 @@ export function sortImages(sortBy = 'name', order = 'asc') {
       valueB = new Date(b.dataset.date || 0).getTime();
     }
 
-    return order === 'desc'
-      ? (valueA > valueB ? -1 : valueA < valueB ? 1 : 0)
-      : (valueA < valueB ? -1 : valueA > valueB ? 1 : 0);
+    if (order === 'desc') {
+      if (valueA > valueB) return -1;
+      if (valueA < valueB) return 1;
+    } else {
+      if (valueA < valueB) return -1;
+      if (valueA > valueB) return 1;
+    }
+    return 0;
   });
 
   images.forEach((image) => fragment.appendChild(image));
@@ -330,7 +336,7 @@ export function sortImages(sortBy = 'name', order = 'asc') {
 
 /**
  * Loads images from the server and updates the gallery.
- * 
+ *
  * @returns {Promise<Array>} Promise resolving to array of loaded images
  * @throws {Error} If image loading fails
  */
@@ -350,7 +356,7 @@ export async function loadImages() {
 
 /**
  * Initializes modal event listeners and keyboard navigation.
- * 
+ *
  * @returns {void}
  */
 export function initializeModal() {
@@ -385,7 +391,7 @@ export function initializeModal() {
 
 /**
  * Opens the modal with specified image data.
- * 
+ *
  * @param {Object} imageData - Data for the image to display
  * @param {string} imageData.src - Image source URL
  * @param {string} imageData.name - Image name/caption
@@ -418,7 +424,7 @@ export function openModal(imageData) {
 
 /**
  * Closes the modal and resets its content.
- * 
+ *
  * @returns {void}
  */
 export function closeModal() {
@@ -441,7 +447,7 @@ export function closeModal() {
 
 /**
  * Updates visibility of the no-results message.
- * 
+ *
  * @param {boolean} show - Whether to show the message
  * @returns {void}
  */
@@ -454,7 +460,7 @@ export function updateNoResultsMessage(show) {
 
 /**
  * Handles search input events.
- * 
+ *
  * @param {Event} event - Search input event
  * @returns {void}
  */
@@ -464,7 +470,7 @@ export function handleSearch(event) {
 
 /**
  * Handles sort selection events.
- * 
+ *
  * @param {Event} event - Sort selection event
  * @returns {void}
  */
@@ -479,11 +485,69 @@ export function handleSort(event) {
 
 /**
  * Handles letter filter selection events.
- * 
+ *
  * @param {Event} event - Letter filter event
  * @returns {void}
  */
 export function handleLetterFilter(event) {
-  const letter = event.target.dataset.letter;
+  const { letter } = event.target.dataset;
   filterByLetter(letter);
+}
+
+/**
+ * Formats a date string into a human-readable format.
+ *
+ * @param {Date} date - The date to format
+ * @returns {string} Formatted date string
+ */
+export function getFormattedDate(date) {
+  const now = new Date();
+  const diff = now - date;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 7) {
+    return date.toLocaleDateString();
+  }
+  if (days > 0) {
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  }
+  if (hours > 0) {
+    return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+  }
+  if (minutes > 0) {
+    return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+  }
+  return 'Just now';
+}
+
+/**
+ * Formats a file size in bytes to a human-readable format.
+ *
+ * @param {number} bytes - The file size in bytes
+ * @returns {string} Formatted file size string
+ */
+export function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+
+  const units = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  
+  if (i === 0) {
+    return `${bytes} ${units[i]}`;
+  }
+  
+  return `${(bytes / (1024 ** i)).toFixed(2)} ${units[i]}`;
+}
+
+/**
+ * Checks if a value is a valid number.
+ *
+ * @param {string|number} value - The value to check
+ * @returns {boolean} True if the value is a valid number
+ */
+export function isValidNumber(value) {
+  return !Number.isNaN(parseFloat(value)) && Number.isFinite(value);
 }

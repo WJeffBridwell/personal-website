@@ -3,7 +3,9 @@
  * Tests the client-side search filtering functionality
  */
 
-import { setupTestDOM, cleanupDOM, mockImageData, simulateInput, flushPromises, simulateClick } from './helpers.js';
+import {
+  setupTestDOM, cleanupDOM, mockImageData, simulateInput, flushPromises, simulateClick,
+} from './helpers.js';
 
 describe('Search Functionality', () => {
   let searchInput;
@@ -71,7 +73,7 @@ describe('Search Functionality', () => {
     letterFilter.addEventListener('click', (event) => {
       if (!event.target.matches('.letter-button')) return;
 
-      const letter = event.target.dataset.letter;
+      const { letter } = event.target.dataset;
       Array.from(imageGrid.children).forEach((container) => {
         const nameElement = container.querySelector('.image-name');
         const name = nameElement ? nameElement.textContent : '';
@@ -238,9 +240,7 @@ describe('Search Functionality', () => {
 
       const containers = Array.from(imageGrid.children);
       const dates = containers.map((container) => container.dataset.date);
-      const sortedDates = [...dates].sort((a, b) => {
-        return new Date(b).getTime() - new Date(a).getTime();
-      });
+      const sortedDates = [...dates].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
       expect(dates).toEqual(sortedDates);
     });

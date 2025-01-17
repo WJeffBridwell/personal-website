@@ -92,54 +92,38 @@ resource "null_resource" "start_servers" {
       # Create logs directory if it doesn't exist
       mkdir -p logs
       
-      # Kill existing processes
+      # Kill existing processes more thoroughly
       pkill -f "npm run dev" || true
       pkill -f "node server.js" || true
+      pkill -f "node video-server.js" || true
       
-      # Start main server
-      npm run dev > logs/main-server.log 2>&1 &
-      main_pid=$!
+      # Wait for ports to be released
+      sleep 2
       
-      # Start video server
+      # Check if ports are still in use
+      if lsof -i:3001 >/dev/null 2>&1; then
+        echo "Error: Port 3001 is still in use"
+        exit 1
+      fi
+      
+      if lsof -i:8082 >/dev/null 2>&1; then
+        echo "Error: Port 8082 is still in use"
+        exit 1
+      fi
+      
+      # Start video server first
+      echo "Starting video server..."
       node video-server.js > logs/video-server.log 2>&1 &
       video_pid=$!
-      
-      # Save PIDs to file for cleanup
-      echo "$main_pid" > logs/main-server.pid
       echo "$video_pid" > logs/video-server.pid
       
-      # Wait for servers to be ready
-      echo "Waiting for servers to start..."
-      max_attempts=30
+      # Wait for video server to be ready
+      max_attempts=15
       attempt=1
-      
       while [ $attempt -le $max_attempts ]; do
-        main_running=false
-        video_running=false
-        
-        # Check main server
-        if curl -s http://localhost:3001/health > /dev/null; then
-          main_running=true
-          echo "Main server is running"
-        fi
-        
-        # Check video server
         if curl -s http://localhost:8082/health > /dev/null; then
-          video_running=true
           echo "Video server is running"
-        fi
-        
-        # Check if both servers are running
-        if [ "$main_running" = true ] && [ "$video_running" = true ]; then
-          echo "Both servers are running successfully"
-          exit 0
-        fi
-        
-        # Check if processes are still alive
-        if ! ps -p $main_pid > /dev/null; then
-          echo "Error: Main server process died"
-          cat logs/main-server.log
-          exit 1
+          break
         fi
         
         if ! ps -p $video_pid > /dev/null; then
@@ -148,17 +132,49 @@ resource "null_resource" "start_servers" {
           exit 1
         fi
         
-        echo "Attempt $attempt/$max_attempts: Waiting for servers..."
+        echo "Waiting for video server... attempt $attempt/$max_attempts"
         sleep 1
         attempt=$((attempt + 1))
       done
       
-      echo "Error: Servers failed to start within timeout"
-      echo "Main server log:"
-      cat logs/main-server.log
-      echo "Video server log:"
-      cat logs/video-server.log
-      exit 1
+      if [ $attempt -gt $max_attempts ]; then
+        echo "Error: Video server failed to start"
+        cat logs/video-server.log
+        exit 1
+      fi
+      
+      # Start main server
+      echo "Starting main server..."
+      npm run dev > logs/main-server.log 2>&1 &
+      main_pid=$!
+      echo "$main_pid" > logs/main-server.pid
+      
+      # Wait for main server to be ready
+      attempt=1
+      while [ $attempt -le $max_attempts ]; do
+        if curl -s http://localhost:3001/health > /dev/null; then
+          echo "Main server is running"
+          break
+        fi
+        
+        if ! ps -p $main_pid > /dev/null; then
+          echo "Error: Main server process died"
+          cat logs/main-server.log
+          exit 1
+        fi
+        
+        echo "Waiting for main server... attempt $attempt/$max_attempts"
+        sleep 1
+        attempt=$((attempt + 1))
+      done
+      
+      if [ $attempt -gt $max_attempts ]; then
+        echo "Error: Main server failed to start"
+        cat logs/main-server.log
+        exit 1
+      fi
+      
+      echo "Both servers started successfully"
     EOT
   }
 
@@ -181,10 +197,13 @@ resource "null_resource" "start_servers" {
         rm logs/video-server.pid
       fi
       
-      # Fallback to pkill if PIDs don't exist or processes are still running
+      # Fallback to pkill
       pkill -f "npm run dev" || true
       pkill -f "node server.js" || true
       pkill -f "node video-server.js" || true
+      
+      # Remove log files
+      rm -f logs/main-server.log logs/video-server.log
     EOT
   }
 }

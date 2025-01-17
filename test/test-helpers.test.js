@@ -238,7 +238,7 @@ describe('Test Helpers', () => {
       // Mock offsetHeight and offsetTop
       Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
         configurable: true,
-        get: function () {
+        get() {
           if (this.tagName.toLowerCase() === 'nav') {
             return 60;
           }
@@ -248,7 +248,7 @@ describe('Test Helpers', () => {
 
       Object.defineProperty(HTMLElement.prototype, 'offsetTop', {
         configurable: true,
-        get: function () {
+        get() {
           if (this.classList.contains('gallery')) {
             return 100;
           }

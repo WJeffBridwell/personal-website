@@ -9,7 +9,9 @@
  * - Error handling
  */
 
-import { setupTestDOM, mockImageData, simulateClick, simulateKeyPress, flushPromises, cleanupDOM } from './helpers.js';
+import {
+  setupTestDOM, mockImageData, simulateClick, simulateKeyPress, flushPromises, cleanupDOM,
+} from './helpers.js';
 import { initializeModal } from '../public/js/modal.js';
 
 describe('Modal Functionality', () => {

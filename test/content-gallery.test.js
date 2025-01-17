@@ -1,185 +1,213 @@
+/**
+ * @jest-environment jsdom
+ */
+
+import { ContentGallery } from '../public/js/content-gallery';
 import { jest } from '@jest/globals';
-import { ContentGallery } from '../public/js/content-gallery.js';
 
 describe('ContentGallery', () => {
-    let contentGallery;
-    let mockGalleryContainer;
-    let mockSearchInput;
-    let mockLetterFilters;
-    let mockSortButtons;
-    let mockTagFilters;
+  let contentGallery;
+  let mockContent;
 
-    beforeEach(() => {
-        // Setup mock DOM
-        mockGalleryContainer = document.createElement('div');
-        mockGalleryContainer.id = 'gallery';
+  beforeEach(async () => {
+    // Mock URL parameters
+    const url = 'http://localhost?image-name=test';
+    delete window.location;
+    window.location = new URL(url);
 
-        // Create search input
-        mockSearchInput = document.createElement('input');
-        mockSearchInput.id = 'search-input';
-        document.body.appendChild(mockSearchInput);
+    document.body.innerHTML = `
+      <div class="gallery-container">
+        <div class="gallery-controls">
+          <input class="gallery-search" type="text" placeholder="Search..." />
+          <select id="type-filter">
+            <option value="">All</option>
+            <option value="Video">Videos</option>
+            <option value="Images">Images</option>
+          </select>
+          <select id="sort-filter">
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="size-asc">Size (Small to Large)</option>
+            <option value="size-desc">Size (Large to Small)</option>
+          </select>
+          <select id="tags-filter">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+        <div class="gallery-grid"></div>
+        <div class="gallery-loading"></div>
+        <div id="contentModal" class="modal">
+          <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="modal-body"></div>
+          </div>
+        </div>
+        <div id="imageModal" class="modal">
+          <div class="modal-content">
+            <span class="close">&times;</span>
+            <img class="modal-img" src="" alt="" />
+          </div>
+        </div>
+      </div>
+    `;
 
-        // Create letter filters
-        mockLetterFilters = document.createElement('div');
-        mockLetterFilters.id = 'letter-filters';
-        document.body.appendChild(mockLetterFilters);
+    // Mock fetch before creating gallery
+    mockContent = [
+      {
+        id: '1',
+        content_type: 'video',
+        content_name: 'test1.mp4',
+        content_path: '/Volumes/VideosNew/test1.mp4',
+        content_date: '2023-01-01',
+        content_size: 1000,
+        content_tags: ['tag1', 'tag2'],
+      },
+      {
+        id: '2',
+        content_type: 'image',
+        content_name: 'test1.jpg',
+        content_path: '/test1.jpg',
+        content_date: '2023-01-02',
+        content_size: 500,
+        content_tags: ['tag1'],
+      },
+    ];
 
-        // Create sort buttons
-        mockSortButtons = document.createElement('div');
-        const sortButton1 = document.createElement('button');
-        sortButton1.className = 'sort-button';
-        sortButton1.dataset.sort = 'title';
-        const sortButton2 = document.createElement('button');
-        sortButton2.className = 'sort-button';
-        sortButton2.dataset.sort = 'date';
-        mockSortButtons.appendChild(sortButton1);
-        mockSortButtons.appendChild(sortButton2);
-        document.body.appendChild(mockSortButtons);
+    global.fetch = jest.fn(() => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ items: mockContent, total: mockContent.length }),
+    }));
 
-        // Create tag filters
-        mockTagFilters = document.createElement('div');
-        mockTagFilters.id = 'tag-filters';
-        document.body.appendChild(mockTagFilters);
+    // Trigger DOMContentLoaded to initialize gallery
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    contentGallery = window.gallery;
 
-        document.body.appendChild(mockGalleryContainer);
+    // Wait for content to load and render
+    await contentGallery.loadContent();
+    // Force filterAndRenderItems to run
+    await contentGallery.filterAndRenderItems();
+    // Wait for DOM updates
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 
-        // Initialize gallery with mock API endpoint
-        contentGallery = new ContentGallery('gallery', 'http://mock-api/content');
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('retries failed requests', async () => {
+    const failedResponse = { ok: false, status: 500 };
+    const successResponse = {
+      ok: true,
+      json: () => Promise.resolve({ items: mockContent, total: mockContent.length }),
+    };
+
+    global.fetch = jest.fn()
+      .mockImplementationOnce(() => Promise.resolve(failedResponse))
+      .mockImplementationOnce(() => Promise.resolve(successResponse));
+
+    await contentGallery.loadContent();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  describe('Filtering and Sorting', () => {
+    test('filters by type', async () => {
+      const typeFilter = document.getElementById('type-filter');
+      typeFilter.value = 'Video';
+      typeFilter.dispatchEvent(new Event('change'));
+
+      // Wait for filtering
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const visibleItems = Array.from(document.querySelectorAll('.gallery-item'))
+        .filter((item) => !item.style.display || item.style.display !== 'none');
+      expect(visibleItems.length).toBe(1);
+      expect(JSON.parse(visibleItems[0].dataset.item).content_name).toBe('test1.mp4');
     });
 
-    afterEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-        if (global.fetch) {
-            global.fetch.mockClear();
-        }
+    test('filters by search term', async () => {
+      const searchInput = document.querySelector('.gallery-search');
+      searchInput.value = 'test1.mp4';
+      searchInput.dispatchEvent(new Event('input'));
+
+      // Wait for filtering
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const visibleItems = Array.from(document.querySelectorAll('.gallery-item'))
+        .filter((item) => !item.style.display || item.style.display !== 'none');
+      expect(visibleItems.length).toBe(1);
+      expect(JSON.parse(visibleItems[0].dataset.item).content_name).toBe('test1.mp4');
     });
 
-    describe('initialization', () => {
-        test('should initialize with correct DOM elements', () => {
-            expect(contentGallery.gallery).toBe(mockGalleryContainer);
-            expect(contentGallery.searchInput).toBe(mockSearchInput);
-            expect(contentGallery.letterFilters).toBe(mockLetterFilters);
-            expect(contentGallery.tagFilters).toBe(mockTagFilters);
-            expect(contentGallery.content).toEqual([]);
-        });
+    test('sorts by name ascending', async () => {
+      const sortSelect = document.getElementById('sort-filter');
+      sortSelect.value = 'name-asc';
+      sortSelect.dispatchEvent(new Event('change'));
 
-        test('should set up event listeners', () => {
-            expect(mockSearchInput.onclick).toBeDefined();
-            expect(mockLetterFilters.onclick).toBeDefined();
-            expect(mockTagFilters.onclick).toBeDefined();
-        });
+      // Wait for sorting
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const names = Array.from(document.querySelectorAll('.gallery-item'))
+        .map((el) => JSON.parse(el.dataset.item).content_name);
+      expect(names).toEqual(['test1.jpg', 'test1.mp4']);
     });
 
-    describe('content loading', () => {
-        beforeEach(() => {
-            global.fetch = jest.fn();
-        });
+    test('sorts by size ascending', async () => {
+      const sortSelect = document.getElementById('sort-filter');
+      sortSelect.value = 'size-asc';
+      sortSelect.dispatchEvent(new Event('change'));
 
-        test('should load content from API', async () => {
-            const mockContent = [
-                { title: 'Test 1', description: 'Desc 1', thumbnail: 'thumb1.jpg' },
-                { title: 'Test 2', description: 'Desc 2', thumbnail: 'thumb2.jpg' }
-            ];
+      // Wait for sorting
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-            global.fetch.mockResolvedValueOnce({
-                ok: true,
-                json: () => Promise.resolve(mockContent)
-            });
+      const sizes = Array.from(document.querySelectorAll('.gallery-item'))
+        .map((el) => JSON.parse(el.dataset.item).content_size);
+      expect(sizes).toEqual([500, 1000]);
+    });
+  });
 
-            await contentGallery.loadContent();
-            expect(contentGallery.content).toEqual(mockContent);
-            expect(mockGalleryContainer.children.length).toBeGreaterThan(0);
-        });
+  describe('Modal Handling', () => {
+    test('opens modal for video', async () => {
+      // Wait for initial render
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-        test('should handle API errors gracefully', async () => {
-            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-            global.fetch.mockRejectedValueOnce(new Error('API Error'));
+      // Find the video item
+      const videoItem = Array.from(document.querySelectorAll('.gallery-item'))
+        .find((item) => JSON.parse(item.dataset.item).content_type === 'video');
 
-            await contentGallery.loadContent();
-            expect(consoleSpy).toHaveBeenCalled();
-            expect(mockGalleryContainer.textContent).toContain('Error loading content');
-
-            consoleSpy.mockRestore();
-        });
+      videoItem.click();
+      expect(document.getElementById('contentModal').style.display).toBe('block');
     });
 
-    describe('content filtering', () => {
-        const mockContent = [
-            { title: 'Alpha', description: 'Test 1', tags: ['tag1'] },
-            { title: 'Beta', description: 'Test 2', tags: ['tag2'] }
-        ];
+    test('opens modal for image', async () => {
+      // Wait for initial render
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-        beforeEach(() => {
-            contentGallery.content = mockContent;
-        });
+      // Find the image item
+      const imageItem = Array.from(document.querySelectorAll('.gallery-item'))
+        .find((item) => JSON.parse(item.dataset.item).content_type === 'image');
 
-        test('should filter content based on search input', () => {
-            mockSearchInput.value = 'alpha';
-            contentGallery.filterContent();
-            expect(contentGallery.getFilteredContent().length).toBe(1);
-            expect(contentGallery.getFilteredContent()[0].title).toBe('Alpha');
-        });
-
-        test('should filter content by starting letter', () => {
-            const letterFilter = document.createElement('button');
-            letterFilter.className = 'letter-filter active';
-            letterFilter.dataset.letter = 'b';
-            mockLetterFilters.appendChild(letterFilter);
-
-            contentGallery.filterContent();
-            expect(contentGallery.getFilteredContent().length).toBe(1);
-            expect(contentGallery.getFilteredContent()[0].title).toBe('Beta');
-        });
+      imageItem.click();
+      expect(document.getElementById('imageModal').style.display).toBe('block');
     });
 
-    describe('sorting', () => {
-        const mockContent = [
-            { title: 'Beta', date: '2023-01-01' },
-            { title: 'Alpha', date: '2023-01-02' }
-        ];
+    test('closes modal', async () => {
+      // Wait for initial render
+      await contentGallery.filterAndRenderItems();
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-        beforeEach(() => {
-            contentGallery.content = mockContent;
-        });
+      // Open modal first
+      const firstItem = document.querySelector('.gallery-item');
+      firstItem.click();
 
-        test('should sort content by title', () => {
-            contentGallery.sortContent('title');
-            expect(contentGallery.content[0].title).toBe('Alpha');
-            expect(contentGallery.content[1].title).toBe('Beta');
-        });
-
-        test('should sort content by date', () => {
-            contentGallery.sortContent('date');
-            expect(contentGallery.content[0].title).toBe('Alpha');
-            expect(contentGallery.content[1].title).toBe('Beta');
-        });
+      // Close modal
+      document.querySelector('#imageModal .close').click();
+      expect(document.getElementById('imageModal').style.display).toBe('none');
     });
-
-    describe('tag filtering', () => {
-        const mockContent = [
-            { title: 'Test 1', tags: ['tag1', 'tag2'] },
-            { title: 'Test 2', tags: ['tag2', 'tag3'] }
-        ];
-
-        beforeEach(() => {
-            contentGallery.content = mockContent;
-            contentGallery.updateTagFilters();
-        });
-
-        test('should update tag filters based on content', () => {
-            expect(mockTagFilters.children.length).toBe(3); // tag1, tag2, tag3
-        });
-
-        test('should filter content by tags', () => {
-            const tagButton = document.createElement('button');
-            tagButton.className = 'tag-filter active';
-            tagButton.dataset.tag = 'tag1';
-            mockTagFilters.appendChild(tagButton);
-
-            contentGallery.filterContent();
-            expect(contentGallery.getFilteredContent().length).toBe(1);
-            expect(contentGallery.getFilteredContent()[0].title).toBe('Test 1');
-        });
-    });
+  });
 });

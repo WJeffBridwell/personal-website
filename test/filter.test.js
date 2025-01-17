@@ -1,126 +1,103 @@
-import { setupTestDOM, flushPromises, cleanupDOM } from './helpers.js';
-import { filterImages } from '../public/js/gallery.js';
+/**
+ * @jest-environment jsdom
+ */
+
+import { jest } from '@jest/globals';
+import { Gallery } from '../public/js/gallery.js';
+import {
+  setupGalleryDOM, setupFetchMock, cleanupDOM, mockGalleryData,
+} from './utils/setupTests';
 
 describe('Gallery Filter', () => {
+  let gallery;
+  let container;
   let imageGrid;
   let searchInput;
-  let testEnv;
-
-  beforeAll(() => {
-    testEnv = setupTestDOM();
-    global.window = testEnv.window;
-    global.document = testEnv.document;
-  });
+  let sortSelect;
 
   beforeEach(() => {
-    document.body.innerHTML = `
-            <div id="gallery-container">
-                <input type="text" id="search-input" />
-                <div id="image-grid"></div>
-                <div class="no-results">No results found</div>
-            </div>
-        `;
-    imageGrid = document.getElementById('image-grid');
-    searchInput = document.getElementById('search-input');
+    container = setupGalleryDOM();
+    imageGrid = document.querySelector('#image-grid');
+    searchInput = document.querySelector('#searchInput');
+    sortSelect = document.querySelector('#sortSelect');
+    setupFetchMock(true);
+    gallery = new Gallery(container);
   });
 
   afterEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  afterAll(() => {
     cleanupDOM();
+    jest.clearAllMocks();
   });
 
-  const createTestImages = (count) => {
-    return Array.from({ length: count }, (_, i) => ({
-      name: `Test Image ${i}`,
-      url: `test-${i}.jpg`,
-      date: new Date(2023, 0, i + 1).toISOString(),
-    }));
-  };
-
-  test('should filter images based on search input', async () => {
-    const testImages = createTestImages(5);
-
-    // Add test images to grid
-    testImages.forEach((img) => {
-      const container = document.createElement('div');
-      container.className = 'image-container';
-      container.innerHTML = `
-                <img src="${img.url}" alt="${img.name}" />
-                <div class="image-name">${img.name}</div>
-            `;
-      imageGrid.appendChild(container);
+  describe('Search Filtering', () => {
+    beforeEach(async () => {
+      await gallery.loadImages();
     });
 
-    // Simulate search
-    searchInput.value = 'Test Image 1';
-    filterImages(searchInput.value);
-    await flushPromises();
+    test('filters by search term', async () => {
+      searchInput.value = 'test1';
+      searchInput.dispatchEvent(new Event('input'));
 
-    // Verify filtering
-    const containers = imageGrid.querySelectorAll('.image-container');
-    containers.forEach((container) => {
-      const name = container.querySelector('.image-name').textContent;
-      const shouldBeVisible = name.includes(searchInput.value);
-      const isHidden = container.style.display === 'none';
-      expect(isHidden).toBe(!shouldBeVisible);
+      // Wait for filtering to complete
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const visibleImages = imageGrid.querySelectorAll('.image-container');
+      expect(visibleImages.length).toBe(1);
+      expect(visibleImages[0].querySelector('img').alt).toBe('test1.jpg');
+    });
+
+    test('filters by tag', async () => {
+      const tagSelect = document.querySelector('#tagSelect');
+      tagSelect.value = 'nature';
+      tagSelect.dispatchEvent(new Event('change'));
+
+      // Wait for filtering to complete
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const visibleImages = imageGrid.querySelectorAll('.image-container');
+      expect(visibleImages.length).toBe(1);
+      expect(visibleImages[0].querySelector('img').alt).toBe('test1.jpg');
     });
   });
 
-  test('should show no results message when no matches found', async () => {
-    const testImages = createTestImages(3);
-
-    // Add test images to grid
-    testImages.forEach((img) => {
-      const container = document.createElement('div');
-      container.className = 'image-container';
-      container.innerHTML = `
-                <img src="${img.url}" alt="${img.name}" />
-                <div class="image-name">${img.name}</div>
-            `;
-      imageGrid.appendChild(container);
+  describe('Sorting', () => {
+    beforeEach(async () => {
+      await gallery.loadImages();
     });
 
-    // Simulate search with no matches
-    searchInput.value = 'nonexistent';
-    filterImages(searchInput.value);
-    await flushPromises();
+    test('sorts by name', async () => {
+      sortSelect.value = 'name-desc';
+      sortSelect.dispatchEvent(new Event('change'));
 
-    // Verify no results message
-    const noResults = document.querySelector('.no-results');
-    expect(noResults.style.display).toBe('block');
-  });
+      // Wait for sorting to complete
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-  test('should reset filter when search input is cleared', async () => {
-    const testImages = createTestImages(4);
-
-    // Add test images to grid
-    testImages.forEach((img) => {
-      const container = document.createElement('div');
-      container.className = 'image-container';
-      container.innerHTML = `
-                <img src="${img.url}" alt="${img.name}" />
-                <div class="image-name">${img.name}</div>
-            `;
-      imageGrid.appendChild(container);
+      const images = Array.from(imageGrid.querySelectorAll('.image-container img'));
+      expect(images.map((img) => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
     });
 
-    // First filter images
-    searchInput.value = 'Test Image 1';
-    filterImages(searchInput.value);
-    await flushPromises();
+    test('sorts by date', async () => {
+      sortSelect.value = 'date-desc';
+      sortSelect.dispatchEvent(new Event('change'));
 
-    // Then clear filter
-    searchInput.value = '';
-    filterImages(searchInput.value);
-    await flushPromises();
+      // Wait for sorting to complete
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Verify all images are visible
-    const containers = imageGrid.querySelectorAll('.image-container');
-    containers.forEach((container) => {
-      expect(container.style.display).not.toBe('none');
+      const images = Array.from(imageGrid.querySelectorAll('.image-container'));
+      const dates = images.map((img) => img.getAttribute('data-date'));
+      expect(dates).toEqual(['2024-01-02', '2024-01-01']);
+    });
+
+    test('sorts by size', async () => {
+      sortSelect.value = 'size-desc';
+      sortSelect.dispatchEvent(new Event('change'));
+
+      // Wait for sorting to complete
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const images = Array.from(imageGrid.querySelectorAll('.image-container'));
+      const sizes = images.map((img) => parseInt(img.getAttribute('data-size')));
+      expect(sizes).toEqual([2048, 1024]);
     });
   });
 });

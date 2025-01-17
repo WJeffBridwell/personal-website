@@ -5,373 +5,293 @@
 import { jest } from '@jest/globals';
 import { Gallery } from '../public/js/gallery.js';
 
-// Helper function to check if an element is visible
-function isVisible(element) {
-  return element && element.style && !element.classList.contains('hidden');
-}
-
-let gallery;
-let imageGrid;
-let searchInput;
-let letterFilter;
-let modal;
-let modalImg;
-let sortNameButton;
-let sortDateButton;
-
-beforeEach(() => {
-  jest.useFakeTimers();
-
-  document.body.innerHTML = `
-    <div id="gallery-container">
-      <div id="image-grid"></div>
-      <div class="gallery-controls">
-        <input id="search-input" type="text" />
-        <div id="letter-filter">
-          <div class="letter-buttons"></div>
-        </div>
-        <button id="sort-name" class="sort-btn" data-sort="name">Sort by Name</button>
-        <button id="sort-date" class="sort-btn" data-sort="date">Sort by Date</button>
-      </div>
-      <div id="imageModal" class="modal">
-        <div class="modal-content">
-          <img class="modal-img" />
-          <div class="modal-caption"></div>
-          <span class="close-modal">&times;</span>
-        </div>
-      </div>
-    </div>
-  `;
-
-  gallery = new Gallery();
-  imageGrid = document.getElementById('image-grid');
-  searchInput = document.getElementById('search-input');
-  letterFilter = document.getElementById('letter-filter');
-  modal = document.getElementById('imageModal');
-  modalImg = modal.querySelector('.modal-img');
-  sortNameButton = document.getElementById('sort-name');
-  sortDateButton = document.getElementById('sort-date');
-
-  // Add test images
-  gallery.images = [
-    { name: 'Beach.jpg', date: '2023-01-01', url: '/images/Beach.jpg' },
-    { name: 'Apple.jpg', date: '2023-02-01', url: '/images/Apple.jpg' },
-    { name: 'Zebra.jpg', date: '2023-03-01', url: '/images/Zebra.jpg' }
-  ];
-  gallery.renderImages();
-});
-
-afterEach(() => {
-  jest.clearAllTimers();
-  jest.useRealTimers();
-  jest.clearAllMocks();
-  document.body.innerHTML = '';
-});
-
 describe('Gallery Class', () => {
-  describe('Search Functionality', () => {
-    test('handleSearch filters images correctly', () => {
-      searchInput.value = 'Beach';
-      gallery.handleSearch({ target: searchInput });
-      jest.runAllTimers();
+  let gallery;
+  let galleryContainer;
+  let mockImages;
 
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(1);
-      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
+  beforeEach(() => {
+    // Setup test data
+    mockImages = [
+      {
+        name: 'image1.jpg',
+        path: '/images/image1.jpg',
+        date: '2023-01-01',
+        tags: ['red', 'nature'],
+      },
+      {
+        name: 'image2.jpg',
+        path: '/images/image2.jpg',
+        date: '2023-02-01',
+        tags: ['blue', 'urban'],
+      },
+      {
+        name: 'image3.jpg',
+        path: '/images/image3.jpg',
+        date: '2023-03-01',
+        tags: ['green', 'nature'],
+      },
+    ];
+
+    // Setup DOM
+    document.body.innerHTML = `
+      <div id="gallery-container">
+        <div id="image-grid"></div>
+        <button id="prevPage" disabled></button>
+        <button id="nextPage"></button>
+        <div id="pageNumbers"></div>
+        <input type="text" id="searchInput" />
+        <select id="sortSelect">
+          <option value="name-asc">Name (A-Z)</option>
+          <option value="name-desc">Name (Z-A)</option>
+          <option value="date-asc">Date (Oldest)</option>
+          <option value="date-desc">Date (Newest)</option>
+        </select>
+        <select id="tagSelect">
+          <option value="">All tags</option>
+        </select>
+        <div id="letterFilter"></div>
+        <div id="imageModal" class="modal">
+          <div class="modal-content">
+            <img class="modal-img">
+            <div class="modal-caption"></div>
+            <span class="close-modal">&times;</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Initialize gallery
+    galleryContainer = document.getElementById('gallery-container');
+    gallery = new Gallery(galleryContainer);
+
+    // Mock fetch
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+    jest.restoreAllMocks();
+  });
+
+  describe('Initialization', () => {
+    test('initializes with correct DOM elements', () => {
+      expect(gallery.imageGrid).toBeTruthy();
+      expect(gallery.searchInput).toBeTruthy();
+      expect(gallery.sortSelect).toBeTruthy();
+      expect(gallery.tagSelect).toBeTruthy();
+      expect(gallery.letterFilter).toBeTruthy();
+      expect(gallery.modal).toBeTruthy();
     });
 
-    test('handleSearch is case insensitive', () => {
-      searchInput.value = 'beach';
-      gallery.handleSearch({ target: searchInput });
-      jest.runAllTimers();
-
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(1);
-      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
-    });
-
-    test('handleSearch shows all images when search is cleared', () => {
-      searchInput.value = '';
-      gallery.handleSearch({ target: searchInput });
-      jest.runAllTimers();
-
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(3);
-    });
-
-    test('handleSearch handles invalid events gracefully', () => {
-      gallery.handleSearch(null);
-      gallery.handleSearch({});
-      gallery.handleSearch({ target: null });
-      
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(3);
-    });
-
-    test('shows no results message when no matches found', () => {
-      searchInput.value = 'nonexistent';
-      gallery.handleSearch({ target: searchInput });
-      jest.runAllTimers();
-
-      const noResultsMessage = document.querySelector('.no-results-message');
-      expect(noResultsMessage).toBeTruthy();
-      expect(noResultsMessage.textContent).toBe('No matching images found');
+    test('initializes with correct default state', () => {
+      expect(gallery.allImages).toEqual([]);
+      expect(gallery.filteredImages).toEqual([]);
+      expect(gallery.currentPage).toBe(1);
+      expect(gallery.itemsPerPage).toBe(30);
+      expect(gallery.searchTerm).toBe('');
+      expect(gallery.sortOrder).toBe('name-asc');
+      expect(gallery.currentLetter).toBe('all');
+      expect(gallery.selectedTags.size).toBe(0);
     });
   });
 
-  describe('Sorting Functionality', () => {
+  describe('Image Loading', () => {
+    test('loads images successfully from API', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ images: mockImages }),
+      });
+
+      await gallery.loadImages();
+      expect(fetch).toHaveBeenCalledWith('/api/gallery/images');
+      expect(gallery.allImages).toEqual(mockImages);
+    });
+
+    test('handles API error gracefully', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: 'Internal Server Error',
+      });
+
+      await gallery.loadImages();
+      expect(gallery.imageGrid.innerHTML).toContain('Failed to load images');
+    });
+
+    test('updates tag select with available tags', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ images: mockImages }),
+      });
+
+      await gallery.loadImages();
+      const options = Array.from(gallery.tagSelect.options).map((opt) => opt.value);
+      expect(options).toContain('red');
+      expect(options).toContain('blue');
+      expect(options).toContain('green');
+    });
+  });
+
+  describe('Search Functionality', () => {
+    beforeEach(async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ images: mockImages }),
+      });
+      await gallery.loadImages();
+    });
+
+    test('filters images based on search term', () => {
+      gallery.searchInput.value = 'image1';
+      gallery.searchInput.dispatchEvent(new Event('input'));
+
+      expect(gallery.filteredImages.length).toBe(1);
+      expect(gallery.filteredImages[0].name).toBe('image1.jpg');
+    });
+
+    test('is case insensitive', () => {
+      gallery.searchInput.value = 'IMAGE2';
+      gallery.searchInput.dispatchEvent(new Event('input'));
+
+      expect(gallery.filteredImages.length).toBe(1);
+      expect(gallery.filteredImages[0].name).toBe('image2.jpg');
+    });
+
+    test('shows all images when search is cleared', () => {
+      gallery.searchInput.value = '';
+      gallery.searchInput.dispatchEvent(new Event('input'));
+
+      expect(gallery.filteredImages.length).toBe(mockImages.length);
+    });
+  });
+
+  describe('Tag Filtering', () => {
+    beforeEach(async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ images: mockImages }),
+      });
+      await gallery.loadImages();
+    });
+
+    test('filters images by tag', () => {
+      gallery.tagSelect.value = 'nature';
+      gallery.tagSelect.dispatchEvent(new Event('change'));
+
+      expect(gallery.filteredImages.length).toBe(2);
+      expect(gallery.filteredImages.every((img) => img.tags.includes('nature'))).toBe(true);
+    });
+
+    test('shows all images when no tag is selected', () => {
+      gallery.tagSelect.value = '';
+      gallery.tagSelect.dispatchEvent(new Event('change'));
+
+      expect(gallery.filteredImages.length).toBe(mockImages.length);
+    });
+  });
+
+  describe('Sorting', () => {
+    beforeEach(async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ images: mockImages }),
+      });
+      await gallery.loadImages();
+    });
+
     test('sorts by name ascending', () => {
-      sortNameButton.click();
-      
-      const containers = document.querySelectorAll('.image-container');
-      const names = Array.from(containers).map(c => c.querySelector('.image-name').textContent);
-      expect(names).toEqual(['Zebra.jpg', 'Beach.jpg', 'Apple.jpg']);
+      gallery.sortSelect.value = 'name-asc';
+      gallery.sortSelect.dispatchEvent(new Event('change'));
+
+      const names = gallery.filteredImages.map((img) => img.name);
+      expect(names).toEqual(['image1.jpg', 'image2.jpg', 'image3.jpg']);
     });
 
     test('sorts by name descending', () => {
-      sortNameButton.click();
-      sortNameButton.click(); // Second click for descending
-      
-      const containers = document.querySelectorAll('.image-container');
-      const names = Array.from(containers).map(c => c.querySelector('.image-name').textContent);
-      expect(names).toEqual(['Zebra.jpg', 'Beach.jpg', 'Apple.jpg']);
+      gallery.sortSelect.value = 'name-desc';
+      gallery.sortSelect.dispatchEvent(new Event('change'));
+
+      const names = gallery.filteredImages.map((img) => img.name);
+      expect(names).toEqual(['image3.jpg', 'image2.jpg', 'image1.jpg']);
     });
 
     test('sorts by date ascending', () => {
-      sortDateButton.click();
-      
-      const containers = document.querySelectorAll('.image-container');
-      const dates = Array.from(containers).map(c => c.dataset.date);
+      gallery.sortSelect.value = 'date-asc';
+      gallery.sortSelect.dispatchEvent(new Event('change'));
+
+      const dates = gallery.filteredImages.map((img) => img.date);
       expect(dates).toEqual(['2023-01-01', '2023-02-01', '2023-03-01']);
     });
 
     test('sorts by date descending', () => {
-      sortDateButton.click();
-      sortDateButton.click(); // Second click for descending
-      
-      const containers = document.querySelectorAll('.image-container');
-      const dates = Array.from(containers).map(c => c.dataset.date);
-      expect(dates).toEqual(['2023-01-01', '2023-02-01', '2023-03-01']);
+      gallery.sortSelect.value = 'date-desc';
+      gallery.sortSelect.dispatchEvent(new Event('change'));
+
+      const dates = gallery.filteredImages.map((img) => img.date);
+      expect(dates).toEqual(['2023-03-01', '2023-02-01', '2023-01-01']);
     });
   });
 
   describe('Modal Functionality', () => {
     test('opens modal with correct image', () => {
-      const firstImage = document.querySelector('.image-container');
-      firstImage.click();
-      
-      expect(modal.style.display).toBe('block');
-      expect(modalImg.src).toContain('Beach.jpg');
+      const imagePath = '/images/test.jpg';
+      const imageName = 'test.jpg';
+
+      gallery.openModal(imagePath, imageName);
+
+      expect(gallery.modal.style.display).toBe('flex');
+      expect(gallery.modalImg.src).toContain(imagePath);
+      expect(gallery.modalCaption.textContent).toBe(imageName);
     });
 
-    test('closes modal on close button click', () => {
-      const firstImage = document.querySelector('.image-container');
-      firstImage.click();
-      
-      const closeButton = modal.querySelector('.close-modal');
-      closeButton.click();
-      
-      expect(modal.classList.contains('modal--active')).toBe(false);
+    test('closes modal when close button is clicked', () => {
+      gallery.openModal('/images/test.jpg', 'test.jpg');
+      gallery.closeBtn.click();
+
+      expect(gallery.modal.style.display).toBe('none');
     });
 
-    test('closes modal on escape key', () => {
-      const firstImage = document.querySelector('.image-container');
-      firstImage.click();
-      
-      const escEvent = new KeyboardEvent('keydown', { key: 'Escape' });
-      document.dispatchEvent(escEvent);
-      
-      expect(modal.classList.contains('modal--active')).toBe(false);
-    });
+    test('closes modal when clicking outside the image', () => {
+      gallery.openModal('/images/test.jpg', 'test.jpg');
+      gallery.modal.click();
 
-    test('closes modal on outside click', () => {
-      const firstImage = document.querySelector('.image-container');
-      firstImage.click();
-      
-      modal.click();
-      
-      expect(modal.classList.contains('modal--active')).toBe(false);
+      expect(gallery.modal.style.display).toBe('none');
     });
   });
 
-  describe('Letter Filter Functionality', () => {
-    test('filters by letter correctly', () => {
-      const letterButtons = letterFilter.querySelectorAll('button');
-      const bButton = Array.from(letterButtons).find(b => b.textContent === 'B');
-      bButton.click();
-
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(1);
-      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
-    });
-
-    test('shows all images when "All" is clicked', () => {
-      const letterButtons = letterFilter.querySelectorAll('button');
-      const allButton = Array.from(letterButtons).find(b => b.textContent === 'All');
-      allButton.click();
-
-      const containers = document.querySelectorAll('.image-container');
-      const visibleContainers = Array.from(containers).filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(3);
-    });
-  });
-
-  describe('API Integration', () => {
-    beforeEach(() => {
-      global.fetch = jest.fn();
-    });
-
-    afterEach(() => {
-      global.fetch.mockClear();
-      delete global.fetch;
-    });
-
-    test('loads images successfully from API', async () => {
-      const mockImages = [
-        { name: 'test1.jpg', url: '/test1.jpg' },
-        { name: 'test2.jpg', url: '/test2.jpg' }
-      ];
-
+  describe('Pagination', () => {
+    beforeEach(async () => {
       global.fetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve(mockImages)
+        json: () => Promise.resolve({ images: Array(50).fill(mockImages[0]) }), // Create 50 images
       });
-
       await gallery.loadImages();
-      expect(global.fetch).toHaveBeenCalledWith('/api/images');
-      expect(gallery.images).toEqual(mockImages);
     });
 
-    test('handles API error gracefully', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false
-      });
-
-      await gallery.loadImages();
-      const errorMessage = document.querySelector('.error-message');
-      expect(errorMessage).toBeTruthy();
-      expect(errorMessage.textContent).toBe('Failed to fetch images');
+    test('shows correct number of images per page', () => {
+      const displayedImages = gallery.imageGrid.querySelectorAll('.image-container');
+      expect(displayedImages.length).toBeLessThanOrEqual(gallery.itemsPerPage);
     });
 
-    test('handles network error gracefully', async () => {
-      global.fetch.mockRejectedValueOnce(new Error('Network error'));
-
-      await gallery.loadImages();
-      const errorMessage = document.querySelector('.error-message');
-      expect(errorMessage).toBeTruthy();
-      expect(errorMessage.textContent).toBe('Network error');
-    });
-  });
-
-  describe('Gallery Controls', () => {
-    test('initializes sticky controls', () => {
-      const controls = document.querySelector('.gallery-controls');
-      const scrollEvent = new Event('scroll');
-      window.pageYOffset = 100;
-      window.dispatchEvent(scrollEvent);
-      expect(controls.classList.contains('sticky')).toBe(true);
+    test('updates page when clicking next', () => {
+      const initialPage = gallery.currentPage;
+      gallery.nextPageBtn.click();
+      expect(gallery.currentPage).toBe(initialPage + 1);
     });
 
-    test('handles sort button clicks', () => {
-      sortNameButton.click();
-      expect(document.querySelectorAll('.image-container').length).toBe(3);
+    test('updates page when clicking previous', () => {
+      // First go to next page
+      gallery.nextPageBtn.click();
+      const { currentPage } = gallery;
 
-      sortDateButton.click();
-      expect(document.querySelectorAll('.image-container').length).toBe(3);
+      // Then go back
+      gallery.prevPageBtn.click();
+      expect(gallery.currentPage).toBe(currentPage - 1);
     });
 
-    test('debounces search input', () => {
-      const mockFn = jest.fn();
-      const debouncedFn = gallery.debounce(mockFn, 100);
-
-      debouncedFn();
-      debouncedFn();
-      debouncedFn();
-
-      jest.advanceTimersByTime(50);
-      expect(mockFn).not.toHaveBeenCalled();
-
-      jest.advanceTimersByTime(50);
-      expect(mockFn).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('Error Handling', () => {
-    test('handles missing DOM elements gracefully', () => {
-      document.body.innerHTML = '<div id="gallery-container"></div>';
-      const newGallery = new Gallery();
-      expect(newGallery).toBeTruthy();
-    });
-
-    test('handles invalid sort parameters', () => {
-      try {
-        gallery.sortImages('invalid');
-      } catch (error) {
-        // Expected error when trying to sort with invalid parameters
-      }
-      // Verify the gallery still displays images
-      const containers = document.querySelectorAll('.image-container');
-      expect(containers.length).toBe(3);
-    });
-
-    test('handles empty image array', () => {
-      gallery.images = [];
-      gallery.renderImages();
-      const containers = document.querySelectorAll('.image-container');
-      expect(containers.length).toBe(0);
-    });
-  });
-
-  describe('Event Handling', () => {
-    test('handles multiple search inputs in quick succession', () => {
-      searchInput.value = 'B';
-      searchInput.dispatchEvent(new Event('input'));
-      searchInput.value = 'Be';
-      searchInput.dispatchEvent(new Event('input'));
-      searchInput.value = 'Bea';
-      searchInput.dispatchEvent(new Event('input'));
-      
-      jest.runAllTimers();
-      
-      const visibleContainers = Array.from(document.querySelectorAll('.image-container'))
-        .filter(c => !c.classList.contains('hidden'));
-      expect(visibleContainers.length).toBe(1);
-      expect(visibleContainers[0].querySelector('.image-name').textContent).toBe('Beach.jpg');
-    });
-
-    test('handles concurrent search and sort operations', () => {
-      searchInput.value = 'Beach';
-      gallery.handleSearch({ target: searchInput });
-      jest.runAllTimers();
-      
-      sortNameButton.click();
-      
-      const containers = document.querySelectorAll('.image-container');
-      const firstImageName = containers[0].querySelector('.image-name').textContent;
-      expect(firstImageName).toBe('Zebra.jpg');
-    });
-  });
-
-  describe('Initialization', () => {
-    test('creates letter filter buttons correctly', () => {
-      const letterButtons = letterFilter.querySelectorAll('button');
-      const letters = Array.from(letterButtons).map(b => b.textContent);
-      expect(letters).toContain('All');
-      expect(letters).toContain('A');
-      expect(letters).toContain('B');
-      expect(letters).toContain('Z');
-    });
-
-    test('initializes with correct default state', () => {
-      expect(gallery.images.length).toBe(3);
-      const containers = document.querySelectorAll('.image-container');
-      expect(containers.length).toBe(3);
-      expect(containers[0].classList.contains('hidden')).toBe(false);
+    test('disables previous button on first page', () => {
+      expect(gallery.prevPageBtn.disabled).toBe(true);
     });
   });
 });

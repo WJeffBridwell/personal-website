@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant U as User
+    participant G as GalleryManager
+    participant A as API
+    participant M as ModalSystem
+    participant F as FilterSystem
+
+    U->>G: Load Gallery
+    G->>A: fetchImages()
+    A-->>G: Return Images
+    G->>G: displayImages()
+    G->>G: updatePagination()
+
+    U->>M: Click Image
+    M->>M: openModal()
+    M->>M: setupModalEventListeners()
+
+    U->>F: Apply Filter
+    F->>F: filterImagesByLetter()
+    F->>G: Update Display

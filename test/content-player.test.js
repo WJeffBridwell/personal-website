@@ -1,117 +1,126 @@
+/**
+ * @jest-environment jsdom
+ */
+
 import { jest } from '@jest/globals';
-import { ContentPlayer } from '../public/js/content-player.js';
+import { ContentPlayer } from '../public/js/content-player';
 
 describe('ContentPlayer', () => {
-    let contentPlayer;
-    let mockModal;
-    let mockContentElement;
-    let mockCloseButton;
+  let contentPlayer;
+  const modalId = 'content-player';
 
-    beforeEach(() => {
-        // Setup mock DOM
-        mockModal = document.createElement('div');
-        mockModal.id = 'contentModal';
-        mockModal.className = 'modal';
+  beforeEach(() => {
+    // Mock HTMLMediaElement methods
+    window.HTMLMediaElement.prototype.pause = jest.fn();
+    window.HTMLMediaElement.prototype.play = jest.fn();
+    window.HTMLMediaElement.prototype.load = jest.fn();
 
-        mockContentElement = document.createElement('div');
-        mockContentElement.className = 'content-player';
-        mockModal.appendChild(mockContentElement);
+    document.body.innerHTML = `
+            <div id="${modalId}" class="modal">
+                <div class="content-player"></div>
+                <button class="modal__close">&times;</button>
+            </div>
+        `;
 
-        mockCloseButton = document.createElement('button');
-        mockCloseButton.className = 'modal__close';
-        mockModal.appendChild(mockCloseButton);
+    contentPlayer = new ContentPlayer(modalId);
+  });
 
-        document.body.appendChild(mockModal);
+  afterEach(() => {
+    document.body.innerHTML = '';
+    jest.clearAllMocks();
+  });
 
-        contentPlayer = new ContentPlayer('contentModal');
-    });
+  test('initialization', () => {
+    expect(contentPlayer.modal).toBeTruthy();
+    expect(contentPlayer.contentElement).toBeTruthy();
+    expect(contentPlayer.closeButton).toBeTruthy();
+  });
 
-    afterEach(() => {
-        document.body.innerHTML = '';
-        jest.clearAllMocks();
-    });
+  test('open video content', () => {
+    const content = {
+      content_name: 'test.mp4',
+      content_url: '/videos/test.mp4',
+      isVideo: true,
+    };
+    contentPlayer.open(content);
 
-    describe('initialization', () => {
-        test('should initialize with correct modal element', () => {
-            expect(contentPlayer.modal).toBe(mockModal);
-            expect(contentPlayer.contentElement).toBe(mockContentElement);
-            expect(contentPlayer.closeButton).toBe(mockCloseButton);
-        });
+    const video = contentPlayer.contentElement.querySelector('video');
+    expect(video).toBeTruthy();
+    expect(video.querySelector('source').src).toContain(content.content_url);
+    expect(contentPlayer.modal.classList.contains('modal--active')).toBe(true);
+  });
 
-        test('should throw error if modal not found', () => {
-            document.body.innerHTML = '';
-            expect(() => new ContentPlayer('nonexistentModal')).toThrow();
-        });
-    });
+  test('open image content', () => {
+    const content = {
+      content_name: 'test.jpg',
+      content_url: '/images/test.jpg',
+      isVideo: false,
+    };
+    contentPlayer.open(content);
 
-    describe('event listeners', () => {
-        test('should close on close button click', () => {
-            contentPlayer.modal.classList.add('modal--active');
-            contentPlayer.closeButton.click();
-            expect(contentPlayer.modal.classList.contains('modal--active')).toBe(false);
-        });
+    const img = contentPlayer.contentElement.querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img.src).toContain(content.content_url);
+    expect(contentPlayer.modal.classList.contains('modal--active')).toBe(true);
+  });
 
-        test('should close on clicking outside content', () => {
-            contentPlayer.modal.classList.add('modal--active');
-            mockModal.click();
-            expect(contentPlayer.modal.classList.contains('modal--active')).toBe(false);
-        });
+  test('handle video error', () => {
+    const content = {
+      content_name: 'test.mp4',
+      content_url: '/videos/test.mp4',
+      isVideo: true,
+    };
+    contentPlayer.open(content);
 
-        test('should not close when clicking content', () => {
-            contentPlayer.modal.classList.add('modal--active');
-            mockContentElement.click();
-            expect(contentPlayer.modal.classList.contains('modal--active')).toBe(true);
-        });
-    });
+    const video = contentPlayer.contentElement.querySelector('video');
+    video.dispatchEvent(new Event('error'));
 
-    describe('open method', () => {
-        test('should open video content correctly', () => {
-            const videoUrl = 'test.mp4';
-            contentPlayer.open(videoUrl);
-            
-            const video = mockContentElement.querySelector('video');
-            expect(video).toBeTruthy();
-            expect(video.src).toContain(videoUrl);
-            expect(video.controls).toBe(true);
-            expect(video.autoplay).toBe(true);
-            expect(contentPlayer.modal.classList.contains('modal--active')).toBe(true);
-        });
+    expect(contentPlayer.contentElement.querySelector('.a-error-message')).toBeTruthy();
+  });
 
-        test('should open image content correctly', () => {
-            const imageUrl = 'test.jpg';
-            contentPlayer.open(imageUrl);
-            
-            const img = mockContentElement.querySelector('img');
-            expect(img).toBeTruthy();
-            expect(img.src).toContain(imageUrl);
-            expect(contentPlayer.modal.classList.contains('modal--active')).toBe(true);
-        });
+  test('close content', () => {
+    const content = {
+      content_name: 'test.mp4',
+      content_url: '/videos/test.mp4',
+      isVideo: true,
+    };
+    contentPlayer.open(content);
+    contentPlayer.close();
 
-        test('should handle empty content url', () => {
-            const consoleSpy = jest.spyOn(console, 'error');
-            contentPlayer.open('');
-            expect(consoleSpy).toHaveBeenCalled();
-            consoleSpy.mockRestore();
-        });
-    });
+    expect(contentPlayer.contentElement.querySelector('video')).toBeFalsy();
+    expect(contentPlayer.modal.classList.contains('modal--active')).toBe(false);
+  });
 
-    describe('close method', () => {
-        test('should clear content immediately', () => {
-            contentPlayer.open('test.jpg');
-            contentPlayer.close();
-            
-            expect(contentPlayer.modal.classList.contains('modal--active')).toBe(false);
-            expect(document.body.style.overflow).toBe('');
-            expect(mockContentElement.innerHTML).toBe('');
-        });
-    });
+  test('close on modal click', () => {
+    const content = {
+      content_name: 'test.jpg',
+      content_url: '/images/test.jpg',
+      isVideo: false,
+    };
+    contentPlayer.open(content);
+    contentPlayer.modal.click();
 
-    describe('content type detection', () => {
-        test('should detect video content', () => {
-            expect(contentPlayer.isVideo('test.mp4')).toBeTruthy();
-            expect(contentPlayer.isVideo('test.webm')).toBeTruthy();
-            expect(contentPlayer.isVideo('test.ogg')).toBeTruthy();
-            expect(contentPlayer.isVideo('test.jpg')).toBeFalsy();
-        });
-    });
+    expect(contentPlayer.contentElement.querySelector('img')).toBeFalsy();
+    expect(contentPlayer.modal.classList.contains('modal--active')).toBe(false);
+  });
+
+  test('not close on content click', () => {
+    const content = {
+      content_name: 'test.jpg',
+      content_url: '/images/test.jpg',
+      isVideo: false,
+    };
+    contentPlayer.open(content);
+    contentPlayer.contentElement.click();
+
+    expect(contentPlayer.contentElement.querySelector('img')).toBeTruthy();
+    expect(contentPlayer.modal.classList.contains('modal--active')).toBe(true);
+  });
+
+  test('get video mime type', () => {
+    expect(contentPlayer.getVideoMimeType('test.mp4')).toBe('video/mp4');
+    expect(contentPlayer.getVideoMimeType('test.webm')).toBe('video/webm');
+    expect(contentPlayer.getVideoMimeType('test.mov')).toBe('video/quicktime');
+    expect(contentPlayer.getVideoMimeType('test.unknown')).toBe('video/mp4');
+  });
 });

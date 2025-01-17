@@ -2,9 +2,9 @@ export default {
   presets: [
     ['@babel/preset-env', {
       targets: {
-        node: 'current'
+        node: 'current',
       },
-      modules: false
-    }]
-  ]
+      modules: false,
+    }],
+  ],
 };

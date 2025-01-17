@@ -1,87 +1,99 @@
+/**
+ * @jest-environment jsdom
+ */
+
 import { jest } from '@jest/globals';
-import { setupTestDOM, flushPromises, cleanupDOM } from './helpers.js';
-import { loadImages } from '../public/js/gallery.js';
+import { Gallery } from '../public/js/gallery.js';
+import {
+  setupGalleryDOM, setupFetchMock, cleanupDOM, mockGalleryData,
+} from './utils/setupTests';
 
 describe('Image Loading', () => {
+  let gallery;
+  let container;
   let imageGrid;
-  let testEnv;
-
-  beforeAll(() => {
-    testEnv = setupTestDOM();
-    global.window = testEnv.window;
-    global.document = testEnv.document;
-  });
+  let modal;
 
   beforeEach(() => {
-    // Set up DOM
-    document.body.innerHTML = `
-            <div id="gallery-container">
-                <div id="image-grid"></div>
-                <div class="error-message" style="display: none;"></div>
-            </div>
-        `;
-    imageGrid = document.getElementById('image-grid');
-
-    // Mock fetch
-    global.fetch = jest.fn();
+    container = setupGalleryDOM();
+    imageGrid = document.querySelector('#image-grid');
+    modal = document.querySelector('#imageModal');
+    setupFetchMock(true);
+    gallery = new Gallery(container);
   });
 
   afterEach(() => {
-    document.body.innerHTML = '';
-    jest.resetAllMocks();
-  });
-
-  afterAll(() => {
     cleanupDOM();
-    jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
 
-  test('should load images with lazy loading enabled', async () => {
-    // Mock successful fetch
-    global.fetch.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve([
-        { url: 'test1.jpg', name: 'Test 1' },
-        { url: 'test2.jpg', name: 'Test 2' },
-      ]),
-    });
+  test('loads images successfully', async () => {
+    await gallery.loadImages();
 
-    await loadImages();
-    await flushPromises();
+    // Check if fetch was called
+    expect(fetch).toHaveBeenCalledTimes(1);
 
-    const images = imageGrid.querySelectorAll('img');
-    expect(images).toHaveLength(2);
-    images.forEach((img) => {
-      expect(img.getAttribute('loading')).toBe('lazy');
-    });
+    // Wait for rendering to complete
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Verify grid has correct number of items
+    const items = imageGrid.querySelectorAll('.image-container');
+    expect(items.length).toBe(mockGalleryData.items.length);
+
+    // Verify first item content
+    const firstItem = items[0];
+    const img = firstItem.querySelector('img');
+    expect(img.src).toContain(mockGalleryData.items[0].url);
+    expect(img.alt).toBe(mockGalleryData.items[0].name);
   });
 
-  test('should handle image load errors gracefully', async () => {
-    // Mock failed fetch
-    global.fetch.mockRejectedValueOnce(new Error('Failed to fetch'));
+  test('handles API error gracefully', async () => {
+    setupFetchMock(false);
+    await gallery.loadImages();
 
-    await loadImages();
-    await flushPromises();
-
-    const errorMessage = document.querySelector('.error-message');
-    expect(errorMessage.style.display).toBe('block');
-    expect(errorMessage.textContent).toBe('Failed to fetch');
+    // Should show error message
+    const errorMessage = imageGrid.querySelector('.error-message');
+    expect(errorMessage).toBeTruthy();
+    expect(errorMessage.textContent).toBe('Failed to load images');
   });
 
-  test('should maintain image aspect ratios', () => {
-    const container = document.createElement('div');
-    container.className = 'image-container';
-    container.innerHTML = `
-            <img src="test.jpg" alt="Test Image" />
-        `;
-    imageGrid.appendChild(container);
+  test('shows loading state', async () => {
+    const loadPromise = gallery.loadImages();
 
-    const img = container.querySelector('img');
-    // Set dimensions directly on the element
-    Object.defineProperty(img, 'width', { value: 200 });
-    Object.defineProperty(img, 'height', { value: 150 });
+    // Should show loading state
+    const loadingElement = imageGrid.querySelector('.loading-progress');
+    expect(loadingElement).toBeTruthy();
+    expect(loadingElement.textContent).toBe('Loading images...');
 
-    const aspectRatio = img.width / img.height;
-    expect(aspectRatio).toBeCloseTo(1.33, 2);
+    await loadPromise;
+
+    // Loading state should be removed after load
+    expect(imageGrid.querySelector('.loading-progress')).toBeFalsy();
+  });
+
+  test('updates pagination info', async () => {
+    await gallery.loadImages();
+
+    // Wait for rendering to complete
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const pageNumbers = document.querySelector('#pageNumbers');
+    const pageCount = Math.ceil(mockGalleryData.items.length / 30); // 30 items per page
+    expect(pageNumbers.textContent).toContain(`${mockGalleryData.items.length} images`);
+    expect(pageNumbers.textContent).toContain(`${pageCount} pages`);
+  });
+
+  test('opens modal with correct display style', async () => {
+    await gallery.loadImages();
+
+    // Wait for rendering to complete
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const firstImage = imageGrid.querySelector('.image-container');
+    firstImage.click();
+
+    expect(modal.style.display).toBe('flex');
+    expect(modal.querySelector('.modal-img').src).toContain(mockGalleryData.items[0].url);
+    expect(modal.querySelector('.modal-caption').textContent).toBe(mockGalleryData.items[0].name);
   });
 });
