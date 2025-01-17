@@ -1,0 +1,127 @@
+/**
+ * @fileoverview Gallery module for managing image display and pagination
+ * in a responsive grid layout.
+ * @module gallery
+ */
+
+/**
+ * Gallery class that handles image loading, display and pagination.
+ * 
+ * @class
+ */
+export class Gallery {
+    constructor(galleryElement) {
+        // DOM Elements
+        this.gallery = galleryElement;
+        this.imageGrid = document.querySelector('#image-grid');
+        this.prevPageBtn = document.querySelector('#prevPage');
+        this.nextPageBtn = document.querySelector('#nextPage');
+        this.pageNumbers = document.querySelector('#pageNumbers');
+        this.searchInput = document.querySelector('#searchInput');
+        this.sortSelect = document.querySelector('#sortSelect');
+        this.tagSelect = document.querySelector('#tagSelect');
+        this.letterFilter = document.querySelector('#letterFilter');
+
+        // Modal elements
+        this.modal = document.getElementById('imageModal');
+        this.modalImg = this.modal.querySelector('.modal-img');
+        this.modalCaption = this.modal.querySelector('.modal-caption');
+        this.closeBtn = this.modal.querySelector('.close-modal');
+
+        // State
+        this.allImages = [];        // All images from server
+        this.filteredImages = [];   // Images after search/filter
+        this.currentPage = 1;
+        this.itemsPerPage = 48;     // 6 rows × 8 columns
+        this.searchTerm = '';
+        this.sortOrder = 'name-asc';
+        this.currentLetter = 'all';
+        this.selectedTags = new Set();
+        this.availableTags = new Set();
+        this.processingStatus = {
+            isProcessing: false,
+            progress: 0,
+            processedCount: 0
+        };
+
+        // Initialize
+        this.loadImages();
+        this.initControls();
+        this.initLetterFilter();
+        this.initModalEvents();
+    }
+
+    initControls() {
+        // Search input
+        this.searchInput?.addEventListener('input', (e) => {
+            this.searchTerm = e.target.value.toLowerCase();
+            this.currentPage = 1; // Reset to first page
+            this.filterAndSortImages();
+        });
+
+        // Sort select
+        this.sortSelect?.addEventListener('change', (e) => {
+            this.sortOrder = e.target.value;
+            this.filterAndSortImages();
+        });
+
+        // Tag select
+        this.tagSelect?.addEventListener('change', (e) => {
+            const selectedTag = e.target.value;
+            this.selectedTags = selectedTag ? new Set([selectedTag]) : new Set();
+            this.currentPage = 1; // Reset to first page
+            this.filterAndSortImages();
+        });
+
+        // Previous page button
+        this.prevPageBtn?.addEventListener('click', () => {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.renderCurrentPage();
+            }
+        });
+
+        // Next page button
+        this.nextPageBtn?.addEventListener('click', () => {
+            const totalPages = Math.ceil(this.filteredImages.length / this.itemsPerPage);
+            if (this.currentPage < totalPages) {
+                this.currentPage++;
+                this.renderCurrentPage();
+            }
+        });
+    }
+
+    async loadImages() {
+        try {
+            if (this.imageGrid) {
+                this.imageGrid.innerHTML = '<div class="loading-progress">Loading images...</div>';
+            }
+
+            console.log('Fetching images from /api/gallery/images...');
+            const response = await fetch('/api/gallery/images');
+            if (!response.ok) throw new Error('Failed to fetch images');
+            
+            const data = await response.json();
+            console.log('Gallery data received:', data);
+            console.log('First image example:', data.images[0]);
+            
+            // Store the images as-is
+            this.allImages = data.images;
+            
+            // Collect all unique tags and update tag select
+            this.availableTags = new Set(
+                this.allImages.reduce((tags, img) => {
+                    if (img.tags) tags.push(...img.tags);
+                    return tags;
+                }, [])
+            );
+
+            this.updateTagSelect();
+            this.filterAndSortImages();
+        } catch (error) {
+            console.error('Error loading images:', error);
+            if (this.imageGrid) {
+                this.imageGrid.innerHTML = '<div class="error-message">Failed to load images</div>';
+            }
+        }
+    }

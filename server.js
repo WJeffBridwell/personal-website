@@ -28,6 +28,8 @@ import timeout from 'connect-timeout';
 import fetch from 'node-fetch';
 import sharp from 'sharp';
 import galleryRouter from './routes/gallery.js';
+import Hexo from 'hexo';
+import yaml from 'js-yaml';
 
 const execPromise = util.promisify(exec);
 
@@ -78,6 +80,39 @@ app.use((req, res, next) => {
   next();
 });
 
+// Parse JSON bodies
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Create blog directory if it doesn't exist
+const blogDirectory = path.join(__dirname, 'blog');
+const postsDirectory = path.join(blogDirectory, 'source', '_posts');
+
+if (!fs.existsSync(blogDirectory)) {
+  fs.mkdirSync(blogDirectory);
+  fs.mkdirSync(path.join(blogDirectory, 'source'), { recursive: true });
+  fs.mkdirSync(postsDirectory, { recursive: true });
+  
+  // Create default _config.yml if it doesn't exist
+  const defaultConfig = {
+    title: 'My Blog',
+    description: 'Welcome to my blog',
+    per_page: 10,
+    theme: 'landscape',
+    url: 'http://localhost:3001',
+    root: '/',
+    permalink: ':year/:month/:day/:title/',
+    source_dir: 'source',
+    public_dir: 'public',
+    new_post_name: ':title.md'
+  };
+  
+  fs.writeFileSync(
+    path.join(blogDirectory, '_config.yml'),
+    yaml.dump(defaultConfig)
+  );
+}
+
 // Middleware Configuration
 // Log all incoming HTTP requests with timestamp
 app.use((req, res, next) => {
@@ -126,6 +161,117 @@ app.use(express.static(publicPath, {
     }
   },
 }));
+
+// Serve static files for blog
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/blog', express.static(path.join(__dirname, 'blog', 'public')));
+
+// Initialize Hexo
+const hexo = new Hexo(process.cwd() + '/blog', {
+  silent: false // Enable logging for debugging
+});
+
+// Ensure Hexo is initialized before handling requests
+let hexoInitialized = false;
+async function ensureHexoInitialized() {
+  if (!hexoInitialized) {
+    console.log('Initializing Hexo...');
+    await hexo.init();
+    await hexo.load();
+    hexoInitialized = true;
+    console.log('Hexo initialized successfully');
+  }
+}
+
+// Blog post routes
+app.get('/post/:year/:month/:day/:slug', async (req, res) => {
+  try {
+    const { year, month, day, slug } = req.params;
+    const postPath = `${year}/${month}/${day}/${slug}/`;  // Add trailing slash to match Hexo format
+    console.log('Requesting blog post:', postPath);
+    
+    await ensureHexoInitialized();
+    const posts = hexo.locals.get('posts');
+    const post = posts.find(p => p.path === postPath);
+    
+    if (!post) {
+      console.log('Post not found:', postPath);
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Convert post to a plain object and ensure all fields are present
+    const postData = {
+      title: post.title || 'Untitled Post',
+      date: post.date ? post.date.toISOString() : new Date().toISOString(),
+      content: post.content || '',
+      excerpt: post._content ? post._content.slice(0, 200) + '...' : '',
+      categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
+      tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
+      path: post.path,
+      raw: post._content || ''  // Include raw content for editing
+    };
+
+    console.log('Sending post data:', postData);
+    res.json(postData);
+  } catch (error) {
+    console.error('Error serving blog post:', error);
+    res.status(500).json({ error: 'Error serving blog post: ' + error.message });
+  }
+});
+
+// Handle blog post editing
+app.get('/blog/api/posts/:path(*)', async (req, res) => {
+  try {
+    console.log('Fetching post for edit:', req.params.path);
+    await ensureHexoInitialized();
+    
+    const postPath = req.params.path.replace(/\/$/, '') + '/';
+    const post = hexo.locals.get('posts').find(p => p.path === postPath);
+    
+    if (!post) {
+      console.log('Post not found:', postPath);
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    
+    res.json({
+      title: post.title,
+      path: post.path,
+      date: post.date,
+      categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
+      tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
+      content: post.content
+    });
+  } catch (error) {
+    console.error('Error fetching post:', error);
+    res.status(500).json({ error: 'Error fetching post: ' + error.message });
+  }
+});
+
+// Handle blog post URLs
+app.get('/*/post/*', async (req, res) => {
+  try {
+    const postPath = req.path.replace('/post/', '');
+    console.log('Requesting blog post:', postPath);
+    
+    await ensureHexoInitialized();
+    const post = hexo.locals.get('posts').findOne({ path: postPath });
+    
+    if (!post) {
+      console.log('Post not found:', postPath);
+      return res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+    }
+    
+    res.sendFile(path.join(__dirname, 'blog', 'public', postPath, 'index.html'));
+  } catch (error) {
+    console.error('Error serving blog post:', error);
+    res.status(500).send('Error serving blog post');
+  }
+});
+
+// Add favicon
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
+});
 
 /**
  * GET /
@@ -521,6 +667,222 @@ app.get('/proxy/image/content', async (req, res) => {
     return { success: false, error };
   }
 });
+
+// Blog API endpoints
+app.get('/blog/api/posts', async (req, res) => {
+  try {
+    console.log('Loading blog posts...');
+    await ensureHexoInitialized();
+
+    // Get all posts
+    const posts = hexo.locals.get('posts').sort('-date');
+    console.log(`Found ${posts.length} posts`);
+
+    // Convert posts to array and format them
+    const formattedPosts = posts.map(post => ({
+      title: post.title,
+      path: post.path,
+      date: post.date,
+      categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
+      tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
+      excerpt: post.excerpt || '',
+      content: post.content
+    }));
+
+    console.log('Formatted posts:', formattedPosts);
+    res.json({ posts: formattedPosts });
+  } catch (error) {
+    console.error('Error fetching blog posts:', error);
+    res.status(500).json({ error: 'Error fetching blog posts: ' + error.message });
+  }
+});
+
+app.get('/blog/api/posts/:path', async (req, res) => {
+  try {
+    await ensureHexoInitialized();
+    const post = hexo.locals.get('posts').findOne({ path: req.params.path });
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+    res.json({
+      title: post.title,
+      path: post.path,
+      date: post.date,
+      categories: post.categories.toArray().map(cat => cat.name),
+      tags: post.tags.toArray().map(tag => tag.name),
+      content: post.content
+    });
+  } catch (error) {
+    console.error('Error fetching post:', error);
+    res.status(500).json({ error: 'Error fetching post' });
+  }
+});
+
+app.put('/blog/api/posts/:path', async (req, res) => {
+  try {
+    const { title, categories, tags, content } = req.body;
+    const post = hexo.locals.get('posts').findOne({ path: req.params.path });
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    const postContent = `---
+title: ${title}
+date: ${post.date.toISOString()}
+categories:
+${categories.map(cat => `  - ${cat}`).join('\n')}
+tags:
+${tags.map(tag => `  - ${tag}`).join('\n')}
+---
+
+${content}`;
+
+    await fs.writeFile(post.full_source, postContent);
+
+    // Regenerate blog
+    await new Promise((resolve, reject) => {
+      exec('cd blog && npx hexo generate', (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating post:', error);
+    res.status(500).json({ error: 'Error updating post' });
+  }
+});
+
+app.delete('/blog/api/posts/:path', async (req, res) => {
+  try {
+    const post = hexo.locals.get('posts').findOne({ path: req.params.path });
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    await fs.unlink(post.full_source);
+
+    // Regenerate blog
+    await new Promise((resolve, reject) => {
+      exec('cd blog && npx hexo generate', (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ error: 'Error deleting post' });
+  }
+});
+
+app.get('/blog/api/config', async (req, res) => {
+  try {
+    const configPath = path.join(__dirname, 'blog', '_config.yml');
+    const config = yaml.load(await fs.readFile(configPath, 'utf8'));
+    res.json({
+      title: config.title,
+      description: config.description,
+      postsPerPage: config.per_page
+    });
+  } catch (error) {
+    console.error('Error loading configuration:', error);
+    res.status(500).json({ error: 'Error loading configuration' });
+  }
+});
+
+app.post('/blog/api/config', async (req, res) => {
+  try {
+    const { title, description, postsPerPage } = req.body;
+    const configPath = path.join(__dirname, 'blog', '_config.yml');
+    const config = yaml.load(await fs.readFile(configPath, 'utf8'));
+
+    config.title = title;
+    config.description = description;
+    config.per_page = postsPerPage;
+
+    await fs.writeFile(configPath, yaml.dump(config));
+
+    // Regenerate blog
+    await new Promise((resolve, reject) => {
+      exec('cd blog && npx hexo generate', (error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving configuration:', error);
+    res.status(500).json({ error: 'Error saving configuration' });
+  }
+});
+
+app.post('/blog/api/posts', async (req, res) => {
+  try {
+    console.log('Creating new post:', req.body);
+    const { title, categories, tags, content } = req.body;
+    
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+
+    await ensureHexoInitialized();
+
+    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const date = new Date().toISOString();
+    
+    const postContent = `---
+title: ${title}
+date: ${date}
+categories:
+${categories.map(cat => `  - ${cat}`).join('\n')}
+tags:
+${tags.map(tag => `  - ${tag}`).join('\n')}
+---
+
+${content}`;
+
+    const postPath = path.join(postsDirectory, `${slug}.md`);
+    console.log('Writing post to:', postPath);
+    
+    await fs.promises.writeFile(postPath, postContent);
+
+    // Regenerate blog
+    try {
+      console.log('Regenerating blog...');
+      await new Promise((resolve, reject) => {
+        exec('cd blog && npx hexo generate', (error) => {
+          if (error) {
+            console.error('Error generating blog:', error);
+            reject(error);
+          } else {
+            console.log('Blog regenerated successfully');
+            resolve();
+          }
+        });
+      });
+
+      // Reload Hexo after generating
+      hexoInitialized = false;
+      await ensureHexoInitialized();
+    } catch (error) {
+      console.error('Failed to regenerate blog:', error);
+      // Continue anyway since the post was saved
+    }
+
+    console.log('Post created successfully');
+    res.json({ success: true, path: slug });
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ error: 'Error creating post: ' + error.message });
+  }
+});
+
+// Serve Hexo blog files
+app.use('/blog', express.static(path.join(__dirname, 'blog/public')));
 
 // Load pre-generated tags file
 const tagMapPath = path.join(__dirname, 'data', 'image-tags.json');

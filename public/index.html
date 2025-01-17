@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jeff Bridwell | Personal Website</title>
     <link rel="stylesheet" href="css/index.css">
+    <link rel="stylesheet" href="css/blog.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="modal.css">
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -161,7 +162,7 @@
                 <li><a href="#" class="nav__link--active">Home</a></li>
                 <li><a href="#about">About</a></li>
                 <li><a href="#projects">Projects</a></li>
-                <li><a href="gallery.html">Blog</a></li>
+                <li><a href="#blog">Blog</a></li>
                 <li><a href="#contact">Contact</a></li>
             </ul>
         </div>
@@ -199,35 +200,12 @@
                 <div class="header-band">
                     <h2>Projects</h2>
                 </div>
-                <div class="project-grid">
-                    <div class="project-tile">
-                        <div class="project-content">
-                            <h3>Songs I Love</h3>
-                            <p>A curated collection of my favorite songs, featuring music that has moved me and shaped my life's soundtrack.</p>
-                            <div class="project-tech">
-                                <span class="tech-tag">React</span>
-                                <span class="tech-tag">Node.js</span>
-                                <span class="tech-tag">MongoDB</span>
-                            </div>
-                            <div class="project-links">
-                                <a href="https://jeffbridwell.blog" class="project-btn" target="_blank">
-                                    <i class="fas fa-external-link-alt"></i> View Live
-                                </a>
-                                <a href="#" class="project-btn">
-                                    <i class="fab fa-github"></i> Source Code
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="project-tile">
-                        <div class="project-content">
-                            <h3>Project 2</h3>
-                            <p>Another innovative project that showcases your skills and demonstrates your expertise in modern web development.</p>
-                            <div class="project-tech">
-                                <span class="tech-tag">Python</span>
-                                <span class="tech-tag">Django</span>
-                                <span class="tech-tag">PostgreSQL</span>
-                            </div>
+                <div class="projects-grid">
+                    <div class="project-card">
+                        <img src="https://via.placeholder.com/300x200" alt="Project 1">
+                        <div class="project-info">
+                            <h3>Project Title 1</h3>
+                            <p>A brief description of the first project and its key features.</p>
                             <div class="project-links">
                                 <a href="#" class="project-btn">
                                     <i class="fas fa-external-link-alt"></i> View Live
@@ -238,15 +216,26 @@
                             </div>
                         </div>
                     </div>
-                    <div class="project-tile">
-                        <div class="project-content">
-                            <h3>Project 3</h3>
-                            <p>A third project that demonstrates your versatility and ability to create impactful solutions.</p>
-                            <div class="project-tech">
-                                <span class="tech-tag">Vue.js</span>
-                                <span class="tech-tag">Firebase</span>
-                                <span class="tech-tag">TailwindCSS</span>
+                    <div class="project-card">
+                        <img src="https://via.placeholder.com/300x200" alt="Project 2">
+                        <div class="project-info">
+                            <h3>Project Title 2</h3>
+                            <p>A brief description of the second project and its key features.</p>
+                            <div class="project-links">
+                                <a href="#" class="project-btn">
+                                    <i class="fas fa-external-link-alt"></i> View Live
+                                </a>
+                                <a href="#" class="project-btn">
+                                    <i class="fab fa-github"></i> Source Code
+                                </a>
                             </div>
+                        </div>
+                    </div>
+                    <div class="project-card">
+                        <img src="https://via.placeholder.com/300x200" alt="Project 3">
+                        <div class="project-info">
+                            <h3>Project Title 3</h3>
+                            <p>A brief description of the third project and its key features.</p>
                             <div class="project-links">
                                 <a href="#" class="project-btn">
                                     <i class="fas fa-external-link-alt"></i> View Live
@@ -260,13 +249,72 @@
                 </div>
             </section>
 
-            <section id="gallery" class="gallery">
+            <section id="blog" class="section">
                 <div class="header-band">
                     <h2>Blog</h2>
                 </div>
-                <div class="gallery__preview">
-                    <p>Check out my latest thoughts and articles in the <a href="gallery.html">blog</a>.</p>
-                    <a href="gallery.html" class="btn">View Blog</a>
+                <div class="blog">
+                    <div class="blog-controls">
+                        <button id="newPostBtn" class="btn primary">New Post</button>
+                        <button id="configureBtn" class="btn">Configure Blog</button>
+                    </div>
+
+                    <!-- Inline Post Editor -->
+                    <div id="postEditor" class="post-editor hidden">
+                        <form id="postForm">
+                            <div class="form-group">
+                                <input type="text" id="postTitle" name="title" placeholder="Post Title" required>
+                            </div>
+                            <div class="form-group">
+                                <input type="text" id="postCategories" name="categories" placeholder="Categories (comma-separated)">
+                            </div>
+                            <div class="form-group">
+                                <input type="text" id="postTags" name="tags" placeholder="Tags (comma-separated)">
+                            </div>
+                            <div class="form-group">
+                                <textarea id="postContent" name="content" placeholder="Write your post content here..."></textarea>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn primary">Save Post</button>
+                                <button type="button" class="btn" id="cancelEdit">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Blog Posts List -->
+                    <div id="hexo-blog-container">
+                        <div class="loading">Loading posts...</div>
+                    </div>
+
+                    <!-- Blog Config Modal -->
+                    <div id="configModal" class="modal">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3>Blog Configuration</h3>
+                                <button class="close-modal">&times;</button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="configForm">
+                                    <div class="form-group">
+                                        <label for="blogTitle">Blog Title</label>
+                                        <input type="text" id="blogTitle" name="title">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="blogDescription">Description</label>
+                                        <textarea id="blogDescription" name="description"></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="postsPerPage">Posts Per Page</label>
+                                        <input type="number" id="postsPerPage" name="postsPerPage" min="1" max="50">
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="submit" class="btn primary">Save Configuration</button>
+                                        <button type="button" class="btn close-modal">Cancel</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -275,10 +323,9 @@
                     <h2>Get in Touch</h2>
                 </div>
                 <form class="contact-form">
-                    <input type="text" placeholder="Your Name" required>
                     <input type="email" placeholder="Your Email" required>
                     <textarea placeholder="Your Message" required></textarea>
-                    <button type="submit" class="btn">Send Message</button>
+                    <button type="submit">Send Message</button>
                 </form>
             </section>
         </main>
@@ -289,39 +336,32 @@
     </div>
 
     <script>
-        // Function to generate consistent color for a tag
         function getTagColor(tag) {
             let hash = 0;
             for (let i = 0; i < tag.length; i++) {
                 hash = tag.charCodeAt(i) + ((hash << 5) - hash);
             }
-            const hue = hash % 360;
-            return `hsl(${hue}, 70%, 50%)`;
+            const hue = Math.abs(hash % 360);
+            return `hsl(${hue}, 70%, 80%)`;
         }
 
-        // Function to create image tile with tag dots
         function createImageTile(image) {
             const tile = document.createElement('div');
             tile.className = 'image-container';
             
-            // Create image element
             const img = document.createElement('img');
-            img.src = image.thumbnailUrl;
+            img.src = image.url;
             img.alt = image.name;
-            img.loading = 'lazy';
             tile.appendChild(img);
             
-            // Create info bar
             const info = document.createElement('div');
             info.className = 'image-info';
             
-            // Add image name
             const name = document.createElement('div');
             name.className = 'image-name';
             name.textContent = image.name;
             info.appendChild(name);
             
-            // Add tag dots if present
             if (image.tags && image.tags.length > 0) {
                 const dots = document.createElement('div');
                 dots.className = 'tag-dots';
@@ -344,5 +384,6 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="js/index.js"></script>
+    <script src="js/blog.js"></script>
 </body>
 </html>

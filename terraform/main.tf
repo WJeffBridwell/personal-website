@@ -33,6 +33,8 @@ resource "null_resource" "install_dependencies" {
       npm install
       # Install nodemon locally instead of globally
       npm install nodemon --save-dev
+      # Install Hexo and its dependencies
+      npm install hexo hexo-server hexo-renderer-ejs hexo-renderer-marked hexo-renderer-stylus --save
     EOT
   }
 }
