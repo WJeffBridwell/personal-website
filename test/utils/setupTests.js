@@ -55,7 +55,7 @@ export function setupGalleryDOM() {
 
 // Mock data that matches the app's expected format
 export const mockGalleryData = {
-  items: [
+  images: [
     {
       name: 'test1.jpg',
       type: 'image',

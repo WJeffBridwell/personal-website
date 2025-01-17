@@ -28,7 +28,8 @@ describe('Image Loading', () => {
   });
 
   test('loads images successfully', async () => {
-    await gallery.loadImages();
+    // Wait for initial load from constructor
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Check if fetch was called
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -38,13 +39,13 @@ describe('Image Loading', () => {
 
     // Verify grid has correct number of items
     const items = imageGrid.querySelectorAll('.image-container');
-    expect(items.length).toBe(mockGalleryData.items.length);
+    expect(items.length).toBe(mockGalleryData.images.length);
 
     // Verify first item content
     const firstItem = items[0];
     const img = firstItem.querySelector('img');
-    expect(img.src).toContain(mockGalleryData.items[0].url);
-    expect(img.alt).toBe(mockGalleryData.items[0].name);
+    expect(img.src).toContain(mockGalleryData.images[0].url);
+    expect(img.alt).toBe(mockGalleryData.images[0].name);
   });
 
   test('handles API error gracefully', async () => {
@@ -78,8 +79,8 @@ describe('Image Loading', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const pageNumbers = document.querySelector('#pageNumbers');
-    const pageCount = Math.ceil(mockGalleryData.items.length / 30); // 30 items per page
-    expect(pageNumbers.textContent).toContain(`${mockGalleryData.items.length} images`);
+    const pageCount = Math.ceil(mockGalleryData.images.length / 30); // 30 items per page
+    expect(pageNumbers.textContent).toContain(`${mockGalleryData.images.length} images`);
     expect(pageNumbers.textContent).toContain(`${pageCount} pages`);
   });
 
@@ -93,7 +94,7 @@ describe('Image Loading', () => {
     firstImage.click();
 
     expect(modal.style.display).toBe('flex');
-    expect(modal.querySelector('.modal-img').src).toContain(mockGalleryData.items[0].url);
-    expect(modal.querySelector('.modal-caption').textContent).toBe(mockGalleryData.items[0].name);
+    expect(modal.querySelector('.modal-img').src).toContain(mockGalleryData.images[0].url);
+    expect(modal.querySelector('.modal-caption').textContent).toBe(mockGalleryData.images[0].name);
   });
 });

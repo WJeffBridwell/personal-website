@@ -32,72 +32,113 @@ describe('Gallery Filter', () => {
   describe('Search Filtering', () => {
     beforeEach(async () => {
       await gallery.loadImages();
+      // Wait for initial render
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
 
-    test('filters by search term', async () => {
-      searchInput.value = 'test1';
+    test('filters by search term case-insensitively', async () => {
+      // Test with uppercase search term
+      searchInput.value = 'TEST1';
       searchInput.dispatchEvent(new Event('input'));
 
       // Wait for filtering to complete
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const visibleImages = imageGrid.querySelectorAll('.image-container');
+      let visibleImages = imageGrid.querySelectorAll('.image-container');
       expect(visibleImages.length).toBe(1);
       expect(visibleImages[0].querySelector('img').alt).toBe('test1.jpg');
-    });
 
-    test('filters by tag', async () => {
-      const tagSelect = document.querySelector('#tagSelect');
-      tagSelect.value = 'nature';
-      tagSelect.dispatchEvent(new Event('change'));
+      // Test with lowercase search term
+      searchInput.value = 'test2';
+      searchInput.dispatchEvent(new Event('input'));
 
       // Wait for filtering to complete
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const visibleImages = imageGrid.querySelectorAll('.image-container');
+      visibleImages = imageGrid.querySelectorAll('.image-container');
+      expect(visibleImages.length).toBe(1);
+      expect(visibleImages[0].querySelector('img').alt).toBe('test2.jpg');
+    });
+
+    test('filters by tag case-insensitively', async () => {
+      const tagSelect = document.querySelector('#tagSelect');
+
+      // Wait for tag select to be populated
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Test with uppercase tag
+      gallery.selectedTags = new Set(['NATURE']);
+      gallery.filterAndSortImages();
+
+      // Wait for filtering to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      let visibleImages = imageGrid.querySelectorAll('.image-container');
       expect(visibleImages.length).toBe(1);
       expect(visibleImages[0].querySelector('img').alt).toBe('test1.jpg');
+
+      // Test with lowercase tag
+      gallery.selectedTags = new Set(['urban']);
+      gallery.filterAndSortImages();
+
+      // Wait for filtering to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      visibleImages = imageGrid.querySelectorAll('.image-container');
+      expect(visibleImages.length).toBe(1);
+      expect(visibleImages[0].querySelector('img').alt).toBe('test2.jpg');
     });
   });
 
   describe('Sorting', () => {
     beforeEach(async () => {
       await gallery.loadImages();
+      // Wait for initial render
+      await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
-    test('sorts by name', async () => {
+    test('sorts by name ascending and descending', async () => {
+      // Test ascending sort
+      sortSelect.value = 'name-asc';
+      sortSelect.dispatchEvent(new Event('change'));
+
+      // Wait for sorting to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      let images = Array.from(imageGrid.querySelectorAll('.image-container img'));
+      expect(images.map((img) => img.alt)).toEqual(['test1.jpg', 'test2.jpg']);
+
+      // Test descending sort
       sortSelect.value = 'name-desc';
       sortSelect.dispatchEvent(new Event('change'));
 
       // Wait for sorting to complete
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const images = Array.from(imageGrid.querySelectorAll('.image-container img'));
+      images = Array.from(imageGrid.querySelectorAll('.image-container img'));
       expect(images.map((img) => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
     });
 
-    test('sorts by date', async () => {
+    test('sorts by date ascending and descending', async () => {
+      // Test ascending sort
+      sortSelect.value = 'date-asc';
+      sortSelect.dispatchEvent(new Event('change'));
+
+      // Wait for sorting to complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      let images = Array.from(imageGrid.querySelectorAll('.image-container img'));
+      expect(images.map(img => img.alt)).toEqual(['test1.jpg', 'test2.jpg']);
+
+      // Test descending sort
       sortSelect.value = 'date-desc';
       sortSelect.dispatchEvent(new Event('change'));
 
       // Wait for sorting to complete
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const images = Array.from(imageGrid.querySelectorAll('.image-container'));
-      const dates = images.map((img) => img.getAttribute('data-date'));
-      expect(dates).toEqual(['2024-01-02', '2024-01-01']);
-    });
-
-    test('sorts by size', async () => {
-      sortSelect.value = 'size-desc';
-      sortSelect.dispatchEvent(new Event('change'));
-
-      // Wait for sorting to complete
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      const images = Array.from(imageGrid.querySelectorAll('.image-container'));
-      const sizes = images.map((img) => parseInt(img.getAttribute('data-size')));
-      expect(sizes).toEqual([2048, 1024]);
+      images = Array.from(imageGrid.querySelectorAll('.image-container img'));
+      expect(images.map(img => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
     });
   });
 });

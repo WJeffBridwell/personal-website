@@ -53,12 +53,13 @@ function initializeModal() {
 
     // Configure close button
     galleryState.closeBtn = document.createElement('span');
-    galleryState.closeBtn.className = 'modal-close';
+    galleryState.closeBtn.className = 'close-modal';
     galleryState.closeBtn.innerHTML = '&times;';
 
     // Configure modal image with loading and error states
     galleryState.modalImg = document.createElement('img');
     galleryState.modalImg.className = 'modal-img';
+    galleryState.modalImg.alt = '';
     galleryState.modalImg.style.cursor = 'pointer';
 
     galleryState.modalImg.addEventListener('load', () => {
@@ -87,6 +88,19 @@ function initializeModal() {
     modalContent.appendChild(galleryState.modalCaption);
     galleryState.modal.appendChild(modalContent);
     document.body.appendChild(galleryState.modal);
+
+    // Add event listeners
+    galleryState.closeBtn.onclick = closeModal;
+    galleryState.modal.onclick = (event) => {
+      if (event.target === galleryState.modal) {
+        closeModal();
+      }
+    };
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closeModal();
+      }
+    });
   } catch (error) {
     console.error('Error initializing modal:', error);
   }
@@ -147,86 +161,35 @@ function createImageContainer(image) {
 
   // Create image element
   const img = document.createElement('img');
-  img.src = `/gallery/image/${encodeURIComponent(image)}?thumbnail=true`;
-  img.alt = image;
+  img.src = image.path;
+  img.alt = image.name;
   img.loading = 'lazy';
-  img.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const fullImageUrl = `/gallery/image/${encodeURIComponent(image)}`;
-    openModal(fullImageUrl, image);
-  });
-  container.appendChild(img);
 
-  // Add icons container
-  const icons = document.createElement('div');
-  icons.className = 'image-icons';
-
-  // Add image icon
-  const imageIcon = document.createElement('i');
-  imageIcon.className = 'fas fa-image';
-  imageIcon.addEventListener('click', (e) => {
-    e.stopPropagation();
-    window.location.href = `/content-gallery.html?image-name=${encodeURIComponent(image)}`;
-  });
-  icons.appendChild(imageIcon);
-
-  // Add folder icon
-  const folderIcon = document.createElement('i');
-  folderIcon.className = 'fas fa-folder';
-  folderIcon.addEventListener('click', (e) => {
-    e.stopPropagation();
-    searchImageInFinder(image);
-  });
-  icons.appendChild(folderIcon);
-
-  container.appendChild(icons);
-
-  // Add tags container
-  const tags = document.createElement('div');
-  tags.className = 'image-tags';
-  // Add sample tag dots - replace with actual tags
-  for (let i = 0; i < 3; i++) {
-    const dot = document.createElement('div');
-    dot.className = 'tag-dot';
-    tags.appendChild(dot);
-  }
-  container.appendChild(tags);
-
-  // Create overlay container
-  const overlay = document.createElement('div');
-  overlay.className = 'image-overlay';
-
-  // Add image name
+  // Create name label
   const nameLabel = document.createElement('div');
   nameLabel.className = 'image-name';
-  nameLabel.textContent = image;
-  overlay.appendChild(nameLabel);
+  nameLabel.textContent = image.name;
 
-  container.appendChild(overlay);
+  // Add elements to container
+  container.appendChild(img);
+  container.appendChild(nameLabel);
 
   return container;
 }
 
 // Display images in the grid
-async function displayImages(images, append = false) {
-  console.log('Displaying images:', images.length);
+function displayImages(images, append = false) {
+  const imageGrid = document.getElementById('image-grid');
+  if (!imageGrid) return;
 
-  const grid = document.getElementById('image-grid');
-  if (!grid) {
-    console.error('Image grid not found');
-    return;
-  }
-
-  // Clear grid if not appending
   if (!append) {
-    grid.innerHTML = '';
+    imageGrid.innerHTML = '';
   }
 
-  // Create and append image containers
-  for (const image of images) {
+  images.forEach((image) => {
     const container = createImageContainer(image);
-    grid.appendChild(container);
-  }
+    imageGrid.appendChild(container);
+  });
 }
 
 /**
@@ -398,33 +361,31 @@ async function filterByLetter(letter) {
   buttons.forEach((btn) => {
     btn.classList.toggle(
       'active',
-      letter === null ? btn.textContent === 'All' : btn.textContent === letter,
+      letter === null ? btn.textContent === 'All' : btn.textContent === letter
     );
   });
 
-  // Reset gallery state
-  galleryState.currentPage = 1;
-  galleryState.hasMore = true;
-  galleryState.loadedImages.clear();
-
-  try {
-    // Fetch filtered images
-    const response = await loadImages(1, galleryState.batchSize);
-
-    if (response && response.files.length > 0) {
-      await displayImages(response.files);
-
-      // Update total count
-      const totalCountElement = document.querySelector('.total-count');
-      if (totalCountElement) {
-        totalCountElement.textContent = `${response.files.length} / ${response.totalPages} images`;
-      }
-
-      // Reset pagination controls
-      updatePagination(response.page, response.totalPages);
+  // Show/hide images based on letter
+  const containers = document.querySelectorAll('.image-container');
+  containers.forEach((container) => {
+    const imageName = container.querySelector('.image-name').textContent.toLowerCase();
+    if (letter === null) {
+      container.classList.remove('hidden');
+    } else {
+      const startsWithLetter = imageName.startsWith(letter.toLowerCase());
+      container.classList.toggle('hidden', !startsWithLetter);
     }
-  } catch (error) {
-    console.error('Error filtering images:', error);
+  });
+
+  // Update visible count
+  const visibleCount = Array.from(containers).filter(
+    (container) => !container.classList.contains('hidden')
+  ).length;
+
+  const totalCountElement = document.querySelector('.total-count');
+  if (totalCountElement) {
+    const totalCount = containers.length;
+    totalCountElement.textContent = `${visibleCount} / ${totalCount} images`;
   }
 }
 
@@ -626,151 +587,55 @@ function initializeSearchFilter() {
   const searchInput = document.getElementById('search-input');
   if (!searchInput) return;
 
-  const allButton = document.querySelector('.letter-btn[data-letter="all"]');
+  let debounceTimer;
 
-  // Debounce function to limit how often the filter runs
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  }
+  searchInput.addEventListener('input', (event) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const searchTerm = event.target.value.toLowerCase().trim();
+      const containers = document.querySelectorAll('.image-container');
 
-  // Function to filter images based on search input
-  const filterImages = debounce((searchTerm) => {
-    const imageContainers = document.querySelectorAll('.image-container');
-    const normalizedSearch = searchTerm.toLowerCase().trim();
-
-    imageContainers.forEach((container) => {
-      const nameLabel = container.querySelector('.image-name');
-      if (!nameLabel) return;
-
-      const imageName = nameLabel.textContent.toLowerCase();
-      // Only match if the image name starts with the search term
-      const isMatch = normalizedSearch === '' || imageName.indexOf(normalizedSearch) === 0;
-
-      // Only toggle hidden class if container doesn't have collection-based visibility
-      if (!container.hasAttribute('data-in-collection')) {
-        container.classList.toggle('hidden', !isMatch);
-      }
-    });
-
-    // Reset letter filter if search is active
-    if (normalizedSearch) {
-      document.querySelectorAll('.letter-btn').forEach((btn) => {
-        btn.classList.remove('active');
+      containers.forEach((container) => {
+        const imageName = container.querySelector('.image-name').textContent.toLowerCase();
+        container.classList.toggle('hidden', !imageName.includes(searchTerm));
       });
-      if (allButton) {
-        allButton.classList.add('active');
-      }
-    }
-  }, 200); // 200ms debounce delay
-
-  // Add input event listener
-  searchInput.addEventListener('input', (e) => {
-    filterImages(e.target.value);
+    }, 300);
   });
-
-  // Add clear search functionality
-  const clearSearch = () => {
-    searchInput.value = '';
-    filterImages('');
-  };
-
-  // Clear search when clicking 'All' in letter filter
-  if (allButton) {
-    allButton.addEventListener('click', clearSearch);
-  }
 }
 
 // Create pagination controls
 function createPaginationControls(currentPage, totalPages) {
-  const paginationContainer = document.createElement('div');
-  paginationContainer.className = 'pagination-controls';
-  paginationContainer.style.cssText = `
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 10px;
-        margin: 20px 0;
-        padding: 10px;
-    `;
+  const pagination = document.getElementById('pagination');
+  if (!pagination) return;
 
-  // Helper function to create page button
-  function createPageButton(page, text, isActive = false, isDisabled = false) {
+  pagination.innerHTML = '';
+
+  // Create previous button
+  if (currentPage > 1) {
+    const prevButton = document.createElement('button');
+    prevButton.textContent = 'Previous';
+    prevButton.className = 'pagination-btn';
+    prevButton.onclick = () => loadImages(currentPage - 1);
+    pagination.appendChild(prevButton);
+  }
+
+  // Create page number buttons
+  for (let i = 1; i <= totalPages; i++) {
     const button = document.createElement('button');
-    button.textContent = text;
-    button.className = `page-button ${isActive ? 'active' : ''} ${isDisabled ? 'disabled' : ''}`;
-    button.style.cssText = `
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            background: ${isActive ? '#007bff' : 'white'};
-            color: ${isActive ? 'white' : isDisabled ? '#999' : '#333'};
-            cursor: ${isDisabled ? 'default' : 'pointer'};
-            border-radius: 4px;
-        `;
-
-    if (!isDisabled) {
-      button.addEventListener('click', async () => {
-        const data = await loadImages(page, galleryState.batchSize);
-        if (data && data.files.length > 0) {
-          galleryState.currentPage = page;
-          galleryState.images = data.files;
-          await displayImages(data.files);
-          updatePagination(page, data.totalPages);
-        }
-      });
-    }
-
-    return button;
+    button.textContent = i;
+    button.className = `pagination-btn ${i === currentPage ? 'active' : ''}`;
+    button.onclick = () => loadImages(i);
+    pagination.appendChild(button);
   }
 
-  // Previous button
-  paginationContainer.appendChild(
-    createPageButton(currentPage - 1, '←', false, currentPage === 1),
-  );
-
-  // First page
-  paginationContainer.appendChild(createPageButton(1, '1', currentPage === 1));
-
-  // Ellipsis and pages
-  if (totalPages > 1) {
-    if (currentPage > 3) {
-      paginationContainer.appendChild(document.createTextNode('...'));
-    }
-
-    // Current page and surrounding pages
-    for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
-      if (i === currentPage) {
-        paginationContainer.appendChild(createPageButton(i, i.toString(), true));
-      } else {
-        paginationContainer.appendChild(createPageButton(i, i.toString()));
-      }
-    }
-
-    if (currentPage < totalPages - 2) {
-      paginationContainer.appendChild(document.createTextNode('...'));
-    }
-
-    // Last page
-    if (totalPages > 1) {
-      paginationContainer.appendChild(
-        createPageButton(totalPages, totalPages.toString(), currentPage === totalPages),
-      );
-    }
+  // Create next button
+  if (currentPage < totalPages) {
+    const nextButton = document.createElement('button');
+    nextButton.textContent = 'Next';
+    nextButton.className = 'pagination-btn';
+    nextButton.onclick = () => loadImages(currentPage + 1);
+    pagination.appendChild(nextButton);
   }
-
-  // Next button
-  paginationContainer.appendChild(
-    createPageButton(currentPage + 1, '→', false, currentPage === totalPages),
-  );
-
-  return paginationContainer;
 }
 
 // Update pagination controls
@@ -789,9 +654,8 @@ function updatePagination(currentPage, totalPages) {
 
 // Filter functions
 const filterFunctions = {
-  filterImagesByLetter,
+  filterByLetter,
   initializeLetterFilter,
-  filterImagesBySearch,
   initializeSearchFilter,
   fetchImages,
   displayImages,

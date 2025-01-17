@@ -269,11 +269,8 @@ export class ContentGallery {
 
     getMediaContent(item) {
         const buildVideoUrl = (path) => {
-            // Replace /Volumes/VideosNew with the correct base path but preserve all other path components
-            const adjusted = path.replace('/Volumes/VideosNew/', '/Users/jeffbridwell/VideosAa-Abella/');
-            
-            // Properly encode the entire path while preserving slashes and special characters
-            const encodedPath = adjusted.split('/')
+            // Properly encode the path components while preserving slashes
+            const encodedPath = path.split('/')
                 .map(component => encodeURIComponent(component))
                 .join('/');
             
@@ -281,7 +278,6 @@ export class ContentGallery {
         };
 
         const buildThumbnailUrl = (imageName, fullPath) => {
-            // Use the full path if available, otherwise construct it
             const path = fullPath || `/Volumes/VideosNew/Photo Sets - Red/A/${imageName}`;
             const url = `/proxy/image/direct?path=${encodeURIComponent(path)}&width=300`;
             console.log('[Gallery] Building thumbnail URL:', url);
@@ -306,11 +302,16 @@ export class ContentGallery {
                 }
                 
                 const videoUrl = buildVideoUrl(item.content_url);
-                return `<video class="media-video" controls 
-                    src="${videoUrl}" 
-                    preload="metadata" 
-                    onclick="event.stopPropagation()"
-                    onerror="this.outerHTML = '<div class=\'media-container-vr\'><i class=\'media-icon fas fa-vr-cardboard\'></i></div>'"></video>`;
+                return `
+                    <video class="media-video" 
+                        controls 
+                        preload="metadata"
+                        type="video/mp4"
+                        onclick="event.stopPropagation()"
+                        onerror="console.error('[Gallery] Video failed to load:', this.src); this.outerHTML = '<div class=\'media-error\'><i class=\'fas fa-exclamation-circle\'></i><div>Failed to load video</div></div>'">
+                        <source src="${videoUrl}" type="video/mp4">
+                        Your browser does not support HTML5 video.
+                    </video>`;
             case 'jpg':
             case 'jpeg':
             case 'png':
