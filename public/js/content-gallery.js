@@ -1,4 +1,4 @@
-class ContentGallery {
+export class ContentGallery {
     constructor() {
         // UI Elements
         this.galleryGrid = document.querySelector('.gallery-grid');
@@ -482,6 +482,7 @@ class ContentGallery {
     openImageModal(imageSrc) {
         const modal = document.getElementById('imageModal');
         const modalImg = document.getElementById('modalImage');
+        const closeBtn = modal.querySelector('.modal__close');
         
         // Set image source and show modal
         modalImg.src = imageSrc;
@@ -498,16 +499,33 @@ class ContentGallery {
             modal.classList.remove('show');
             document.body.style.overflow = '';
             modalImg.src = '';
+            
+            // Clean up event listeners
+            modal.removeEventListener('click', modalClickHandler, true);
+            document.removeEventListener('keydown', escHandler);
+            window.removeEventListener('popstate', popStateHandler);
+            if (closeBtn) {
+                closeBtn.removeEventListener('click', closeModal);
+            }
         };
         
-        // Click anywhere to close
-        modal.onclick = closeModal;
+        // Click handler with proper event delegation
+        const modalClickHandler = (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        };
+        modal.addEventListener('click', modalClickHandler, true);
+        
+        // Close button handler
+        if (closeBtn) {
+            closeBtn.addEventListener('click', closeModal);
+        }
         
         // ESC key to close
         const escHandler = (e) => {
             if (e.key === 'Escape') {
                 closeModal();
-                document.removeEventListener('keydown', escHandler);
             }
         };
         document.addEventListener('keydown', escHandler);
@@ -515,7 +533,6 @@ class ContentGallery {
         // Handle back button
         const popStateHandler = () => {
             closeModal();
-            window.removeEventListener('popstate', popStateHandler);
         };
         window.addEventListener('popstate', popStateHandler);
     }
@@ -550,6 +567,8 @@ class ContentGallery {
 }
 
 // Initialize the gallery when the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.gallery = new ContentGallery();
-});
+if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        window.gallery = new ContentGallery();
+    });
+}

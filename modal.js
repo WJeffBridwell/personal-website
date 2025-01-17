@@ -89,13 +89,8 @@ const modalFunctions = {
   },
 };
 
-// Export for both ESM and CommonJS
+// Export for ESM
 export { modalFunctions, createElement };
-
-// For CommonJS compatibility
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { modalFunctions, createElement };
-}
 
 // Initialize if in browser environment
 if (typeof window !== 'undefined') {
