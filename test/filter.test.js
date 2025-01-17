@@ -128,7 +128,7 @@ describe('Gallery Filter', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       let images = Array.from(imageGrid.querySelectorAll('.image-container img'));
-      expect(images.map(img => img.alt)).toEqual(['test1.jpg', 'test2.jpg']);
+      expect(images.map((img) => img.alt)).toEqual(['test1.jpg', 'test2.jpg']);
 
       // Test descending sort
       sortSelect.value = 'date-desc';
@@ -138,7 +138,7 @@ describe('Gallery Filter', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       images = Array.from(imageGrid.querySelectorAll('.image-container img'));
-      expect(images.map(img => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
+      expect(images.map((img) => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
     });
   });
 });

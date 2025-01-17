@@ -11,7 +11,7 @@ export default {
   // Add support for Jest's module system
   env: {
     test: {
-      plugins: ['@babel/plugin-transform-modules-commonjs']
-    }
-  }
+      plugins: ['@babel/plugin-transform-modules-commonjs'],
+    },
+  },
 };

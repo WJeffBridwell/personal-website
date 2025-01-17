@@ -44,7 +44,7 @@ describe('Image Loading', () => {
     // Verify first item content
     const firstItem = items[0];
     const img = firstItem.querySelector('img');
-    expect(img.src).toContain(mockGalleryData.images[0].url);
+    expect(img.src).toContain('/api/gallery/image/');
     expect(img.alt).toBe(mockGalleryData.images[0].name);
   });
 
@@ -53,23 +53,23 @@ describe('Image Loading', () => {
     await gallery.loadImages();
 
     // Should show error message
-    const errorMessage = imageGrid.querySelector('.error-message');
+    const errorMessage = imageGrid.querySelector('.status');
     expect(errorMessage).toBeTruthy();
-    expect(errorMessage.textContent).toBe('Failed to load images');
+    expect(errorMessage.textContent).toBe('Error loading images');
   });
 
   test('shows loading state', async () => {
     const loadPromise = gallery.loadImages();
 
     // Should show loading state
-    const loadingElement = imageGrid.querySelector('.loading-progress');
+    const loadingElement = imageGrid.querySelector('.status');
     expect(loadingElement).toBeTruthy();
-    expect(loadingElement.textContent).toBe('Loading images...');
+    expect(loadingElement.textContent).toBe('Loading...');
 
     await loadPromise;
 
     // Loading state should be removed after load
-    expect(imageGrid.querySelector('.loading-progress')).toBeFalsy();
+    expect(imageGrid.querySelector('.status')).toBeFalsy();
   });
 
   test('updates pagination info', async () => {
@@ -94,7 +94,7 @@ describe('Image Loading', () => {
     firstImage.click();
 
     expect(modal.style.display).toBe('flex');
-    expect(modal.querySelector('.modal-img').src).toContain(mockGalleryData.images[0].url);
+    expect(modal.querySelector('.modal-img').src).toContain('/api/gallery/image/');
     expect(modal.querySelector('.modal-caption').textContent).toBe(mockGalleryData.images[0].name);
   });
 });

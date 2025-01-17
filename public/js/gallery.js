@@ -83,27 +83,26 @@ export class Gallery {
 
     // Previous page button
     this.prevPageBtn?.addEventListener('click', () => {
-      if (this.currentPage > 1) {
-        this.currentPage -= 1;
-        this.renderCurrentPage();
-      }
+      this.handlePageNavigation(-1);
     });
 
     // Next page button
     this.nextPageBtn?.addEventListener('click', () => {
-      const totalPages = Math.ceil(this.filteredImages.length / this.itemsPerPage);
-      if (this.currentPage < totalPages) {
-        this.currentPage += 1;
-        this.renderCurrentPage();
-      }
+      this.handlePageNavigation(1);
     });
   }
 
   async loadImages() {
     console.log('JEFF CLIENT - About to fetch /api/gallery/images');
     try {
+      // Set loading state
+      document.title = '⟳ Loading... | Gallery | Jeff Bridwell';
       if (this.imageGrid) {
-        this.imageGrid.innerHTML = '<div class="loading-progress">Loading images...</div>';
+        const primaryStatusElement = document.createElement('div');
+        primaryStatusElement.classList.add('status');
+        primaryStatusElement.textContent = 'Loading...';
+        this.imageGrid.innerHTML = '';
+        this.imageGrid.appendChild(primaryStatusElement);
       }
 
       const response = await fetch('/api/gallery/images');
@@ -111,6 +110,9 @@ export class Gallery {
       if (!response.ok) throw new Error('Failed to fetch images');
 
       const data = await response.json();
+
+      // Reset title after loading
+      document.title = 'Gallery | Jeff Bridwell';
 
       // Single, clear count of red-tagged images
       const redCount = data.images.filter((img) => img.tags && Array.isArray(img.tags)
@@ -125,7 +127,9 @@ export class Gallery {
       let imagesWithoutTags = 0;
       let imagesWithTags = 0;
 
-      this.allImages.forEach((img) => {
+      let currentIndex = 0;
+      while (currentIndex < this.allImages.length) {
+        const img = this.allImages[currentIndex];
         if (img.tags && Array.isArray(img.tags)) {
           imagesWithTags++;
           img.tags.forEach((tag) => {
@@ -135,7 +139,8 @@ export class Gallery {
           imagesWithoutTags++;
           console.warn('Image missing tags or invalid tags format:', img.name);
         }
-      });
+        currentIndex += 1;
+      }
 
       console.log('Tag statistics:', tagStats);
       console.log(`Images with tags: ${imagesWithTags}, without tags: ${imagesWithoutTags}`);
@@ -149,8 +154,14 @@ export class Gallery {
       this.filterAndSortImages();
     } catch (error) {
       console.error('Error loading images:', error);
+      // Reset title on error
+      document.title = 'Gallery | Jeff Bridwell';
       if (this.imageGrid) {
-        this.imageGrid.innerHTML = '<div class="error-message">Failed to load images</div>';
+        const secondaryStatusElement = document.createElement('div');
+        secondaryStatusElement.classList.add('status');
+        secondaryStatusElement.textContent = 'Error loading images';
+        this.imageGrid.innerHTML = '';
+        this.imageGrid.appendChild(secondaryStatusElement);
       }
     }
   }
@@ -274,11 +285,17 @@ export class Gallery {
     this.modalImg.onload = () => {
       this.modalImg.style.opacity = '1';
     };
-    this.modalImg.src = imageUrl;
+
+    // Use the passed imageUrl to construct the full-size image URL
+    const fullSizeUrl = imageUrl.replace('/thumbnails/', '/');
+    this.modalImg.src = fullSizeUrl;
     this.modalCaption.textContent = imageName;
 
     // Prevent body scroll
     document.body.style.overflow = 'hidden';
+
+    // Set window controls to image mode
+    setWindowControls('image');
   }
 
   closeModal() {
@@ -290,6 +307,9 @@ export class Gallery {
     if (window.location.hash !== '') {
       window.history.back();
     }
+
+    // Set window controls to gallery mode
+    setWindowControls('gallery');
   }
 
   filterAndSortImages() {
@@ -483,10 +503,19 @@ export class Gallery {
     const container = document.createElement('div');
     container.className = 'image-container';
 
-    // Background image
+    // Create and append image
     const img = document.createElement('img');
-    img.src = image.url;
     img.alt = image.name;
+
+    // Add load event listener before setting src
+    img.addEventListener('load', () => {
+      img.classList.add('loaded');
+      container.classList.add('loaded');
+    });
+
+    // Set src after adding load listener
+    const imageUrl = encodeURIComponent(image.name);
+    img.src = `/api/gallery/image/${imageUrl}`;
     container.appendChild(img);
 
     // Image icon (top left)
@@ -509,13 +538,14 @@ export class Gallery {
     folderIcon.appendChild(folderI);
     folderIcon.addEventListener('click', async (e) => {
       e.stopPropagation();
-      console.log('Folder icon clicked for image:', image.name);
       try {
         const response = await fetch(`/gallery/finder-search/${encodeURIComponent(image.name)}`);
-        const data = await response.json();
-        console.log('Finder search response:', data);
-        if (!data.success) {
-          console.error('Finder search failed:', data.error);
+        if (!response.ok) {
+          const data = await response.json();
+          console.error('Finder search failed:', data);
+          if (data.details) {
+            console.error('Details:', data.details);
+          }
         }
       } catch (error) {
         console.error('Error opening Finder search:', error);
@@ -537,7 +567,7 @@ export class Gallery {
       container.appendChild(tagDots);
     }
 
-    // Image name (bottom center)
+    // Image name (bottom)
     const name = document.createElement('div');
     name.className = 'image-name';
     name.textContent = image.name;
@@ -594,23 +624,36 @@ export class Gallery {
       container.appendChild(tagEl);
     });
   }
-}
 
-function updateStatus(message) {
-  const statusContainer = document.querySelector('.status-container');
-  if (!statusContainer) {
-    const newStatusContainer = document.createElement('div');
-    newStatusContainer.className = 'status-container';
-    document.body.appendChild(newStatusContainer);
-    newStatusContainer.textContent = message;
-  } else {
-    statusContainer.textContent = message;
+  handlePageNavigation(direction) {
+    const newPage = this.currentPage + direction;
+    if (newPage >= 1 && newPage <= Math.ceil(this.filteredImages.length / this.itemsPerPage)) {
+      this.currentPage = newPage;
+      this.renderCurrentPage();
+    }
   }
 }
 
-function handleNavigation() {
-  window.history.pushState({ page: currentPage }, '', `?page=${currentPage}`);
+// Function to set window controls style
+function setWindowControls(mode) {
+  if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.windowControls) {
+    const controls = mode === 'gallery' ? {
+      title: 'Content Gallery | Jeff',
+      showClose: true,
+      showNav: false,
+    } : {
+      title: '',
+      showClose: true,
+      showNav: true,
+    };
+    window.webkit.messageHandlers.windowControls.postMessage(controls);
+  }
 }
+
+// Call this when page loads
+document.addEventListener('DOMContentLoaded', () => {
+  setWindowControls('gallery');
+});
 
 const style = document.createElement('style');
 style.textContent = `

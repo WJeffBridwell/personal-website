@@ -116,7 +116,7 @@ describe('Gallery Class', () => {
       });
 
       await gallery.loadImages();
-      expect(gallery.imageGrid.innerHTML).toContain('Failed to load images');
+      expect(gallery.imageGrid.innerHTML).toContain('Error loading images');
     });
 
     test('updates tag select with available tags', async () => {

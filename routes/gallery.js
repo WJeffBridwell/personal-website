@@ -12,6 +12,7 @@ import sharp from 'sharp';
 import crypto from 'crypto';
 import { promisify } from 'util';
 import fetch from 'node-fetch';
+import { exec } from 'child_process';
 
 console.log('=====================================');
 console.log('Gallery router loading at:', new Date().toISOString());
@@ -970,30 +971,29 @@ router.get('/video/:videoName', async (req, res) => {
       });
 
       return file.pipe(res);
-    } else {
-      // Handle non-range requests
-      const head = {
-        'Content-Length': fileSize,
-        'Content-Type': 'video/mp4',
-        'Cache-Control': 'no-cache',
-        'Cross-Origin-Resource-Policy': 'cross-origin',
-      };
-      res.writeHead(200, head);
-
-      const stream = fs.createReadStream(videoPath);
-
-      // Handle stream errors
-      stream.on('error', (error) => {
-        logGallery('Video Serve', 'Error', null, { error: error.message });
-        res.end();
-      });
-
-      stream.on('end', () => {
-        logGallery('Video Serve', 'Request complete', null, { message: 'Stream ended successfully' });
-      });
-
-      return stream.pipe(res);
     }
+    // Handle non-range requests
+    const head = {
+      'Content-Length': fileSize,
+      'Content-Type': 'video/mp4',
+      'Cache-Control': 'no-cache',
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+    };
+    res.writeHead(200, head);
+
+    const stream = fs.createReadStream(videoPath);
+
+    // Handle stream errors
+    stream.on('error', (error) => {
+      logGallery('Video Serve', 'Error', null, { error: error.message });
+      res.end();
+    });
+
+    stream.on('end', () => {
+      logGallery('Video Serve', 'Request complete', null, { message: 'Stream ended successfully' });
+    });
+
+    return stream.pipe(res);
   } catch (error) {
     logGallery('Video Serve', 'Error', null, { error: error.message });
     return res.status(500).json({ error: 'Error serving video file', details: error.message });
@@ -1054,12 +1054,19 @@ router.post('/search', async (req, res) => {
     const script = `
             tell application "Finder"
                 activate
-                set searchFolder to POSIX file "/Volumes/VideosNew/Models" as alias
-                set searchResults to search searchFolder for "${imageName}"
-                if searchResults is not {} then
-                    reveal item 1 of searchResults
-                    activate
-                end if
+                make new Finder window
+                delay 0.5
+            end tell
+            
+            tell application "System Events"
+                tell process "Finder"
+                    click menu item "Find" of menu "File" of menu bar 1
+                    delay 0.5
+                    keystroke "a" using command down
+                    keystroke "${imageName}"
+                    delay 0.2
+                    click button "Search This Mac" of window 1
+                end tell
             end tell
         `;
 
@@ -1086,144 +1093,32 @@ router.post('/search', async (req, res) => {
   }
 });
 
-// Search in Finder
-router.get('/finder-search', async (req, res) => {
-  const searchTerm = req.query.term;
-  if (!searchTerm) {
-    logGallery('Finder Search', 'Error', null, { error: 'Search term is missing' });
-    return res.status(400).json({ error: 'Search term is required' });
-  }
-
-  // Extract just the filename prefix (remove extension)
-  const searchPrefix = searchTerm.replace(/\.[^/.]+$/, '');
-  logGallery('Finder Search', 'Request received', null, { searchPrefix });
-
-  const scriptContent = `
-tell application "Finder"
-    activate
-    make new Finder window
-end tell
-delay 1
-tell application "System Events"
-    tell process "Finder"
-        -- Open Find dialog
-        click menu item "Find" of menu "File" of menu bar 1
-        delay 1
-        
-        -- Type search term (select all and replace any existing text)
-        keystroke "a" using command down
-        delay 0.2
-        keystroke "name:${searchPrefix.replace(/"/g, '\\"')}"
-        delay 0.5
-        
-        -- Navigate to and click "This Mac" button
-        key code 48 -- tab key
-        delay 0.2
-        key code 48
-        delay 0.2
-        key code 49 -- space key
-        delay 0.5
-        
-        -- Press return to execute search
-        key code 36 -- return key
-    end tell
-end tell`;
-
-  const scriptPath = '/tmp/search_files.applescript';
-  try {
-    logGallery('Finder Search', 'Script created', null, { scriptPath });
-    fs.writeFileSync(scriptPath, scriptContent, 'utf8');
-
-    logGallery('Finder Search', 'Script executed', null, { scriptPath });
-    const { stdout, stderr } = await new Promise((resolve, reject) => {
-      require('child_process').exec(`osascript "${scriptPath}"`, (error, stdout, stderr) => {
-        if (error) {
-          logGallery('Finder Search', 'Error', null, {
-            error: error.message, code: error.code, signal: error.signal, killed: error.killed, cmd: error.cmd,
-          });
-          reject(error);
-        } else {
-          resolve({ stdout, stderr });
-        }
-      });
-    });
-
-    try {
-      fs.unlinkSync(scriptPath);
-      logGallery('Finder Search', 'Script cleaned up', null, { scriptPath });
-    } catch (e) {
-      logGallery('Finder Search', 'Error', null, { error: e.message });
-    }
-
-    if (stderr) {
-      logGallery('Finder Search', 'Error', null, { error: stderr });
-    }
-
-    if (stdout) {
-      logGallery('Finder Search', 'Output', null, { stdout });
-      if (stdout.startsWith('Error:')) {
-        throw new Error(stdout);
-      }
-    }
-
-    return res.json({
-      success: true,
-      searchTerm: searchPrefix,
-      output: stdout,
-    });
-  } catch (error) {
-    logGallery('Finder Search', 'Error', null, { error: error.message, stack: error.stack });
-    return res.status(500).json({
-      error: 'Failed to execute Finder search',
-      details: error.message,
-      stack: error.stack,
-    });
-  }
-});
-
 // Add route to trigger Finder search
 router.get('/finder-search/:filename', (req, res) => {
   const { filename } = req.params;
-  const searchPrefix = filename.replace(/\.[^/.]+$/, '');
-  logGallery('Finder Search', 'Request received', null, { searchPrefix });
+  const searchPrefix = filename.replace(/\.[^/.]+$/, ''); // Remove file extension
 
-  const searchScript = `
-tell application "Finder"
+  const searchScript = `tell application "Finder"
     activate
     make new Finder window
+    delay 0.5
 end tell
-delay 1
+
 tell application "System Events"
-    tell process "Finder"
-        -- Open Find dialog
-        click menu item "Find" of menu "File" of menu bar 1
-        delay 1
-        
-        -- Type search term (select all and replace any existing text)
-        keystroke "a" using command down
-        delay 0.2
-        keystroke "name:${searchPrefix.replace(/"/g, '\\"')}"
-        delay 0.5
-        
-        -- Navigate to and click "This Mac" button
-        key code 48 -- tab key
-        delay 0.2
-        key code 48
-        delay 0.2
-        key code 49 -- space key
-        delay 0.5
-        
-        -- Press return to execute search
-        key code 36 -- return key
-    end tell
+    keystroke "f" using command down
+    delay 0.5
+    keystroke "${searchPrefix}"
+    delay 0.2
+    key code 36
 end tell`;
 
-  require('child_process').exec(`osascript -e '${searchScript}'`, (error, stdout, stderr) => {
+  exec(`osascript -e '${searchScript}'`, (error, stdout, stderr) => {
     if (error) {
       console.error('Error executing AppleScript:', error);
-      return res.status(500).json({ error: 'Failed to open Finder search' });
+      res.status(500).json({ error: error.message }); // Send actual error for better debugging
+      return;
     }
-    return res.json({ success: true });
+    res.json({ success: true });
   });
 });
 

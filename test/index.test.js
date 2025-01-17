@@ -31,9 +31,9 @@ describe('Gallery Index', () => {
         </div>
       </div>
     `;
-    
+
     imageGrid = document.getElementById('image-grid');
-    
+
     // Initialize modal
     filterFunctions.initializeModal();
     modal = document.getElementById('imageModal');
@@ -45,8 +45,8 @@ describe('Gallery Index', () => {
           ok: true,
           json: () => Promise.resolve({
             letters: ['a', 'b', 'c'],
-            total: 10
-          })
+            total: 10,
+          }),
         });
       }
       return Promise.resolve({
@@ -54,12 +54,12 @@ describe('Gallery Index', () => {
         json: () => Promise.resolve({
           files: [
             { name: 'test1.jpg', path: '/images/test1.jpg', tags: ['test'] },
-            { name: 'test2.jpg', path: '/images/test2.jpg', tags: ['test'] }
+            { name: 'test2.jpg', path: '/images/test2.jpg', tags: ['test'] },
           ],
           total: 2,
           page: 1,
-          totalPages: 1
-        })
+          totalPages: 1,
+        }),
       });
     });
 
@@ -78,7 +78,7 @@ describe('Gallery Index', () => {
       const imageSrc = '/images/test1.jpg';
       const caption = 'Test Image';
       filterFunctions.openModal(imageSrc, caption);
-      
+
       expect(modal.style.display).toBe('block');
       expect(modal.querySelector('.modal-img').src).toContain(imageSrc);
       expect(modal.querySelector('.modal-caption').textContent).toBe(caption);
@@ -107,9 +107,9 @@ describe('Gallery Index', () => {
     test('displayImages renders images to grid', async () => {
       const images = [
         { name: 'test1.jpg', path: '/images/test1.jpg' },
-        { name: 'test2.jpg', path: '/images/test2.jpg' }
+        { name: 'test2.jpg', path: '/images/test2.jpg' },
       ];
-      
+
       await filterFunctions.displayImages(images);
       const containers = imageGrid.querySelectorAll('.image-container');
       expect(containers.length).toBe(2);
@@ -126,17 +126,17 @@ describe('Gallery Index', () => {
     test('filterByLetter shows/hides correct images', async () => {
       const images = [
         { name: 'apple.jpg', path: '/images/apple.jpg' },
-        { name: 'banana.jpg', path: '/images/banana.jpg' }
+        { name: 'banana.jpg', path: '/images/banana.jpg' },
       ];
-      
+
       await filterFunctions.displayImages(images);
       await filterFunctions.filterByLetter('a');
 
       // Wait for async operations to complete
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       const visibleImages = Array.from(imageGrid.querySelectorAll('.image-container'))
-        .filter(container => !container.classList.contains('hidden'));
+        .filter((container) => !container.classList.contains('hidden'));
       expect(visibleImages.length).toBe(1);
       expect(visibleImages[0].querySelector('.image-name').textContent).toBe('apple.jpg');
     });
@@ -144,21 +144,21 @@ describe('Gallery Index', () => {
     test('search filter functionality', async () => {
       const images = [
         { name: 'test1.jpg', path: '/images/test1.jpg' },
-        { name: 'test2.jpg', path: '/images/test2.jpg' }
+        { name: 'test2.jpg', path: '/images/test2.jpg' },
       ];
-      
+
       await filterFunctions.displayImages(images);
       filterFunctions.initializeSearchFilter();
-      
+
       const searchInput = document.querySelector('#search-input');
       searchInput.value = 'test1';
       searchInput.dispatchEvent(new Event('input'));
 
       // Wait for debounce
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       const visibleImages = Array.from(imageGrid.querySelectorAll('.image-container'))
-        .filter(container => !container.classList.contains('hidden'));
+        .filter((container) => !container.classList.contains('hidden'));
       expect(visibleImages.length).toBe(1);
       expect(visibleImages[0].querySelector('.image-name').textContent).toBe('test1.jpg');
     });

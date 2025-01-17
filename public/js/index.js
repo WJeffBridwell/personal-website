@@ -361,7 +361,7 @@ async function filterByLetter(letter) {
   buttons.forEach((btn) => {
     btn.classList.toggle(
       'active',
-      letter === null ? btn.textContent === 'All' : btn.textContent === letter
+      letter === null ? btn.textContent === 'All' : btn.textContent === letter,
     );
   });
 
@@ -379,7 +379,7 @@ async function filterByLetter(letter) {
 
   // Update visible count
   const visibleCount = Array.from(containers).filter(
-    (container) => !container.classList.contains('hidden')
+    (container) => !container.classList.contains('hidden'),
   ).length;
 
   const totalCountElement = document.querySelector('.total-count');

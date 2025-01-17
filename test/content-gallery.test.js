@@ -2,8 +2,8 @@
  * @jest-environment jsdom
  */
 
-import { ContentGallery } from '../public/js/content-gallery';
 import { jest } from '@jest/globals';
+import { ContentGallery } from '../public/js/content-gallery';
 
 describe('ContentGallery', () => {
   let contentGallery;
@@ -65,7 +65,7 @@ describe('ContentGallery', () => {
         content_date: '2023-01-01',
         content_size: 1000,
         content_tags: ['tag1', 'tag2'],
-        thumbnail_path: '/thumbnails/test1.jpg'
+        thumbnail_path: '/thumbnails/test1.jpg',
       },
       {
         id: '2',
@@ -76,7 +76,7 @@ describe('ContentGallery', () => {
         content_date: '2023-01-02',
         content_size: 500,
         content_tags: ['tag1'],
-        thumbnail_path: '/thumbnails/test2.jpg'
+        thumbnail_path: '/thumbnails/test2.jpg',
       },
       {
         id: '3',
@@ -87,24 +87,26 @@ describe('ContentGallery', () => {
         content_date: '2023-01-03',
         content_size: 2000,
         content_tags: ['tag3'],
-        thumbnail_path: '/thumbnails/test3.jpg'
-      }
+        thumbnail_path: '/thumbnails/test3.jpg',
+      },
     ];
 
     // Mock fetch response
     global.fetch = jest.fn(() => Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({ 
-        items: mockContent, 
+      json: () => Promise.resolve({
+        items: mockContent,
         total: mockContent.length,
-        success: true
-      })
+        success: true,
+      }),
     }));
 
     // Mock ResizeObserver
     global.ResizeObserver = class ResizeObserver {
       observe() {}
+
       unobserve() {}
+
       disconnect() {}
     };
 
@@ -113,14 +115,17 @@ describe('ContentGallery', () => {
       constructor(callback) {
         this.callback = callback;
       }
+
       observe(element) {
         // Simulate element coming into view
         this.callback([{
           target: element,
-          isIntersecting: true
+          isIntersecting: true,
         }]);
       }
+
       unobserve() {}
+
       disconnect() {}
     };
 
@@ -128,7 +133,7 @@ describe('ContentGallery', () => {
     contentGallery = new ContentGallery();
 
     // Mock getMediaContent method
-    contentGallery.getMediaContent = jest.fn(item => {
+    contentGallery.getMediaContent = jest.fn((item) => {
       if (item.content_type === 'video') {
         const videoPath = item.content_path.replace('/Volumes/VideosNew/', '/Users/jeffbridwell/VideosAa-Abella/');
         return `<video src="${videoPath}" controls></video>`;
@@ -161,7 +166,7 @@ describe('ContentGallery', () => {
       searchInput.value = 'test1';
       searchInput.dispatchEvent(new Event('input'));
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const filtered = contentGallery.filteredItems;
       expect(filtered.length).toBe(1);
       expect(filtered[0].content_name).toBe('test1.jpg');
@@ -176,7 +181,7 @@ describe('ContentGallery', () => {
       tagsFilter.value = 'tag2';
       tagsFilter.dispatchEvent(new Event('change'));
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const filtered = contentGallery.filteredItems;
       expect(filtered.length).toBe(1);
       expect(filtered[0].content_tags).toContain('tag2');
@@ -187,7 +192,7 @@ describe('ContentGallery', () => {
       typeFilter.value = 'Video';
       typeFilter.dispatchEvent(new Event('change'));
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const filtered = contentGallery.filteredItems;
       expect(filtered.length).toBe(1);
       expect(filtered[0].content_type).toBe('video');
@@ -198,7 +203,7 @@ describe('ContentGallery', () => {
       sortSelect.value = 'name-desc';
       sortSelect.dispatchEvent(new Event('change'));
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const sorted = contentGallery.filteredItems;
       expect(sorted[0].content_name).toBe('test3.mp4');
       expect(sorted[2].content_name).toBe('test1.jpg');
@@ -209,7 +214,7 @@ describe('ContentGallery', () => {
       sortSelect.value = 'size-desc';
       sortSelect.dispatchEvent(new Event('change'));
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const sorted = contentGallery.filteredItems;
       expect(sorted[0].content_size).toBe(2000);
       expect(sorted[2].content_size).toBe(500);
@@ -226,7 +231,7 @@ describe('ContentGallery', () => {
       searchInput.value = 'test1';
       searchInput.dispatchEvent(new Event('input'));
 
-      await new Promise(resolve => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const filtered = contentGallery.filteredItems;
       expect(filtered.length).toBe(1);
       expect(filtered[0].content_name).toBe('test1.jpg');
@@ -253,12 +258,10 @@ describe('ContentGallery', () => {
     test('handles content modal', async () => {
       const modal = document.getElementById('contentModal');
       const modalContent = modal.querySelector('.modal__content');
-      const videoData = mockContent.find(item => item.content_type === 'video');
+      const videoData = mockContent.find((item) => item.content_type === 'video');
 
       // Mock getModalContent to return video element
-      contentGallery.getModalContent = jest.fn(item => {
-        return `<video src="${item.content_url}" controls></video>`;
-      });
+      contentGallery.getModalContent = jest.fn((item) => `<video src="${item.content_url}" controls></video>`);
 
       // Open modal
       contentGallery.openModal(videoData);
@@ -278,7 +281,7 @@ describe('ContentGallery', () => {
       // Click outside modal content
       const event = new MouseEvent('click', {
         bubbles: true,
-        cancelable: true
+        cancelable: true,
       });
       modal.dispatchEvent(event);
 
@@ -295,7 +298,7 @@ describe('ContentGallery', () => {
       const event = new MouseEvent('click', {
         bubbles: true,
         cancelable: true,
-        view: window
+        view: window,
       });
 
       // Prevent event from bubbling up
@@ -307,7 +310,7 @@ describe('ContentGallery', () => {
 
       // Dispatch event and verify modal stays open
       modalContent.dispatchEvent(event);
-      modal.onclick = null;  // Remove the click handler to prevent auto-close
+      modal.onclick = null; // Remove the click handler to prevent auto-close
       expect(modal.classList.contains('show')).toBe(true);
     });
 
@@ -327,7 +330,7 @@ describe('ContentGallery', () => {
     test('handles failed content loading', async () => {
       global.fetch = jest.fn(() => Promise.resolve({
         ok: false,
-        status: 500
+        status: 500,
       }));
 
       const consoleSpy = jest.spyOn(console, 'error');
@@ -338,11 +341,11 @@ describe('ContentGallery', () => {
     test('handles empty content', async () => {
       global.fetch = jest.fn(() => Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ 
-          items: [], 
+        json: () => Promise.resolve({
+          items: [],
           total: 0,
-          success: true
-        })
+          success: true,
+        }),
       }));
 
       await contentGallery.loadContent();
@@ -353,7 +356,7 @@ describe('ContentGallery', () => {
     test('handles invalid JSON response', async () => {
       global.fetch = jest.fn(() => Promise.resolve({
         ok: true,
-        json: () => Promise.reject(new Error('Invalid JSON'))
+        json: () => Promise.reject(new Error('Invalid JSON')),
       }));
 
       const consoleSpy = jest.spyOn(console, 'error');
@@ -376,21 +379,21 @@ describe('ContentGallery', () => {
       const manyItems = Array.from({ length: 30 }, (_, i) => ({
         ...mockContent[0],
         id: `${i}`,
-        content_name: `test${i}.jpg`
+        content_name: `test${i}.jpg`,
       }));
 
       global.fetch = jest.fn(() => Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ 
-          items: manyItems, 
+        json: () => Promise.resolve({
+          items: manyItems,
           total: manyItems.length,
-          success: true
-        })
+          success: true,
+        }),
       }));
 
       await contentGallery.loadContent();
       expect(contentGallery.totalPages).toBe(2);
-      
+
       // Test next page
       contentGallery.currentPage = 2;
       await contentGallery.filterAndRenderItems();
@@ -435,7 +438,7 @@ describe('ContentGallery', () => {
       item.className = 'gallery-item';
       const img = document.createElement('img');
       img.dataset.src = '/test/lazy.jpg';
-      img.src = '/test/lazy.jpg';  // Set src directly since we're not using IntersectionObserver
+      img.src = '/test/lazy.jpg'; // Set src directly since we're not using IntersectionObserver
       item.appendChild(img);
       document.querySelector('.gallery-grid').appendChild(item);
 

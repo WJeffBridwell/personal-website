@@ -534,11 +534,11 @@ export function formatFileSize(bytes) {
 
   const units = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  
+
   if (i === 0) {
     return `${bytes} ${units[i]}`;
   }
-  
+
   return `${(bytes / (1024 ** i)).toFixed(2)} ${units[i]}`;
 }
 

@@ -34,7 +34,8 @@ describe('Gallery Core Functionality', () => {
 
       await gallery.loadImages();
       expect(consoleSpy).toHaveBeenCalled();
-      expect(imageGrid.querySelector('.error-message')).toBeTruthy();
+      expect(imageGrid.querySelector('.status')).toBeTruthy();
+      expect(imageGrid.querySelector('.status').textContent).toBe('Error loading images');
 
       consoleSpy.mockRestore();
     });
@@ -51,7 +52,7 @@ describe('Gallery Core Functionality', () => {
       sortSelect.dispatchEvent(new Event('change'));
 
       const images = Array.from(imageGrid.querySelectorAll('.image-container img'));
-      expect(images.map(img => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
+      expect(images.map((img) => img.alt)).toEqual(['test2.jpg', 'test1.jpg']);
     });
   });
 

@@ -14,9 +14,8 @@
  */
 
 import express from 'express';
-import path from 'path';
+import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import fs from 'fs';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -511,9 +510,8 @@ app.get('/proxy/image/content', async (req, res) => {
         console.error('[Proxy] Request timed out');
         res.status(504).json({ error: 'Request timed out after 30 seconds' });
         return { success: false, error };
-      } else {
-        throw error;
       }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
