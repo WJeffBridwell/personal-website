@@ -166,6 +166,39 @@ app.use(express.static(publicPath, {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/blog', express.static(path.join(__dirname, 'blog', 'public')));
 
+// Get all blog posts
+app.get('/blog/api/posts', async (req, res) => {
+  try {
+    console.log('Fetching all blog posts');
+    await ensureHexoInitialized();
+    
+    const posts = hexo.locals.get('posts');
+    console.log('Posts object:', posts);
+    
+    if (!posts || !posts.data) {
+      console.error('No posts data available');
+      return res.status(500).json({ error: 'No posts data available' });
+    }
+    
+    console.log('Total posts available:', posts.data.length);
+    
+    // Map posts to a simpler format
+    const formattedPosts = posts.data.map(post => ({
+      title: post.title || 'Untitled Post',
+      path: post.path,
+      date: post.date ? post.date.toISOString() : new Date().toISOString(),
+      categories: post.categories ? post.categories.toArray().map(cat => cat.name) : [],
+      tags: post.tags ? post.tags.toArray().map(tag => tag.name) : [],
+      excerpt: post.excerpt || (post._content ? post._content.slice(0, 200) + '...' : 'No content available')
+    }));
+    
+    res.json({ posts: formattedPosts });
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ error: 'Error fetching posts: ' + error.message });
+  }
+});
+
 // Initialize Hexo once
 const hexo = new Hexo(path.join(__dirname, 'blog'), {
   debug: true,  // Enable debug mode
@@ -179,19 +212,42 @@ async function ensureHexoInitialized() {
   try {
     if (!hexoInitialized) {
       console.log('Initializing Hexo...');
+      console.log('Blog directory:', path.join(__dirname, 'blog'));
+      console.log('Posts directory:', path.join(__dirname, 'blog', 'source', '_posts'));
+      
+      // Check if directories exist
+      const blogDir = path.join(__dirname, 'blog');
+      const postsDir = path.join(blogDir, 'source', '_posts');
+      
+      if (!fs.existsSync(blogDir)) {
+        throw new Error('Blog directory does not exist: ' + blogDir);
+      }
+      if (!fs.existsSync(postsDir)) {
+        throw new Error('Posts directory does not exist: ' + postsDir);
+      }
+      
       await hexo.init();
+      console.log('Hexo init complete');
+      
       await hexo.load();
+      console.log('Hexo load complete');
+      
       hexoInitialized = true;
       console.log('Hexo initialized successfully');
       
       // Log available posts for debugging
-      const posts = hexo.locals.get('posts').data;
-      console.log('Available posts:', posts.map(p => ({ 
-        title: p.title, 
-        path: p.path,
-        source: p.source,
-        full_source: p.full_source 
-      })));
+      const posts = hexo.locals.get('posts');
+      console.log('Posts after initialization:', posts);
+      if (posts && posts.data) {
+        console.log('Available posts:', posts.data.map(p => ({ 
+          title: p.title, 
+          path: p.path,
+          source: p.source,
+          full_source: p.full_source 
+        })));
+      } else {
+        console.log('No posts available after initialization');
+      }
     }
   } catch (error) {
     console.error('Error initializing Hexo:', error);
@@ -845,7 +901,11 @@ app.get('/proxy/image/direct', async (req, res) => {
   } catch (error) {
     console.error('[Proxy] Error:', error);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Proxy error', message: error.message });
+      res.status(500).json({
+        error: 'Proxy error',
+        message: error.message,
+        code: error.code,
+      });
     }
     console.log('[Proxy] ========== Image Request End (Error) ==========\n');
     return { success: false, error };

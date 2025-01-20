@@ -26,6 +26,846 @@ A modern, responsive personal website featuring a dynamic image gallery, blog in
   - Event-driven component architecture
   - Responsive design with CSS Grid/Flexbox
   - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
+# Personal Website with Image Gallery
+
+A modern, responsive personal website featuring a dynamic image gallery, blog integration, and advanced media management capabilities. Built with modern JavaScript and comprehensive test coverage.
+
+## 🚀 Features
+
+- **Dynamic Image Gallery**
+  - Semantic search with natural language processing
+  - Multi-criteria sorting (name, date, size)
+  - A-Z letter filtering with visual feedback
+  - Responsive grid layout with automatic resizing
+  - Modal image viewing with keyboard navigation
+  - Lazy loading for optimal performance
+  - Multiple media type support (images, videos, VR)
+  - Tag-based organization
+
+- **Blog Integration**
+  - Hexo-powered blog engine
+  - Markdown support
+  - Custom theming
+  - Post management API
+  - Dynamic content rendering
+
+- **Modern Architecture**
+  - ES6+ JavaScript modules
+  - Event-driven component architecture
+  - Responsive design with CSS Grid/Flexbox
+  - Progressive enhancement
   - Accessibility-first approach
   - Comprehensive logging system
   - Performance monitoring

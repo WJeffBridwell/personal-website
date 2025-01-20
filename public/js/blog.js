@@ -531,3 +531,11 @@ style.textContent = `
 }
 `;
 document.head.appendChild(style);
+
+// Initialize when DOM is ready
+if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('Initializing blog functionality...');
+        initializeBlog();
+    });
+}

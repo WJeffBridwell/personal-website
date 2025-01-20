@@ -147,6 +147,14 @@
     flex-wrap: wrap;
 }
 
+.tag-circle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 4px;
+}
+
 .item-tag {
     background: var(--accent-color);
     color: white;

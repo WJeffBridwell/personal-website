@@ -242,12 +242,14 @@ export class ContentGallery {
   createItemHTML(item) {
     const mediaContent = this.getMediaContent(item);
     const tags = item.content_tags || [];
-    const tagCircles = tags.slice(0, 8).map((tag) => `
-            <div class="tag-circle" 
-                 style="background-color: ${tag.toLowerCase()}" 
-                 title="${tag}">
-            </div>
-        `).join('');
+    const tagCircles = tags
+      .filter(tag => ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'gray'].includes(tag.toLowerCase()))
+      .map((tag) => `
+        <div class="tag-circle" 
+             style="background-color: ${tag.toLowerCase()}" 
+             title="${tag}">
+        </div>
+    `).join('');
 
     return `
             <div class="gallery-item" data-item='${JSON.stringify(item)}'>
