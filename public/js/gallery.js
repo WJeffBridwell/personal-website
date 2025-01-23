@@ -32,7 +32,7 @@ export class Gallery {
     this.allImages = []; // All images from server
     this.filteredImages = []; // Images after search/filter
     this.currentPage = 1;
-    this.itemsPerPage = 30; // 5 rows × 6 columns
+    this.imagesPerPage = 30; // 5 rows × 6 columns
     this.searchTerm = '';
     this.sortOrder = 'name-asc';
     this.currentLetter = 'all';
@@ -93,7 +93,7 @@ export class Gallery {
   }
 
   async loadImages() {
-    console.log('JEFF CLIENT - About to fetch /api/gallery/images');
+    console.log('JEFF CLIENT - About to fetch from gallery service');
     try {
       // Set loading state
       document.title = '⟳ Loading... | Gallery | Jeff Bridwell';
@@ -105,7 +105,7 @@ export class Gallery {
         this.imageGrid.appendChild(primaryStatusElement);
       }
 
-      const response = await fetch('/api/gallery/images');
+      const response = await fetch('http://192.168.86.242:8081/gallery/images');
       console.log('JEFF CLIENT - Got response:', response.status);
       if (!response.ok) throw new Error('Failed to fetch images');
 
@@ -320,21 +320,21 @@ export class Gallery {
     console.log('Selected tags:', [...this.selectedTags]);
 
     // Filter images by search term, letter, and tags
-    this.filteredImages = this.allImages.filter((image) => {
-      const matchesSearch = image.name.toLowerCase().includes(this.searchTerm);
+    this.filteredImages = this.allImages.filter((img) => {
+      const matchesSearch = img.name.toLowerCase().includes(this.searchTerm);
       const matchesLetter = this.currentLetter === 'all'
-                                || image.name.charAt(0).toUpperCase() === this.currentLetter;
+                                || img.name.charAt(0).toUpperCase() === this.currentLetter;
 
       // Tag filtering - normalize tag case for comparison
       let matchesTags = false;
       if (this.selectedTags.size === 0) {
         matchesTags = true;
-      } else if (image.tags && Array.isArray(image.tags)) {
-        matchesTags = image.tags.some((tag) => {
+      } else if (img.tags && Array.isArray(img.tags)) {
+        matchesTags = img.tags.some((tag) => {
           const normalizedTag = tag.toLowerCase();
           const matches = Array.from(this.selectedTags).some((selectedTag) => selectedTag.toLowerCase() === normalizedTag);
           if (matches) {
-            console.log(`Image ${image.name} matches tag filter with tag: ${tag}`);
+            console.log(`Image ${img.name} matches tag filter with tag: ${tag}`);
           }
           return matches;
         });
@@ -342,11 +342,11 @@ export class Gallery {
 
       const matches = matchesSearch && matchesLetter && matchesTags;
       if (!matches && this.selectedTags.size > 0) {
-        console.log(`Image ${image.name} filtered out:`, {
+        console.log(`Image ${img.name} filtered out:`, {
           matchesSearch,
           matchesLetter,
           matchesTags,
-          imageTags: image.tags,
+          imgTags: img.tags,
         });
       }
       return matches;
@@ -379,9 +379,9 @@ export class Gallery {
 
   renderCurrentPage() {
     console.log('renderCurrentPage - current page:', this.currentPage);
-    console.log('renderCurrentPage - items per page:', this.itemsPerPage);
-    const start = (this.currentPage - 1) * this.itemsPerPage;
-    const end = start + this.itemsPerPage;
+    console.log('renderCurrentPage - images per page:', this.imagesPerPage);
+    const start = (this.currentPage - 1) * this.imagesPerPage;
+    const end = start + this.imagesPerPage;
     const currentImages = this.filteredImages.slice(start, end);
     console.log('renderCurrentPage - showing images from index', start, 'to', end);
     console.log('renderCurrentPage - total filtered images:', this.filteredImages.length);
@@ -389,9 +389,9 @@ export class Gallery {
     // Clear current grid
     this.imageGrid.innerHTML = '';
 
-    // Create and append new items
-    currentImages.forEach((image) => {
-      const tile = this.createImageTile(image);
+    // Create and append new images
+    currentImages.forEach((img) => {
+      const tile = this.createImageTile(img);
       this.imageGrid.appendChild(tile);
     });
 
@@ -399,12 +399,12 @@ export class Gallery {
   }
 
   updatePagination() {
-    const totalPages = Math.ceil(this.filteredImages.length / this.itemsPerPage);
+    const totalPages = Math.ceil(this.filteredImages.length / this.imagesPerPage);
     const totalImages = this.filteredImages.length;
 
     console.log('updatePagination - total pages:', totalPages);
     console.log('updatePagination - total images:', totalImages);
-    console.log('updatePagination - items per page:', this.itemsPerPage);
+    console.log('updatePagination - images per page:', this.imagesPerPage);
 
     // Update prev/next buttons
     if (this.prevPageBtn) {
@@ -499,24 +499,23 @@ export class Gallery {
     }
   }
 
-  createImageTile(image) {
+  createImageTile(img) {
     const container = document.createElement('div');
     container.className = 'image-container';
 
     // Create and append image
-    const img = document.createElement('img');
-    img.alt = image.name;
+    const image = document.createElement('img');
+    image.alt = img.name;
 
     // Add load event listener before setting src
-    img.addEventListener('load', () => {
-      img.classList.add('loaded');
+    image.addEventListener('load', () => {
+      image.classList.add('loaded');
       container.classList.add('loaded');
     });
 
     // Set src after adding load listener
-    const imageUrl = encodeURIComponent(image.name);
-    img.src = `/api/gallery/image/${imageUrl}`;
-    container.appendChild(img);
+    image.src = `http://192.168.86.242:8082/api/images/${encodeURIComponent(img.name)}`;
+    container.appendChild(image);
 
     // Image icon (top left)
     const imageIcon = document.createElement('div');
@@ -526,7 +525,7 @@ export class Gallery {
     imageIcon.appendChild(imageI);
     imageIcon.addEventListener('click', (e) => {
       e.stopPropagation();
-      window.open(`/content-gallery.html?image-name=${encodeURIComponent(image.name)}`, '_blank');
+      window.open(`/content-gallery.html?item-name=${encodeURIComponent(img.name)}`, '_blank');
     });
     container.appendChild(imageIcon);
 
@@ -539,7 +538,7 @@ export class Gallery {
     folderIcon.addEventListener('click', async (e) => {
       e.stopPropagation();
       try {
-        const response = await fetch(`/gallery/finder-search/${encodeURIComponent(image.name)}`);
+        const response = await fetch(`/gallery/finder-search/${encodeURIComponent(img.name)}`);
         if (!response.ok) {
           const data = await response.json();
           console.error('Finder search failed:', data);
@@ -554,10 +553,10 @@ export class Gallery {
     container.appendChild(folderIcon);
 
     // Tags (below image icon)
-    if (image.tags && image.tags.length > 0) {
+    if (img.tags && img.tags.length > 0) {
       const tagDots = document.createElement('div');
       tagDots.className = 'tag-dots';
-      image.tags.forEach((tag) => {
+      img.tags.forEach((tag) => {
         const dot = document.createElement('div');
         dot.className = 'tag-dot';
         dot.style.backgroundColor = this.getTagColor(tag);
@@ -570,7 +569,7 @@ export class Gallery {
     // Image name (bottom)
     const name = document.createElement('div');
     name.className = 'image-name';
-    name.textContent = image.name;
+    name.textContent = img.name;
     container.appendChild(name);
 
     return container;
@@ -627,7 +626,7 @@ export class Gallery {
 
   handlePageNavigation(direction) {
     const newPage = this.currentPage + direction;
-    if (newPage >= 1 && newPage <= Math.ceil(this.filteredImages.length / this.itemsPerPage)) {
+    if (newPage >= 1 && newPage <= Math.ceil(this.filteredImages.length / this.imagesPerPage)) {
       this.currentPage = newPage;
       this.renderCurrentPage();
     }
