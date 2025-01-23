@@ -1,0 +1,23 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        
+        > personal-website@1.0.0 test
+        > NODE_OPTIONS='--experimental-vm-modules --experimental-global-webcrypto' jest
+        
+        
+        > personal-website@1.0.0 lint
+        > eslint .
+        
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome against localhost",
+            "url": "http://localhost:8081",
+            "webRoot": "${workspaceFolder}"
+        }
+    ]
+}

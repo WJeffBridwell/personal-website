@@ -525,7 +525,7 @@ export class Gallery {
     imageIcon.appendChild(imageI);
     imageIcon.addEventListener('click', (e) => {
       e.stopPropagation();
-      window.open(`/content-gallery.html?item-name=${encodeURIComponent(img.name)}`, '_blank');
+      window.open(`/content-gallery.html?image-name=${encodeURIComponent(img.name)}`, '_blank');
     });
     container.appendChild(imageIcon);
 

@@ -14,5 +14,5 @@ variable "project_path" {
 variable "development_port" {
   description = "Port for development server"
   type        = number
-  default     = 3001
+  default     = 8081
 }

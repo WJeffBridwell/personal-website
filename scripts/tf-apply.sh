@@ -17,7 +17,7 @@ echo "Starting video server..."
 node video-server.js > video-server.log 2>&1 &
 
 echo "Services started! Ports:"
-echo "- Web app: http://localhost:3001"
+echo "- Web app: http://localhost:8081"
 echo "- Video server: http://localhost:8082"
 echo "Logs:"
 echo "- Web app: server.log"

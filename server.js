@@ -53,7 +53,7 @@ console.log = function (...args) {
 };
 
 const app = express();
-const port = parseInt(process.env.PORT || '3001', 10); // Default to 3001 to avoid Windsurf conflicts
+const port = parseInt(process.env.PORT || '3001', 10); // Default to 3001
 
 // Create HTTP server
 const server = createServer(app);
@@ -1368,7 +1368,7 @@ let lastCacheUpdate = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Gallery API Endpoints
-app.get('/api/gallery/images', async (req, res) => {
+app.get('/gallery/images', async (req, res) => {
   console.log('\n=== Gallery Images Request ===');
   try {
     // Check cache first
@@ -1458,7 +1458,7 @@ app.get('/api/gallery/image/:name', async (req, res) => {
 
 // Create proxy server
 const proxy = httpProxy.createProxyServer({
-  target: 'http://192.168.86.242:8082',
+  target: 'http://192.168.86.242:8081',
   ws: true,
   changeOrigin: true,
   proxyTimeout: 60000,
@@ -1503,7 +1503,7 @@ app.use((err, req, res, next) => {
 
 // Start server
 server.listen(port, '0.0.0.0', () => {
-  console.log(`Server running at http://0.0.0.0:${port}`);
+  console.log(`Server running on port ${port}`);
 });
 
 // Helper function to get file info

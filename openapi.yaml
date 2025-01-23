@@ -9,7 +9,7 @@ info:
     name: Jeff Bridwell
 
 servers:
-  - url: http://localhost:3001
+  - url: http://localhost:8081
     description: Development server
 
 tags:

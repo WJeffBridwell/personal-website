@@ -104,7 +104,7 @@ describe('Gallery Class', () => {
       });
 
       await gallery.loadImages();
-      expect(fetch).toHaveBeenCalledWith('/api/gallery/images');
+      expect(fetch).toHaveBeenCalledWith('/gallery/images');
       expect(gallery.allImages).toEqual(mockImages);
     });
 
